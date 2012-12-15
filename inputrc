@@ -1,0 +1,9 @@
+"\e[A": history-search-backward
+\e[B": history-search-forward
+Space: magic-space
+"\M-o": "\C-p\C-a\M-f "
+set completion-ignore-case on
+set visible-stats on
+set show-all-if-ambiguous on
+"\M-s": menu-complete]"]"]"
+set editing-mode vi
