@@ -5,6 +5,7 @@
 
 # Add rvm gems and nginx to the path
 export PATH=$PATH:~/.gem/ruby/1.8/bin:/opt/nginx/sbin
+export PATH="/usr/local/bin:$PATH"
 
 # Path to the bash it configuration
 export BASH_IT=$HOME/.bash_it
@@ -14,8 +15,8 @@ export BASH_IT=$HOME/.bash_it
 export BASH_IT_THEME='luan'
 
 # Set my editor and git editor
-export EDITOR="/usr/bin/mate -w"
-export GIT_EDITOR='/usr/bin/mate -w'
+export EDITOR="vim"
+export GIT_EDITOR="vim"
 
 # Set the path nginx
 export NGINX_PATH='/opt/nginx'
@@ -31,6 +32,8 @@ export IRC_CLIENT='irssi'
 # Set this to the command you use for todo.txt-cli
 
 export TODO="t"
+
+alias git=hub
 
 # Set vcprompt executable path for scm advance info in prompt (demula theme)
 # https://github.com/xvzf/vcprompt
