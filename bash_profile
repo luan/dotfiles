@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 
+PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+
+### Added by the Heroku Toolbelt
+export PATH="/usr/local/bin:$PATH"
+export PATH="/usr/local/heroku/bin:$PATH"
+export PATH="/usr/local/share/npm/bin:$PATH"
+export PATH="/Applications/Postgres.app/Contents/MacOS/bin:$PATH"
+
+[ -z "$PS1" ] && return
+
 # Load RVM, if you are using it
 [[ -s $HOME/.rvm/scripts/rvm ]] && source $HOME/.rvm/scripts/rvm
 
 # Add rvm gems and nginx to the path
 export PATH=$PATH:~/.gem/ruby/1.8/bin:/opt/nginx/sbin
-export PATH="/usr/local/bin:$PATH"
 
 # Path to the bash it configuration
 export BASH_IT=$HOME/.bash_it
@@ -41,3 +50,4 @@ alias git=hub
 
 # Load Bash It
 source $BASH_IT/bash_it.sh
+source $HOME/.secrets
