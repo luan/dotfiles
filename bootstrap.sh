@@ -8,6 +8,7 @@ mv $HOME/.gemrc $HOME/.gemrc.bak
 mv $HOME/.gitconfig $HOME/.gitconfig.bak
 mv $HOME/.inputrc $HOME/.inputrc.bak
 mv $HOME/.pryrc $HOME/.pryrc.bak
+mv $HOME/.tmux.conf $HOME/.tmux.conf.bak
 mv $HOME/.secrets $HOME/.secrets.bak
 
 ln -s `pwd`/bash_profile $HOME/.bash_profile
@@ -18,4 +19,5 @@ ln -s `pwd`/gemrc $HOME/.gemrc
 ln -s `pwd`/gitconfig $HOME/.gitconfig
 ln -s `pwd`/inputrc $HOME/.inputrc
 ln -s `pwd`/pryrc $HOME/.pryrc
+ln -s `pwd`/tmux.conf $HOME/.tmux.conf
 ln -s `pwd`/secrets $HOME/.secrets
