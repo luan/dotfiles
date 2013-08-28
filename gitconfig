@@ -39,7 +39,8 @@
   last = diff HEAD^                 # diff last committed change
 
   # log
-  l = log --graph --date=short
+  l = log --graph --oneline --pretty=\"format:%C(yellow)%h%C(green)%d%Creset %C(blue)%s %C(magenta) [%an]%Creset\"
+  detailed = log --graph --oneline --pretty=\"format:%C(blue)%ad%Creset %C(yellow)%h%C(green)%d%Creset %C(blue)%s %C(magenta) [%an]%Creset\"
   changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
   short = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\"
   changelog = log --pretty=format:\" * %s\"
@@ -82,8 +83,6 @@
   svnr = svn rebase
   svnd = svn dcommit
   svnl = svn log --oneline --show-commit
-[format]
-  pretty = format:%C(blue)%ad%Creset %C(yellow)%h%C(green)%d%Creset %C(blue)%s %C(magenta) [%an]%Creset
 [merge]
   summary = true
   verbosity = 1
