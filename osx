@@ -242,6 +242,9 @@ defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true
 # [ -e "$file" ] && mv -f "$file" "$file.bak"
 # unset file
 
+# Enable full keyboard access
+defaults write .GlobalPreferences AppleKeyboardUIMode -int 2
+
 # Kill affected applications
 for app in Finder Dock Mail Safari iTunes iCal Address\ Book SystemUIServer; do killall "$app" > /dev/null 2>&1; done
 echo "OSX Hacks Done. Note that some of these changes require a logout/restart to take effect."
