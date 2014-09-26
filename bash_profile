@@ -9,6 +9,8 @@ export BASH_IT=$HOME/.bash_it
 # Lock and Load a custom theme file
 # location /.bash_it/themes/
 export BASH_IT_THEME='bobby'
+export GOPATH=$HOME/code/go
+export PATH=$PATH:/usr/local/opt/go/libexec/bin
 
 # Set my editor and git editor
 export EDITOR="vim"
@@ -25,7 +27,6 @@ alias git=hub
 
 # Load Bash It
 source $BASH_IT/bash_it.sh
-source $HOME/.secrets
 
-export LSCOLORS=Exfxcxdxdxegedabagacad
-export LS_COLORS="di=1;;40:ln=35;40:so=32;40:pi=33;40:ex=33;40:bd=34;46:cd=34;43:su=0;41:sg=0;46:tw=0;42:ow=0;43:"
+export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
+alias ls='ls -G'

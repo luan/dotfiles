@@ -244,6 +244,7 @@ defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true
 
 # Enable full keyboard access
 defaults write .GlobalPreferences AppleKeyboardUIMode -int 2
+defaults write -g NSScrollViewRubberbanding -int 0
 
 # Kill affected applications
 for app in Finder Dock Mail Safari iTunes iCal Address\ Book SystemUIServer; do killall "$app" > /dev/null 2>&1; done
