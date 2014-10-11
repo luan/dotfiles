@@ -30,3 +30,7 @@ source $BASH_IT/bash_it.sh
 
 export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
 alias ls='ls -G'
+
+export LC_CTYPE=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
