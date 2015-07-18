@@ -97,7 +97,7 @@
 [core]
   autocrlf = false
   editor = vim
-  excludesfile = ~/.yadr/git/gitignore
+  excludesfile = /Users/luan/.gitignore_global
 [advice]
   statusHints = false
 [diff]
