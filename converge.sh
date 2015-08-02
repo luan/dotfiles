@@ -44,7 +44,7 @@ copy_plist com.divisiblebyzero.Spectacle.plist
 
 mkdir -p $HOME/Library/Fonts
 pushd $HOME/Library/Fonts
-curl -o "Meslo LG S Regular for Powerline.otf" https://github.com/powerline/fonts/raw/master/Meslo/Meslo%20LG%20S%20Regular%20for%20Powerline.otf
+curl -L -o "Meslo LG S Regular for Powerline.otf" https://github.com/powerline/fonts/raw/master/Meslo/Meslo%20LG%20S%20Regular%20for%20Powerline.otf
 
 brew install ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
