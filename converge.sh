@@ -102,3 +102,6 @@ ruby-install ruby 2.1.6
 chruby ruby-2.1.6
 gem install bosh_cli
 gem install bundler
+
+mkdir -p $HOME/workspace
+mkdir -p $HOME/deployments/{concourse,bosh-lite}
