@@ -9,7 +9,7 @@ export EDITOR='vim'
 export GIT_EDITOR='vim'
 
 export GIT_DUET_GLOBAL=true
-export GIT_DUET_ROTATE_AUTHOR=1
+export GIT_DUET_ROTATE_AUTHOR=true
 
 unset MAILCHECK
 
@@ -22,7 +22,15 @@ alias ls='ls -G'
 
 bosh() {
   (
-    BUNDLE_GEMFILE=~/workspace/fast-bosh/Gemfile bundle exec bosh "$@"
+    if [ ! -f $HOME/workspace/fast-bosh/Gemfile ]; then
+      mkdir -p $HOME/workspace/fast-bosh
+      pushd $HOME/workspace/fast-bosh
+      echo -e "source 'https://rubygems.org'\ngem 'bosh_cli'" > Gemfile
+      gem install bundler
+      bundle install
+      popd
+    fi
+    GEM_PATH= BUNDLE_GEMFILE=$HOME/workspace/fast-bosh/Gemfile bundle exec bosh "$@"
   )
 }
 export -f bosh
@@ -30,9 +38,9 @@ export -f bosh
 _direnv_hook() {
   eval "$(direnv export bash)";
 };
+
 if ! [[ "$PROMPT_COMMAND" =~ _direnv_hook ]]; then
   PROMPT_COMMAND="_direnv_hook;$PROMPT_COMMAND";
 fi
 
-source /Users/luan/.iterm2_shell_integration.bash
 export PATH="/usr/local/sbin:$PATH"

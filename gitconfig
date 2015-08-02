@@ -111,3 +111,7 @@
 [user]
   email = cfcluan@gmail.com
   name = Luan Santos
+[duet "env"]
+	git-author-name = Luan Santos
+	git-author-email = cfcluan@gmail.com
+	mtime = 1438494454
