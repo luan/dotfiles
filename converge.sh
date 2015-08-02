@@ -1,8 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 copy_plist() {
   name=$1
-  cp ~/.dotfiles/osx/plists/$name ~/Library/Preferences/$name
+  cp $HOME/.dotfiles/osx/plists/$name $HOME/Library/Preferences/$name
+}
+
+symlink_dotfile() {
+  file=$1
+  ln -s $HOME/.dotfiles/$file $HOME/.$file
 }
 
 # Disable Caps Lock
@@ -19,10 +24,10 @@ brew tap git-duet/tap
 
 # general dependencies
 brew install git
-git clone https://github.com/luan/atom-config.git ~/.atom
-git clone https://github.com/luan/vimfiles ~/.vim
-git clone https://github.com/luan/dotfiles ~/.dotfiles
-git clone --depth=1 https://github.com/Bash-it/bash-it.git ~/.bash_it
+git clone https://github.com/luan/atom-config.git $HOME/.atom
+git clone https://github.com/luan/vimfiles $HOME/.vim
+git clone https://github.com/luan/dotfiles $HOME/.dotfiles
+git clone --depth=1 https://github.com/Bash-it/bash-it.git $HOME/.bash_it
 
 # apps and configs
 
@@ -47,10 +52,10 @@ brew install ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
 
 # formulas that need setup
 brew install mysql && \
-  ln -sfv /usr/local/opt/mysql/*.plist ~/Library/LaunchAgents
+  ln -sfv /usr/local/opt/mysql/*.plist $HOME/Library/LaunchAgents
 
 brew install postgres && \
-  ln -sfv /usr/local/opt/postgresql/*.plist ~/Library/LaunchAgents
+  ln -sfv /usr/local/opt/postgresql/*.plist $HOME/Library/LaunchAgents
 
 # formulas that need customization
 brew install vim --with-lua
@@ -59,10 +64,19 @@ brew install macvim --with-lua
 brew install universal-ctags --HEAD
 
 cd $HOME/.dotfiles
-./bootstrap.sh
+symlink_dotfile bash_profile
+symlink_dotfile vimrc.after
+symlink_dotfile dir_colors
+symlink_dotfile editrc
+symlink_dotfile gemrc
+symlink_dotfile gitconfig
+symlink_dotfile inputrc
+symlink_dotfile pryrc
+symlink_dotfile tmux.conf
+
 ./osx/setup-preferences
 
-~/.vim/install
+$HOME/.vim/install
 
 sudo vim /etc/shells +'norm 5ggO/usr/local/bin/bash' +wq
 
