@@ -30,6 +30,7 @@ set -e
 
 brew install caskroom/cask/brew-cask
 brew tap caskroom/versions
+brew tap caskroom/fonts
 brew tap pivotal/tap
 brew tap universal-ctags/universal-ctags
 brew tap git-duet/tap
@@ -55,9 +56,7 @@ copy_plist com.googlecode.iterm2.plist
 brew cask install spectacle
 copy_plist com.divisiblebyzero.Spectacle.plist
 
-mkdir -p $HOME/Library/Fonts
-pushd $HOME/Library/Fonts
-curl -L -o "Meslo LG S Regular for Powerline.otf" https://github.com/powerline/fonts/raw/master/Meslo/Meslo%20LG%20S%20Regular%20for%20Powerline.otf
+font-meslo-lg-for-powerline
 
 brew install ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
