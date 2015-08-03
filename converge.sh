@@ -5,9 +5,18 @@ copy_plist() {
   cp $HOME/.dotfiles/osx/plists/$name $HOME/Library/Preferences/$name
 }
 
-symlink_dotfile() {
-  file=$1
-  ln -s $HOME/.dotfiles/$file $HOME/.$file
+symlink_dotfiles() {
+  set +e
+  for file in $@; do
+    ln -s $HOME/.dotfiles/$file $HOME/.$file
+  done
+  set -e
+}
+
+clone() {
+  set +e
+  git clone https://github.com/$1 $HOME/$2
+  set -e
 }
 
 # Disable Caps Lock
@@ -16,21 +25,25 @@ xcode-select --install
 
 # Install Homebrew and enable cask and taps
 ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+set -e
+
 brew install caskroom/cask/brew-cask
 brew tap caskroom/versions
 brew tap pivotal/tap
 brew tap universal-ctags/universal-ctags
 brew tap git-duet/tap
+brew tap nviennot/tmate
 
 # general dependencies
 brew install git
-git clone https://github.com/luan/atom-config.git $HOME/.atom
-git clone https://github.com/luan/vimfiles $HOME/.vim
-git clone https://github.com/luan/dotfiles $HOME/.dotfiles
-git clone --depth=1 https://github.com/Bash-it/bash-it.git $HOME/.bash_it
+
+clone luan/atom-config .atom
+clone luan/vimfiles    .vim
+clone luan/dotfiles    .dotfiles
+clone Bash-it/bash-it  .bash_it
 
 # apps and configs
-
 brew cask install karabiner
 copy_plist org.pqrs.Karabiner.plist
 
@@ -64,15 +77,8 @@ brew install macvim --with-lua
 brew install universal-ctags --HEAD
 
 cd $HOME/.dotfiles
-symlink_dotfile bash_profile
-symlink_dotfile vimrc.after
-symlink_dotfile dir_colors
-symlink_dotfile editrc
-symlink_dotfile gemrc
-symlink_dotfile gitconfig
-symlink_dotfile inputrc
-symlink_dotfile pryrc
-symlink_dotfile tmux.conf
+symlink_dotfiles bash_profile vimrc.after dir_colors editrc gemrc gitconfig \
+  inputrc pryrc tmux.conf
 
 ./osx/setup-preferences
 
@@ -80,7 +86,7 @@ $HOME/.vim/install
 
 sudo vim /etc/shells +'norm 5ggO/usr/local/bin/bash' +wq
 
-exec bash -l
+source $HOME/.bash_profile
 echo chruby chruby-auto fzf fasd ssh tmux osx | xargs -n1 echo bash-it enable plugin | bash -l
 echo bash-it brew defaults gem git gulp npm packer pip rake ssh tmux vagrant | xargs -n1 echo bash-it enable completion | bash -l
 
