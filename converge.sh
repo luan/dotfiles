@@ -86,7 +86,10 @@ $HOME/.vim/install
 sudo vim /etc/shells +'norm 5ggO/usr/local/bin/bash' +wq
 
 source $HOME/.bash_profile
-echo chruby chruby-auto fzf fasd ssh tmux osx | xargs -n1 echo bash-it enable plugin | bash -l
+rm -rf $HOME/.bash_it/plugins/enabled/*
+rm -rf $HOME/.bash_it/completion/enabled/*
+rm -rf $HOME/.bash_it/aliases/enabled/*
+echo chruby fzf fasd ssh tmux osx | xargs -n1 echo bash-it enable plugin | bash -l
 echo bash-it brew defaults gem git gulp npm packer pip rake ssh tmux vagrant | xargs -n1 echo bash-it enable completion | bash -l
 
 brew cask install alfred
