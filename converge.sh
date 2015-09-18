@@ -21,6 +21,10 @@ clone() {
 
 # Disable Caps Lock
 # Install Xcode - https://itunes.apple.com/us/app/xcode/id497799835?mt=12
+open https://itunes.apple.com/us/app/xcode/id497799835?mt=12
+echo "press enter when done"
+read
+
 xcode-select --install
 
 # Install Homebrew and enable cask and taps
@@ -56,7 +60,7 @@ copy_plist com.googlecode.iterm2.plist
 brew cask install spectacle
 copy_plist com.divisiblebyzero.Spectacle.plist
 
-font-meslo-lg-for-powerline
+brew cask install font-meslo-lg-for-powerline
 
 brew install ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
@@ -101,13 +105,16 @@ brew cask install vagrant
 brew cask install wraparound
 
 go get github.com/vito/boosh
-go get github.com/vito/spiff
 go get github.com/tools/godep
+
+curl-L  -o /tmp/spiff.zip https://github.com/cloudfoundry-incubator/spiff/releases/download/v1.0.7/spiff_darwin_amd64.zip
+mkdir -p $HOME/bin
+unzip /tmp/spiff.zip -d $HOME/bin
 
 pip install aws
 
-ruby-install ruby 2.1.6
-chruby ruby-2.1.6
+ruby-install ruby 2.1.7
+chruby ruby-2.1.7
 gem install bosh_cli
 gem install bundler
 
