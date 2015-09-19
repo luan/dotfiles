@@ -52,6 +52,7 @@ brew tap pivotal/tap
 brew tap universal-ctags/universal-ctags
 brew tap git-duet/tap
 brew tap nviennot/tmate
+brew tap neovim/neovim
 
 # general dependencies
 brew_upinstall git
@@ -80,7 +81,7 @@ brew_upinstall ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
   ncdu pstree ruby-install tig tmate tmux tree watch wget xz
 
-brew_install node python
+brew_install node python python3
 
 # formulas that need setup
 brew_install mysql && \
@@ -94,6 +95,9 @@ brew_upinstall vim --with-lua
 brew_install go --with-cc-common
 brew_upinstall macvim --with-lua
 brew_upinstall universal-ctags --HEAD
+
+brew_install neovim --HEAD
+sudo pip3 install neovim
 
 cd $HOME/.dotfiles
 symlink_dotfiles bash_profile vimrc.local vimrc.local.before dir_colors \
