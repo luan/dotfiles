@@ -131,7 +131,7 @@ go get -v -u github.com/tools/godep
 
 curl -L  -o /tmp/spiff.zip https://github.com/cloudfoundry-incubator/spiff/releases/download/v1.0.7/spiff_darwin_amd64.zip
 mkdir -p $HOME/bin
-unzip /tmp/spiff.zip -d $HOME/bin
+unzip -o /tmp/spiff.zip -d $HOME/bin
 
 pip install aws
 
