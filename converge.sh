@@ -79,7 +79,7 @@ brew cask install font-fira-mono-for-powerline
 
 brew_upinstall ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
-  ncdu pstree ruby-install tig tmate tmux tree watch wget xz
+  ncdu pstree ruby-install tig tmate tmux tmux-mem-cup-load tree watch wget xz
 
 brew_install node python python3
 
