@@ -49,3 +49,5 @@ if [ -f $(brew --prefix)/etc/bash_completion ]; then
   . $(brew --prefix)/etc/bash_completion
 fi
 
+export NVIM_TUI_ENABLE_TRUE_COLOR=1
+alias vim=nvim
