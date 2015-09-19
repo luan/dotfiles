@@ -61,6 +61,7 @@ brew cask install spectacle
 copy_plist com.divisiblebyzero.Spectacle.plist
 
 brew cask install font-meslo-lg-for-powerline
+brew cask install font-fira-mono-for-powerline
 
 brew install ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
   fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
