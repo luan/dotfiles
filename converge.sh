@@ -80,8 +80,8 @@ brew install macvim --with-lua
 brew install universal-ctags --HEAD
 
 cd $HOME/.dotfiles
-symlink_dotfiles bash_profile vimrc.after dir_colors editrc gemrc gitconfig \
-  inputrc pryrc tmux.conf
+symlink_dotfiles bash_profile vimrc.local vimrc.local.before dir_colors \
+  editrc gemrc gitconfig inputrc pryrc tmux.conf
 
 ./osx/setup-preferences
 
