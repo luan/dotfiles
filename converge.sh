@@ -137,7 +137,7 @@ curl -L  -o /tmp/spiff.zip https://github.com/cloudfoundry-incubator/spiff/relea
 mkdir -p $HOME/bin
 unzip -o /tmp/spiff.zip -d $HOME/bin
 
-pip install aws
+brew install awscli
 
 ruby-install ruby 2.1.7 --no-reinstall
 chruby ruby-2.1.7
