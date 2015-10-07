@@ -20,20 +20,7 @@ source $HOME/.vim/scripts/base16-shell/base16-monokai.dark.sh
 
 alias ls='ls -G'
 
-bosh() {
-  (
-    if [ ! -f $HOME/workspace/fast-bosh/Gemfile ]; then
-      mkdir -p $HOME/workspace/fast-bosh
-      pushd $HOME/workspace/fast-bosh
-      echo -e "source 'https://rubygems.org'\ngem 'bosh_cli'" > Gemfile
-      gem install bundler
-      bundle install
-      popd
-    fi
-    GEM_PATH= BUNDLE_GEMFILE=$HOME/workspace/fast-bosh/Gemfile bundle exec bosh "$@"
-  )
-}
-export -f bosh
+export BOSH_USE_BUNDLER=true
 
 _direnv_hook() {
   eval "$(direnv export bash)";
