@@ -38,3 +38,4 @@ fi
 
 export NVIM_TUI_ENABLE_TRUE_COLOR=1
 alias vim=nvim
+chruby 2.1.7
