@@ -139,6 +139,8 @@ unzip -o /tmp/spiff.zip -d $HOME/bin
 
 brew install awscli
 
+source /usr/local/opt/chruby/share/chruby/chruby.sh
+
 ruby-install ruby 2.1.7 --no-reinstall
 chruby ruby-2.1.7
 gem install bosh_cli
