@@ -29,7 +29,11 @@ brew_upinstall() {
   brew install $@ || brew upgrade $@
 }
 
-# Disable Caps Lock
+# Enable passwordless sudo
+sudo perl -pi -e 's/%admin\s+ALL=\(ALL\)\s+ALL/%admin ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+
+# Disable Caps Lock (manual step :/)
+
 # Install Xcode - https://itunes.apple.com/us/app/xcode/id497799835?mt=12
 if [ ! -d /Applications/Xcode.app/ ]; then
   open https://itunes.apple.com/us/app/xcode/id497799835?mt=12
