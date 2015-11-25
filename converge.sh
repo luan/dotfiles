@@ -64,7 +64,6 @@ brew_upinstall git
 clone luan/atom-config .atom
 clone luan/vimfiles    .vim
 clone luan/dotfiles    .dotfiles
-clone Bash-it/bash-it  .bash_it
 
 # apps and configs
 brew cask install karabiner
@@ -81,9 +80,9 @@ copy_plist com.divisiblebyzero.Spectacle.plist
 brew cask install font-meslo-lg-for-powerline
 brew cask install font-fira-mono-for-powerline
 
-brew_upinstall ack ag aria2 bash-completion chruby cloudfoundry-cli direnv \
-  fasd fzf git-duet htop-osx jq libevent libffi libtool libyaml mercurial \
-  ncdu pstree ruby-install tig tmate tmux tree watch wget xz
+brew_upinstall ack ag aria2 chruby chruby-fish cloudfoundry-cli direnv fasd fish fzf
+brew_upinstall bash git-duet htop-osx jq libevent libffi libtool libyaml mercurial
+brew_upinstall ncdu pstree ruby-install tig tmate tmux tree watch wget xz
 
 brew_install node python python3
 
@@ -104,24 +103,30 @@ brew_install neovim --HEAD
 sudo pip3 install neovim
 
 cd $HOME/.dotfiles
-symlink_dotfiles bash_profile vimrc.local vimrc.local.before dir_colors \
+symlink_dotfiles vimrc.local vimrc.local.before dir_colors \
   editrc gemrc gitconfig inputrc pryrc tmux.conf
 
 ./osx/setup-preferences
 
 $HOME/.vim/install
 
-sudo vim /etc/shells +'norm 5ggO/usr/local/bin/bash' +wq
+cat <<EOF | sudo tee /etc/shells
+# List of acceptable shells for chpass(1).
+# Ftpd will not allow users to connect who are not using
+# one of these shells.
 
-set +e
-source $HOME/.bash_profile
-set -e
+/usr/local/bin/fish
+/usr/local/bin/bash
+/bin/bash
+/bin/csh
+/bin/ksh
+/bin/sh
+/bin/tcsh
+/bin/zsh
+EOF
 
-rm -rf $HOME/.bash_it/plugins/enabled/*
-rm -rf $HOME/.bash_it/completion/enabled/*
-rm -rf $HOME/.bash_it/aliases/enabled/*
-echo chruby fasd ssh tmux osx | xargs -n1 echo bash-it enable plugin | bash -l
-echo bash-it brew defaults gem git gulp npm packer pip rake ssh tmux vagrant | xargs -n1 echo bash-it enable completion | bash -l
+chsh -s /usr/local/bin/fish
+OMF_CONFIG=$HOME/.dotfiles/omf CI=true fish <(curl -L https://github.com/oh-my-fish/oh-my-fish/raw/master/bin/install) || true
 
 brew cask install alfred
 brew cask install slack
@@ -141,18 +146,19 @@ curl -L  -o /tmp/spiff.zip https://github.com/cloudfoundry-incubator/spiff/relea
 mkdir -p $HOME/bin
 unzip -o /tmp/spiff.zip -d $HOME/bin
 
-brew install awscli
+brew_upinstall awscli
 
-source /usr/local/opt/chruby/share/chruby/chruby.sh
-
-ruby-install ruby 2.1.7 --no-reinstall
-chruby ruby-2.1.7
-gem install bosh_cli
-gem install bundler
+bash <<EOF
+  source /usr/local/opt/chruby/share/chruby/chruby.sh
+  ruby-install ruby 2.1.7 --no-reinstall
+  chruby ruby-2.1.7
+  gem install bosh_cli
+  gem install bundler
+EOF
 
 mkdir -p $HOME/workspace
-mkdir -p $HOME/deployments/{concourse,bosh-lite}
+mkdir -p $HOME/workspace/concourse-lite
 
-set +e
-source $HOME/.bash_profile
-set -e
+(cd $HOME/workspace/concourse-lite && vagrant init concourse/lite || true )
+
+exec fish -l
