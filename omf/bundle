@@ -2,4 +2,4 @@ package brew
 package direnv
 package fzf
 package jump
-theme beloglazov
+theme coffeeandcode

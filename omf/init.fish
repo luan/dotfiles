@@ -13,9 +13,10 @@ set -x BOSH_USE_BUNDLER true
 
 set -x NVIM_TUI_ENABLE_TRUE_COLOR 1
 
-function vim  --description 'Alias vim to neovim'
-  command nvim $argv
+function pullify --description 'adds PRs as remotes'
+  command git config --add remote.origin.fetch '+refs/pull/*/head:refs/remotes/origin/pr/*';
+  command git fetch origin
 end
 
-source /usr/local/share/chruby/chruby.fish
-chruby 2.1.7
+eval (direnv hook fish)
+
