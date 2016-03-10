@@ -22,7 +22,7 @@
   # commit
   c = commit -m                     # commit with message
   ca = commit -am                   # commit all with message
-  ci = commit                       # commit
+  ci = duet-commit                  # commit
   amend = commit --amend            # ammend your last commit
   ammend = commit --amend           # ammend your last commit
 
@@ -113,3 +113,7 @@
 [user]
   email = cfcluan@gmail.com
   name = Luan Santos
+[duet "env"]
+[filter "gitignore"]
+	clean = "sed  '/^\\[duet \"env\"\\]$/,/^\\[/{//p;d;}'"
+[duet "env"]
