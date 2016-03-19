@@ -6,6 +6,10 @@ set -x GIT_DUET_ROTATE_AUTHOR true
 
 set -x GOPATH $HOME/workspace/go
 set -x PATH $GOPATH/bin $PATH
+set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
+set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+
+set -x grcplugin_ls -F --color
 
 bash $HOME/.vim/scripts/base16-shell/base16-monokai.dark.sh
 
