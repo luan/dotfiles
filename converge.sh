@@ -80,7 +80,7 @@ copy_plist com.divisiblebyzero.Spectacle.plist
 brew cask install font-meslo-lg-for-powerline
 brew cask install font-fira-mono-for-powerline
 
-brew_upinstall ack ag aria2 rvm loudfoundry-cli direnv fasd fish fzf
+brew_upinstall ack ag aria2 rvm loudfoundry-cli direnv fasd fish fzf coreutils
 brew_upinstall bash git-duet htop-osx jq libevent libffi libtool libyaml mercurial
 brew_upinstall ncdu pstree ruby-install tig tmate tmux tree watch wget xz
 

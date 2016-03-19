@@ -114,6 +114,7 @@
   email = cfcluan@gmail.com
   name = Luan Santos
 [duet "env"]
-[filter "gitignore"]
-	clean = "sed  '/^\\[duet \"env\"\\]$/,/^\\[/{//p;d;}'"
-[duet "env"]
+	git-author-initials = ls
+	git-author-name = Luan Santos
+	git-author-email = cfcluan@gmail.com
+	mtime = 1457969775

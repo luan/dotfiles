@@ -1,5 +1,12 @@
 package brew
+package config
 package direnv
+package fasd
 package fzf
-package jump
+package grc
+package shark
+package technicolor
+package thefuck
+package title
+package weather
 theme coffeeandcode
