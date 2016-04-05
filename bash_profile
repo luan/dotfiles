@@ -38,6 +38,5 @@ fi
 
 export NVIM_TUI_ENABLE_TRUE_COLOR=1
 alias vim=nvim
-chruby 2.1.7
 
 [[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
