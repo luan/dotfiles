@@ -11,10 +11,12 @@ set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
 
 set -x grcplugin_ls -F --color
 
-if test "$LIGHT_MODE" = "1"
-  bash $HOME/.vim/scripts/base16-shell/base16-atelierdune.light.sh
-else
-  bash $HOME/.vim/scripts/base16-shell/base16-monokai.dark.sh
+if status --is-interactive
+  if test "$LIGHT_MODE" = "1"
+    bash $HOME/.vim/scripts/base16-shell/base16-atelierdune.light.sh
+  else
+    bash $HOME/.vim/scripts/base16-shell/base16-monokai.dark.sh
+  end
 end
 
 set -x BOSH_USE_BUNDLER true
