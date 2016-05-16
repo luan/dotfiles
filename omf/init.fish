@@ -6,8 +6,12 @@ set -x GIT_DUET_ROTATE_AUTHOR true
 
 set -x GOPATH $HOME/workspace/go
 set -x PATH $GOPATH/bin $PATH
-set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
-set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+
+switch (uname)
+case Darwin
+  set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
+  set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+end
 
 set -x grcplugin_ls -F --color
 

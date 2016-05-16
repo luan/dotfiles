@@ -1,15 +1,9 @@
-# Gratuitously stolen from @mathiasbynens
-# https://github.com/mathiasbynens/dotfiles/blob/master/.osx
-
 # Disable menu bar transparency
 defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 
 # Show remaining battery time; hide percentage
 defaults write com.apple.menuextra.battery ShowPercent -string "NO"
 defaults write com.apple.menuextra.battery ShowTime -string "YES"
-
-# Always show scrollbars
-# defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
 
 # Expand save panel by default
 defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
@@ -33,15 +27,11 @@ defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 # Disable Resume system-wide
 defaults write NSGlobalDomain NSQuitAlwaysKeepsWindows -bool false
 
-# # Disable the “reopen windows when logging back in” option
-# # This works, although the checkbox will still appear to be checked,
-# # and the command needs to be entered again for every restart.
-# defaults write com.apple.loginwindow TALLogoutSavesState -bool false
-# defaults write com.apple.loginwindow LoginwindowLaunchesRelaunchApps -bool false
-
-# Fix for the ancient UTF-8 bug in QuickLook (http://mths.be/bbo)
-# Commented out, as this is known to cause problems when saving files in Adobe Illustrator CS5 :(
-# echo "0x08000100:0" > ~/.CFUserTextEncoding
+# Disable the “reopen windows when logging back in” option
+# This works, although the checkbox will still appear to be checked,
+# and the command needs to be entered again for every restart.
+defaults write com.apple.loginwindow TALLogoutSavesState -bool false
+defaults write com.apple.loginwindow LoginwindowLaunchesRelaunchApps -bool false
 
 # Enable full keyboard access for all controls (e.g. enable Tab in modal dialogs)
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
@@ -62,12 +52,6 @@ defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
 defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
 defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
-
-# # Map bottom right Trackpad corner to right-click
-# defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadCornerSecondaryClick -int 2
-# defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadRightClick -bool true
-# defaults -currentHost write NSGlobalDomain com.apple.trackpad.trackpadCornerClickBehavior -int 1
-# defaults -currentHost write NSGlobalDomain com.apple.trackpad.enableSecondaryClick -bool true
 
 # Require password immediately after sleep or screen saver begins
 defaults write com.apple.screensaver askForPassword -int 1
@@ -125,17 +109,6 @@ defaults write com.apple.NetworkBrowser BrowseAllInterfaces -bool true
 # Show the ~/Library folder
 chflags nohidden ~/Library
 
-# # Hot corners
-# # Top left screen corner → Mission Control
-# defaults write com.apple.dock wvous-tl-corner -int 2
-# defaults write com.apple.dock wvous-tl-modifier -int 0
-# # Top right screen corner → Desktop
-# defaults write com.apple.dock wvous-tr-corner -int 4
-# defaults write com.apple.dock wvous-tr-modifier -int 0
-# # Bottom left screen corner → Start screen saver
-# defaults write com.apple.dock wvous-bl-corner -int 5
-# defaults write com.apple.dock wvous-bl-modifier -int 0
-
 # Enable highlight hover effect for the grid view of a stack (Dock)
 defaults write com.apple.dock mouse-over-hilte-stack -bool true
 
@@ -166,16 +139,8 @@ defaults write com.apple.dock persistent-apps -array {}
 # Automatically hide and show the Dock
 defaults write com.apple.dock autohide -bool true
 
-# # Make Dock icons of hidden applications translucent
-# defaults write com.apple.dock showhidden -bool true
-
-# Enable iTunes track notifications in the Dock
-defaults write com.apple.dock itunes-notifications -bool true
-
-# Add a spacer to the left side of the Dock (where the applications are)
-#defaults write com.apple.dock persistent-apps -array-add '{tile-data={}; tile-type="spacer-tile";}'
-# Add a spacer to the right side of the Dock (where the Trash is)
-#defaults write com.apple.dock persistent-others -array-add '{tile-data={}; tile-type="spacer-tile";}'
+# Make Dock icons of hidden applications translucent
+defaults write com.apple.dock showhidden -bool true
 
 # Disable shadow in screenshots
 defaults write com.apple.screencapture disable-shadow -bool true
@@ -204,11 +169,6 @@ defaults write com.apple.iCal IncludeDebugMenu -bool true
 # Only use UTF-8 in Terminal.app
 defaults write com.apple.terminal StringEncodings -array 4
 
-# Enable “focus follows mouse” for Terminal.app and all X11 apps
-# This means you can hover over a window and start typing in it without clicking first
-#defaults write com.apple.terminal FocusFollowsMouse -bool true
-#defaults write org.x.X11 wm_ffm -bool true
-
 # Disable the Ping sidebar in iTunes
 defaults write com.apple.iTunes disablePingSidebar -bool true
 
@@ -233,14 +193,6 @@ defaults write com.apple.dashboard devmode -bool true
 
 # Prevent Time Machine from prompting to use new hard drives as backup volume
 defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true
-
-# Disable local Time Machine backups
-# hash tmutil &> /dev/null && sudo tmutil disablelocal
-
-# # Remove Dropbox’s green checkmark icons in Finder
-# file=/Applications/Dropbox.app/Contents/Resources/check.icns
-# [ -e "$file" ] && mv -f "$file" "$file.bak"
-# unset file
 
 # Enable full keyboard access
 defaults write .GlobalPreferences AppleKeyboardUIMode -int 2
