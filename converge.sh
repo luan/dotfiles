@@ -62,7 +62,9 @@ copy_plist org.pqrs.Karabiner.plist
 copy_plist com.googlecode.iterm2.plist
 copy_plist com.divisiblebyzero.Spectacle.plist
 
-sudo pip3 install neovim
+pip install --upgrade pip
+pip3 install --upgrade pip
+pip3 install neovim
 
 cd $HOME/.dotfiles
 symlink_dotfiles vimrc.local vimrc.local.before dir_colors \
@@ -70,7 +72,10 @@ symlink_dotfiles vimrc.local vimrc.local.before dir_colors \
 
 ./osx/setup-preferences
 
-$HOME/.vim/install
+mkdir -p $HOME/workspace/go
+export GOPATH=$HOME/workspace/go
+
+$HOME/.vim/update
 
 cat <<EOF | sudo tee /etc/shells
 # List of acceptable shells for chpass(1).
@@ -91,9 +96,6 @@ user=$(whoami)
 sudo chsh -s /usr/local/bin/fish $user
 OMF_CONFIG=$HOME/.dotfiles/omf CI=true fish <(curl -L https://github.com/oh-my-fish/oh-my-fish/raw/master/bin/install) || true
 
-mkdir -p $HOME/workspace/go
-export GOPATH=$HOME/workspace/go
-
 go get -v -u github.com/vito/boosh
 go get -v -u github.com/tools/godep
 
@@ -101,8 +103,8 @@ curl -L  -o /tmp/spiff.zip https://github.com/cloudfoundry-incubator/spiff/relea
 mkdir -p $HOME/bin
 unzip -o /tmp/spiff.zip -d $HOME/bin
 
-
 gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3
 curl -sSL https://get.rvm.io | bash -s stable --ruby --gems=bundler,bosh_cli
+curl -L --create-dirs -o ~/.config/fish/functions/rvm.fish https://raw.github.com/lunks/fish-nuggets/master/functions/rvm.fish
 
 exec fish -l

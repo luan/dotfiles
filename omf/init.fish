@@ -33,4 +33,4 @@ function pullify --description 'adds PRs as remotes'
 end
 
 eval (direnv hook fish)
-
+rvm default
