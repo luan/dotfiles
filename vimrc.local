@@ -5,3 +5,7 @@ if $LIGHT_MODE == "1"
 else
   colorscheme base16-monokai
 endif
+
+if has('nvim')
+  set termguicolors
+end

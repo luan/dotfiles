@@ -34,3 +34,5 @@ end
 
 eval (direnv hook fish)
 rvm default
+
+set -x RUST_SRC_PATH $HOME/rust/src

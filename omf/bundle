@@ -4,6 +4,7 @@ package direnv
 package fasd
 package fzf
 package grc
+package rustup
 package shark
 package technicolor
 package title
