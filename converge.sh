@@ -57,6 +57,9 @@ clone luan/atom-config .atom
 clone luan/vimfiles    .vim
 clone luan/dotfiles    .dotfiles
 
+mkdir -p ~/.tmux/plugins
+clone tmux-plugins/tpm .tmux/plugins/tpm
+
 # configs
 copy_plist org.pqrs.Karabiner.plist
 copy_plist com.googlecode.iterm2.plist

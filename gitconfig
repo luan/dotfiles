@@ -113,6 +113,8 @@
 [user]
   email = cfcluan@gmail.com
   name = Luan Santos
+[submodule]
+  fetchJobs = 16
 [duet "env"]
 	git-author-initials = ls
 	git-author-name = Luan Santos
