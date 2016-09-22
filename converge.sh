@@ -97,7 +97,7 @@ EOF
 
 user=$(whoami)
 sudo chsh -s /usr/local/bin/fish $user
-OMF_CONFIG=$HOME/.dotfiles/omf CI=true fish <(curl -L https://github.com/oh-my-fish/oh-my-fish/raw/master/bin/install) || true
+fish <(curl -L https://github.com/oh-my-fish/oh-my-fish/raw/master/bin/install) --path=~/.local/share/omf --config=~/.dotfiles/omf/
 
 go get -v -u github.com/vito/boosh
 go get -v -u github.com/tools/godep

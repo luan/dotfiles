@@ -6,6 +6,7 @@ package fzf
 package grc
 package rustup
 package shark
+package spark
 package technicolor
 package title
 package weather

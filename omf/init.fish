@@ -1,31 +1,31 @@
-set -x EDITOR vim
-set -x GIT_EDITOR vim
+set -gx EDITOR vim
+set -gx GIT_EDITOR vim
 
-set -x GIT_DUET_GLOBAL true
-set -x GIT_DUET_ROTATE_AUTHOR true
+set -gx GIT_DUET_GLOBAL true
+set -gx GIT_DUET_ROTATE_AUTHOR true
 
-set -x GOPATH $HOME/workspace/go
-set -x PATH $GOPATH/bin $PATH
+set -gx GOPATH $HOME/workspace/go
+set -gx PATH $GOPATH/bin $PATH
 
 switch (uname)
 case Darwin
-  set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
-  set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+  set -gx PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
+  set -gx MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
 end
 
-set -x grcplugin_ls -F --color
+set -gx grcplugin_ls -F --color
 
 if status --is-interactive
   if test "$LIGHT_MODE" = "1"
-    bash $HOME/.vim/scripts/base16-shell/base16-atelierdune.light.sh
+    bash $HOME/.vim/scripts/base16-shell/scripts/base16-solarized-light.sh
   else
-    bash $HOME/.vim/scripts/base16-shell/base16-monokai.dark.sh
+    bash $HOME/.vim/scripts/base16-shell/scripts/base16-monokai.sh
   end
 end
 
-set -x BOSH_USE_BUNDLER true
+set -gx BOSH_USE_BUNDLER true
 
-set -x NVIM_TUI_ENABLE_TRUE_COLOR 1
+set -gx NVIM_TUI_ENABLE_TRUE_COLOR 1
 
 function pullify --description 'adds PRs as remotes'
   command git config --add remote.origin.fetch '+refs/pull/*/head:refs/remotes/origin/pr/*';
@@ -33,6 +33,5 @@ function pullify --description 'adds PRs as remotes'
 end
 
 eval (direnv hook fish)
-rvm default
 
-set -x RUST_SRC_PATH $HOME/rust/src
+set -gx RUST_SRC_PATH $HOME/rust/src
