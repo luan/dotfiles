@@ -35,3 +35,4 @@ end
 eval (direnv hook fish)
 
 set -gx RUST_SRC_PATH $HOME/rust/src
+set -gx QT_HOMEBREW true
