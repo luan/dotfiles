@@ -1,11 +1,9 @@
-package brew
 package config
 package direnv
 package fasd
 package fzf
 package grc
 package rustup
-package shark
 package spark
 package technicolor
 package title

@@ -1,5 +1,6 @@
-# set your user tokens as enivornment variables, such as ~/.secrets
-# See the README for examples.
+[user]
+  email = cfcluan@gmail.com
+  name = Luan Santos
 [color]
   ui = true
 [color "branch"]
@@ -12,77 +13,14 @@
   old = red bold
   new = green bold
 [alias]
-  # add
-  a = add                           # add
-  chunkyadd = add --patch           # stage commits chunk by chunk
+  ci = duet-commit
+  co = checkout
+  cp = cherry-pick -x
+  st = status
 
-  # branch
-  b = branch -v                     # branch (verbose)
-
-  # commit
-  c = commit -m                     # commit with message
-  ca = commit -am                   # commit all with message
-  ci = duet-commit                  # commit
-  amend = commit --amend            # ammend your last commit
-  ammend = commit --amend           # ammend your last commit
-
-  # checkout
-  co = checkout                     # checkout
-  nb = checkout -b                  # create and switch to a new branch (mnemonic: "git new branch branchname...")
-
-  # cherry-pick
-  cp = cherry-pick -x               # grab a change from a branch
-
-  # diff
-  d = diff                          # diff unstaged changes
-  dc = diff --cached                # diff staged changes
-  last = diff HEAD^                 # diff last committed change
-
-  # log
   l = log --graph --abbrev-commit --date=relative --decorate --pretty=format:\"%C(yellow)%h%C(bold yellow)%d%Creset %C(blue)%s %C(green)(%ad)%Creset %C(magenta) [%an]%Creset \"
   lg = log --graph --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'
   changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
-  short = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\"
-  changelog = log --pretty=format:\" * %s\"
-  shortnocolor = log --pretty=format:\"%h %cr %cn %s\"
-
-  # pull
-  pl = pull                         # pull
-
-  # push
-  ps = push                         # push
-
-  # rebase
-  rc = rebase --continue            # continue rebase
-  rs = rebase --skip                # skip rebase
-
-  # remote
-  r = remote -v                     # show remotes (verbose)
-
-  # reset
-  unstage = reset HEAD              # remove files from index (tracking)
-  uncommit = reset --soft HEAD^     # go back before last commit, with files in uncommitted state
-  filelog = log -u                  # show changes to a file
-  mt = mergetool                    # fire up the merge tool
-
-  # stash
-  ss = stash                        # stash changes
-  sl = stash list                   # list stashes
-  sa = stash apply                  # apply stash (restore changes)
-  sd = stash drop                   # drop stashes (destory changes)
-
-  # status
-  s = status                        # status
-  st = status                       # status
-  stat = status                     # status
-
-  # tag
-  t = tag -n                        # show tags with <n> lines of each tag message
-
-  # svn helpers
-  svnr = svn rebase
-  svnd = svn dcommit
-  svnl = svn log --oneline --show-commit
 [merge]
   summary = true
   verbosity = 1
@@ -91,13 +29,13 @@
 [branch]
   autosetupmerge = true
 [push]
-  # 'git push' will push the current branch to its tracking branch
-  # the usual default is to push all branches
   default = tracking
+  recurseSubmodules=check
 [core]
   autocrlf = false
   editor = vim
   excludesfile = /Users/luan/.gitignore_global
+  pager = diff-so-fancy | less --tabs=4 -RFX
 [advice]
   statusHints = false
 [diff]
@@ -105,18 +43,8 @@
   # instead of a/b/c/d as prefixes for patches
   mnemonicprefix = true
 [rerere]
-  # Remember my merges
-  # http://gitfu.wordpress.com/2008/04/20/git-rerere-rereremember-what-you-did-last-time/
   enabled = true
 [url "git@github.com:"]
   pushInsteadOf = "https://github.com/"
-[user]
-  email = cfcluan@gmail.com
-  name = Luan Santos
 [submodule]
   fetchJobs = 16
-[duet "env"]
-	git-author-initials = ls
-	git-author-name = Luan Santos
-	git-author-email = cfcluan@gmail.com
-	mtime = 1457969775

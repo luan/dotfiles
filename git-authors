@@ -1,0 +1,12 @@
+authors:
+  luan: Luan Santos; cfcluan
+  ls: Luan Santos
+
+email:
+  prefix: pair
+  domain: gmail.com
+
+email_addresses:
+  ls: lsantos@pivotal.io
+
+global: true
