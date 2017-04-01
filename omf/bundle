@@ -3,6 +3,7 @@ package direnv
 package fasd
 package fzf
 package grc
+package rbenv
 package rustup
 package spark
 package technicolor

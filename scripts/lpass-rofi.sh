@@ -36,5 +36,5 @@ if [[ "$(lpass show -G "$action" | head -n 1)" == *"Multiple matches found"* ]];
     action=${names[$getid]}
 fi
 
-lpass show --password "$action" | xsel --clipboard
+echo -n $(lpass show --password "$action") | xsel --clipboard
 

@@ -1,3 +1,4 @@
+#!/bin/env fish
 set -gx EDITOR vim
 set -gx GIT_EDITOR vim
 
@@ -7,6 +8,7 @@ set -gx GIT_DUET_ROTATE_AUTHOR true
 set -gx PATH $PATH /usr/local/go/bin
 set -gx GOPATH $HOME/workspace/go
 set -gx PATH $GOPATH/bin $PATH
+set -gx PATH $HOME/bin $PATH
 
 switch (uname)
 case Darwin
@@ -36,4 +38,4 @@ end
 eval (direnv hook fish)
 
 set -gx RUST_SRC_PATH $HOME/rust/src
-set -gx QT_HOMEBREW true
+
