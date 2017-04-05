@@ -31,7 +31,7 @@ font pango:Iosevka Term, FontAwesome 11
 floating_modifier $mod
 
 # start a terminal
-bindsym $mod+Return exec alacritty
+bindsym $mod+Return exec alacritty -e ~/bin/tmux-attach.sh
 
 # kill focused window
 bindsym $mod+Shift+q kill
@@ -221,6 +221,13 @@ exec --no-startup-id $mclip daemon
 # LastPass key
 bindsym Mod1+shift+bar exec ~/bin/lpass-rofi.sh
 
+# Wallpaper
+exec feh --randomize --bg-fill ~/.wallpapers/*
+
+# Screen Shots
+bindsym Print       exec --no-startup-id scrot 'Screenshot %Y-%m-%d %H.%M.%S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
+# bindsym Shift+Print exec --no-startup-id scrot -s 'Screenshot %Y-%m-%d %H.%M.%S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
+
 # Brightness controls
 bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks
 bindsym XF86MonBrightnessDown exec --no-startup-id light -U 5 && pkill -RTMIN+11 i3blocks
@@ -235,8 +242,11 @@ for_window [title="Authy"] floating enable
 
 # Name and assign certain workspaces
 exec i3-msg workspace 3 
+exec --no-startup-id slack
 exec i3-msg workspace 2 
+exec --no-startup-id google-chrome-stable
 exec i3-msg workspace 1 
+exec --no-startup-id alacritty -e ~/bin/tmux-attach.sh
 
 assign [class="(?i)google-chrome"] 2 
 assign [class="Slack"] 3 

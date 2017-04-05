@@ -79,7 +79,7 @@ shrink = no
 # The transparency of the window.  Range: [0; 100].
 # This option will only work if a compositing windowmanager is
 # present (e.g. xcompmgr, compiz, etc.).
-transparency = 5
+transparency = 10
 
 # Don't remove messages, if the user is idle (no mouse or keyboard input)
 # for longer than idle_threshold seconds.
@@ -184,23 +184,20 @@ context = ctrl+shift+period
 # IMPORTANT: colors have to be defined in quotation marks.
 # Otherwise the "#" and following would be interpreted as a comment.
 frame_color = "#4B8C97"
-foreground = "#4B8C97"
-background = "#191311"
-#background = "#2B313C"
+foreground = "#ffffff"
+background = "#223035"
 timeout = 4
 
 [urgency_normal]
-frame_color = "#6B9244"
-foreground = "#6B9244"
-background = "#191311"
-#background = "#2B313C"
+frame_color = "#999391"
+foreground = "#ffffff"
+background = "#223035"
 timeout = 6
 
 [urgency_critical]
 frame_color = "#C7573A"
-foreground = "#C7573A"
-background = "#191311"
-#background = "#2B313C"
+foreground = "#ffffff"
+background = "#223035"
 timeout = 8
 
 

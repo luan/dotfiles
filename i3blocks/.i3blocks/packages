@@ -1,0 +1,13 @@
+#!/bin/bash
+
+count=$(pacaur -Qu | wc -l)
+
+if [ $count -gt 0 ]; then
+  echo " $count"
+  echo " $count"
+  echo "#00cc66"
+else
+  echo ""
+  echo ""
+  echo "#666666"
+fi
