@@ -234,9 +234,9 @@ bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle &
 for_window [title="Authy"] floating enable
 
 # Name and assign certain workspaces
-exec i3-msg workspace 1 
-exec i3-msg workspace 2 
 exec i3-msg workspace 3 
+exec i3-msg workspace 2 
+exec i3-msg workspace 1 
 
 assign [class="(?i)google-chrome"] 2 
 assign [class="Slack"] 3 
