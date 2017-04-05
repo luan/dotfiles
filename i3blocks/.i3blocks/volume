@@ -1,0 +1,16 @@
+#!/bin/bash
+
+volume=$(/usr/lib/i3blocks/volume)
+val=$(echo $volume | tr -d '%')
+
+if [ $val == "MUTE" ]; then
+  echo -n ""
+elif [ $val -eq 0 ]; then
+  echo -n ""
+elif [ $val -lt 30 ]; then
+  echo -n ""
+else
+  echo -n ""
+fi
+
+echo " $volume"

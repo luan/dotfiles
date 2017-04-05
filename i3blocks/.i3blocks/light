@@ -1,0 +1,8 @@
+#!/bin/bash
+
+echo "$(light)%"
+
+case $BLOCK_BUTTON in
+  4) light -A 5 ;;
+  5) light -U 5 ;;
+esac
