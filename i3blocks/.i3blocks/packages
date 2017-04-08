@@ -1,6 +1,6 @@
 #!/bin/bash
 
-count=$(pacaur -Qu | wc -l)
+count=$(pacaur -Qyu | wc -l)
 
 if [ $count -gt 0 ]; then
   echo " $count"

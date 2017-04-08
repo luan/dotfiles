@@ -81,6 +81,8 @@ bindsym $mod+s layout stacking
 bindsym $mod+w layout tabbed
 bindsym $mod+e layout toggle split
 
+bindsym $mod+m move workspace to output up
+
 # toggle tiling / floating
 bindsym $mod+Shift+space floating toggle
 
@@ -241,24 +243,24 @@ bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle &
 for_window [title="Authy"] floating enable
 
 # Name and assign certain workspaces
-exec i3-msg workspace 3 
-exec --no-startup-id slack
-exec i3-msg workspace 2 
-exec --no-startup-id google-chrome-stable
-exec i3-msg workspace 1 
-exec --no-startup-id alacritty -e ~/bin/tmux-attach.sh
-
 assign [class="(?i)google-chrome"] 2 
 assign [class="Slack"] 3 
 assign [class="discord"] 3 
-assign [title="Tibia"] 9 tibia
+assign [title="Tibia"] 4 tibia
+exec --no-startup-id slack
+exec --no-startup-id discord
+exec --no-startup-id google-chrome-stable
+exec --no-startup-id alacritty -e ~/bin/tmux-attach.sh
+exec i3-msg workspace 1 
+
+for_window [title="^Tibia Flash Client$"] move container to workspace 4 tibia
 
 # Attempt to get links to actually open in the foreground
 for_window [urgent=latest] focus
 
 # Autolock/turn off screen
 exec --no-startup-id xset dpms 120
-exec --no-startup-id xautolock -time 5 -locker i3lock
+exec --no-startup-id xautolock -time 5 -locker i3lock -c 000000
 
 # System Mode
 set $Locker i3lock && sleep 0.5

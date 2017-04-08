@@ -23,6 +23,8 @@ dimensions:
 dpi:
   x: 192.0
   y: 192.0
+  # x: 147.0
+  # y: 147.0
 
 # Display tabs using this many cells (changes require restart)
 tabspaces: 8
@@ -57,6 +59,8 @@ font:
   offset:
     x: 9.0
     y: 7.0
+    # x: 5.0
+    # y: 3.0
 
   # OS X only: use thin stroke font rendering. Thin strokes are suitable
   # for retina displays, but for non-retina you probably want this set to
