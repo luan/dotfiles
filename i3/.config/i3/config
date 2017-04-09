@@ -197,8 +197,8 @@ set $color15    #FFFFFF
 bar {
         separator_symbol " | "
         position top
+        tray_output primary
         status_command i3blocks
-        tray_output none
         colors {
                 background $background
                 statusline $foreground
@@ -211,6 +211,9 @@ bar {
 
 # Notification deamon
 exec --no-startup-id dunst
+
+# network manager gui
+exec --no-startup-id nm-applet
 
 # Compositing
 exec --no-startup-id compton -b --backend glx --vsync opengl
