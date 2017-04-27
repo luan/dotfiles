@@ -3,7 +3,7 @@ if $LIGHT_MODE == "1"
   set background=light
   colorscheme base16-atelierdune
 else
-  colorscheme base16-default-dark
+  " colorscheme base16-default-dark
 endif
 
 

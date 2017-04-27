@@ -127,8 +127,6 @@ bindsym $mod+Shift+0 move container to workspace number 10
 bindsym $mod+Shift+c reload
 # restart i3 inplace (preserves your layout/session, can be used to upgrade i3)
 bindsym $mod+Shift+r restart
-# exit i3 (logs you out of your X session)
-bindsym $mod+Shift+e exec "i3-nagbar -t warning -m 'You pressed the exit shortcut. Do you really want to exit i3? This will end your X session.' -b 'Yes, exit i3' 'i3-msg exit'"
 
 # resize window (you can also use the mouse for that)
 mode "resize" {
@@ -261,12 +259,17 @@ for_window [title="^Tibia Flash Client$"] move container to workspace 4 tibia
 # Attempt to get links to actually open in the foreground
 for_window [urgent=latest] focus
 
+set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
+
 # Autolock/turn off screen
-exec --no-startup-id xset dpms 120
-exec --no-startup-id xautolock -time 5 -locker 'i3lock -c 000000'
+# exec --no-startup-id xset dpms 120
+# exec --no-startup-id xautolock -time 5 -locker $Locker
+exec --no-startup-id xautolock -detectsleep \
+  -notify   60 -notifier "xset dpms force off" \
+  -time     5  -locker   "$Locker" \
+  -killtime 10 -killer   "systemctl suspend"
 
 # System Mode
-set $Locker i3lock && sleep 0.5
 set $mode_system System (l) lock, (e) logout, (s) suspend, (h) hibernate, (r) reboot, (Shift+s) shutdown
 mode "$mode_system" {
     bindsym l exec --no-startup-id $Locker, mode "default"
@@ -283,9 +286,16 @@ mode "$mode_system" {
 
 bindsym $mod+Delete mode "$mode_system"
 
+set $mode_exit exit (enter) cancel (Escape)
+mode "$mode_exit" {
+    bindsym Return exec --no-startup-id i3-msg exit, mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+Shift+e mode "$mode_exit"
+
 # TODO: make touchpad hack more generic
 set $touchpad "DLL07BE:01 06CB:7A13 Touchpad"
-exec --no-startup-id xinput set-prop $touchpad "libinput Tapping Enabled" 1
+# exec --no-startup-id xinput set-prop $touchpad "libinput Tapping Enabled" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Accel Speed" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0 1
 
