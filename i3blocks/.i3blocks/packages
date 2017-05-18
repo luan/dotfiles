@@ -1,8 +1,12 @@
 #!/bin/bash
 
+if [[ "${BLOCK_BUTTON}" -eq 1 ]]; then
+  notify-send Packages "$(checkupdates)"
+fi
+
 count=$(checkupdates | wc -l)
 
-if [ $count -gt 0 ]; then
+if [ "$count" -gt 0 ]; then
   echo " $count"
   echo " $count"
   echo "#00cc66"
