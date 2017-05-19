@@ -244,9 +244,9 @@ bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle &
 for_window [title="Authy"] floating enable
 
 # Name and assign certain workspaces
-assign [title=".*Slack$"] 3 
 assign [class="(?i)google-chrome"] 2 
 assign [class="discord"] 3 
+assign [class="slack"] 3 
 assign [title="Tibia"] 4 tibia
 
 exec i3-msg workspace 1 
@@ -262,7 +262,6 @@ exec --no-startup-id slack
 exec i3-msg workspace 1 
 
 for_window [title="^Tibia Flash Client$"] move container to workspace 4 tibia
-for_window [title="Slack$"] move container to workspace 3 
 
 # Attempt to get links to actually open in the foreground
 for_window [urgent=latest] focus
