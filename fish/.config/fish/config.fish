@@ -6,6 +6,10 @@ set -gx GIT_EDITOR vim
 set -gx GIT_DUET_GLOBAL true
 set -gx GIT_DUET_ROTATE_AUTHOR true
 
+# PATH
+set -gx PATH $PATH /usr/local/bin
+set -gx PATH $PATH $HOME/bin
+
 # golang
 set -gx PATH $PATH /usr/local/go/bin
 set -gx GOPATH $HOME/workspace/go
