@@ -1,1 +1,5 @@
+# update key repeat rate
+xset r rate 200 30
+setxkbmap -option ctrl:nocaps
+
 xrandr --dpi 192

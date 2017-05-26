@@ -1,0 +1,1 @@
+/home/luan/.config/fish/config.fish
