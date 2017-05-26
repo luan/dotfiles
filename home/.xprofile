@@ -2,4 +2,5 @@
 xset r rate 200 30
 setxkbmap -option ctrl:nocaps
 
+export QT_SCALE_FACTOR=2
 xrandr --dpi 192
