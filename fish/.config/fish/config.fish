@@ -7,11 +7,11 @@ set -gx GIT_DUET_GLOBAL true
 set -gx GIT_DUET_ROTATE_AUTHOR true
 
 # PATH
-set -gx PATH $PATH /usr/local/bin
-set -gx PATH $PATH $HOME/bin
+set -gx PATH /usr/local/bin $PATH
+set -gx PATH $HOME/bin $PATH
 
 # golang
-set -gx PATH $PATH /usr/local/go/bin
+set -gx PATH /usr/local/go/bin $PATH
 set -gx GOPATH $HOME/workspace/go
 set -gx PATH $GOPATH/bin $PATH
 set -gx PATH $HOME/bin $PATH
