@@ -60,6 +60,10 @@ stow home
 stow i3
 stow i3blocks
 stow dunst
+stow fish
+stow compton
+stow alacritty
+stow rofi
 
 mkdir -p ~/.tmux/plugins
 

@@ -1,3 +1,7 @@
 secrets
 .DS_Store
 .dropbox
+fish/.config/functions
+fish/.config/conf.d
+fish/.config/completions
+fish/.config/fishd.*
