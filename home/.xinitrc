@@ -7,7 +7,7 @@
 eval $(ssh-agent)
 
 # hide mouse cursour when inactive
-unclutter -root -visible &
+# unclutter -root -visible &
 
 source ~/.xprofile
 

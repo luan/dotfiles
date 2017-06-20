@@ -159,7 +159,7 @@ mode "resize" {
 
 bindsym $mod+r mode "resize"
 
-new_window pixel 0
+new_window pixel 1
 new_float  pixel 4
 
 ## Base16 Ocean
@@ -257,7 +257,7 @@ exec i3-msg workspace 1 
 exec --no-startup-id $term
 
 # Attempt to get links to actually open in the foreground
-for_window [urgent=latest] focus
+# for_window [urgent=latest] focus
 
 set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
 
