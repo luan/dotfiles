@@ -57,6 +57,7 @@ sudo pacman -Syu --needed --noconfirm yajl git expac
 # pac xsel
 # 
 stow home
+stow x11
 stow i3
 stow i3blocks
 stow dunst
