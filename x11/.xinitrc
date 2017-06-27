@@ -6,9 +6,6 @@
 # start ssh-agent
 eval $(ssh-agent)
 
-# hide mouse cursour when inactive
-# unclutter -root -visible &
-
-source ~/.xprofile
+autorandr -c
 
 exec /usr/bin/i3

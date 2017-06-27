@@ -46,15 +46,13 @@ rofi.color-window: #273238, #273238, #1e2529
 rofi.color-normal: #273238, #c1c1c1, #273238, #394249, #ffffff
 rofi.color-active: #273238, #80cbc4, #273238, #394249, #80cbc4
 rofi.color-urgent: #273238, #ff1844, #273238, #394249, #ff1844
-rofi.font: Iosevka Term 12
-rofi.dpi: 147
+rofi.font: Iosevka Term
 
 Rxvt.font: xft:Iosevka Term:size=8.5
 Rxvt.scrollBar: false
 
 Xft.antialias: true
 Xft.autohint: 0
-Xft.dpi: 147
 Xft.hinting: true
 Xft.hintstyle: hintslight
 Xft.lcdfilter: lcddefault

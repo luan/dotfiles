@@ -1,22 +1,4 @@
-# update key repeat rate
-xset r rate 200 30
-setxkbmap -option ctrl:nocaps
-
-# export QT_SCALE_FACTOR=2
-# xrandr --dpi 192
-# SCALE=2.0
-# WIDTH=$(echo  "scale=2; 1920*$SCALE" | bc | cut -d "." -f1)
-# HEIGHT=$(echo "scale=2; 1080*$SCALE" | bc | cut -d "." -f1)
-# xrandr --output eDP-1 --auto --output HDMI-1 --auto --panning ${WIDTH}x${HEIGHT}+3840+0 --scale ${SCALE}x${SCALE} --right-of eDP-1
-
-xrandr --dpi 147
-SCALE=0.77
-WIDTH=$(echo  "scale=2; 3840*$SCALE" | bc | cut -d "." -f1)
-HEIGHT=$(echo "scale=2; 2160*$SCALE" | bc | cut -d "." -f1)
-xrandr --output eDP-1 --auto --panning ${WIDTH}x${HEIGHT}+0+0 --scale ${SCALE}x${SCALE} --output DP-1-2 --auto --panning 3840x2160+${WIDTH}+0 --right-of eDP-1
-
-# xrandr --dpi 96
-# SCALE=0.5
-# WIDTH=$(echo  "scale=2; 1920*$SCALE" | bc | cut -d "." -f1)
-# HEIGHT=$(echo "scale=2; 1080*$SCALE" | bc | cut -d "." -f1)
-# xrandr --output eDP-1 --auto --panning ${WIDTH}x${HEIGHT}+0+0 --scale ${SCALE}x${SCALE} --output HDMI-1 --auto --panning 1920x1080+${WIDTH}+0 --right-of eDP-1
+# SCALE=0.77
+# WIDTH=$(echo  "scale=2; 3840*$SCALE" | bc | cut -d "." -f1)
+# HEIGHT=$(echo "scale=2; 2160*$SCALE" | bc | cut -d "." -f1)
+# xrandr --output eDP-1 --auto --panning ${WIDTH}x${HEIGHT}+0+0 --scale ${SCALE}x${SCALE} --output DP-1-2 --auto --panning 3840x2160+${WIDTH}+0 --right-of eDP-1

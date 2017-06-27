@@ -7,3 +7,12 @@ else
 endif
 
 
+" testing rounded separators (extra-powerline-symbols):
+let g:airline_left_sep = "\uE0C6"
+let g:airline_right_sep = "\uE0C7"
+
+" set the CN (column number) symbol:
+let g:airline_section_z = airline#section#create(["\uE0A1" . '%{line(".")}' . "\uE0A3" . '%{col(".")}'])
+
+let g:airline_symbols.branch = ''
+let g:airline_symbols.readonly = ''
