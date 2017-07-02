@@ -66,6 +66,7 @@ fzf
 gawk
 gcc
 gcc-libs
+gcc5
 gdm
 gedit
 gedit-code-assistance
@@ -186,6 +187,7 @@ nodejs
 nvidia
 nvidia-utils
 nvme-cli-git
+openbsd-netcat
 openssh
 openssl-1.0
 openvpn
@@ -244,6 +246,7 @@ termite
 termite-terminfo
 texinfo
 the_silver_searcher
+tibia
 tlp
 tmux
 totem
