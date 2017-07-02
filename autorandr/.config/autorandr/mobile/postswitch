@@ -1,0 +1,10 @@
+#!/bin/bash
+
+xrandr --dpi 192
+xrdb -merge -I$HOME $HOME/.Xresources-192
+
+xset r rate 200 30
+setxkbmap -option ctrl:nocaps
+
+date > /tmp/ran
+

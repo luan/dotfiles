@@ -1,0 +1,6 @@
+#!/bin/bash
+
+xset r rate 200 30
+setxkbmap -option ctrl:nocaps
+
+date > /tmp/ran
