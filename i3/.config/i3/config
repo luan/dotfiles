@@ -210,8 +210,8 @@ bindsym XF86AudioLowerVolume exec --no-startup-id amixer -q sset Master 5%- && p
 bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle && pkill -RTMIN+10 i3blocks
 
 # Make Authy a floating window
-for_window [title="Authy"] move container to workspace 10 
-for_window [title="Authy"] floating enable
+for_window [title="^Authy$"] move container to workspace 10 
+for_window [title="^Authy$"] floating enable
 
 # Name and assign certain workspaces
 assign [class="(?i)google-chrome"] 2 

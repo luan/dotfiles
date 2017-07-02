@@ -1,0 +1,5 @@
+bumblebeed.service
+tlp.service
+NetworkManager.service
+docker.service
+autorandr.service

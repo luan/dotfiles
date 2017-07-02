@@ -1,0 +1,10 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+for srvc in $(cat $DIR/state/srvclist.txt); do
+  sudo systemctl enable $srvc
+done
+
+pacaur -S - < $DIR/state/pkglist.txt
+
