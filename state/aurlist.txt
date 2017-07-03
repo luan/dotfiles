@@ -17,10 +17,11 @@ i3-gaps
 i3blocks-git
 j4-dmenu-desktop
 light
-linux-userns
+nautilus-dropbox
 nerd-fonts-complete
 nvme-cli-git
 pacaur
+pia-nm
 polybar
 powerline-fonts-git
 private-internet-access-vpn

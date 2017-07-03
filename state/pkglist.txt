@@ -1,3 +1,4 @@
+a52dec
 aalib
 accerciser
 accountsservice
@@ -88,6 +89,7 @@ damageproto
 db
 dbus
 dbus-glib
+dcadec
 dconf
 dconf-editor
 desktop-file-utils
@@ -123,6 +125,7 @@ enchant
 eog
 epiphany
 espeak
+ethtool
 evince
 evolution
 evolution-data-server
@@ -136,6 +139,7 @@ fakeroot
 farstream
 feh
 ffmpeg
+ffmpeg2.8
 fftw
 file
 file-roller
@@ -148,9 +152,11 @@ flac
 flatpak
 flex
 folks
+fontconfig
 fontsproto
 four-in-a-row
 freerdp
+freetype2
 fribidi
 fuse-common
 fuse2
@@ -163,6 +169,8 @@ gcc5
 gconf
 gcr
 gd
+gdb
+gdb-common
 gdbm
 gdk-pixbuf2
 gdl
@@ -306,6 +314,7 @@ hitori
 hspell
 htop
 http-parser
+hub
 hunspell
 hunspell-en
 hunspell-en_GB
@@ -317,6 +326,7 @@ iagno
 iana-etc
 icu
 idnkit
+iftop
 ijs
 imagemagick
 imlib2
@@ -390,8 +400,10 @@ libdca
 libdmapsharing
 libdrm
 libdv
+libdvbpsi
 libdvdnav
 libdvdread
+libebml
 libedit
 libelf
 libepoxy
@@ -436,12 +448,14 @@ libimobiledevice
 libinput
 libiptcdata
 libjpeg-turbo
+libkate
 libksba
 libldap
 liblouis
 liblqr
 libmad
 libmariadbclient
+libmatroska
 libmediaart
 libmm-glib
 libmms
@@ -507,18 +521,21 @@ libssh
 libssh2
 libstemmer
 libsystemd
+libtar
 libtasn1
 libteam
 libtermkey
 libthai
 libtheora
 libtiff
+libtiger
 libtirpc
 libtool
 libtracker-sparql
 libtxc_dxtn
 libunistring
 libunwind
+libupnp
 libusb
 libusbmuxd
 libutempter
@@ -626,6 +643,7 @@ nodejs
 npth
 nspr
 nss
+ntfs-3g
 nvidia
 nvidia-utils
 ocl-icd
@@ -633,6 +651,7 @@ oniguruma
 openal
 openbsd-netcat
 opencore-amr
+openjpeg
 openjpeg2
 openresolv
 openssh
@@ -755,6 +774,7 @@ schroedinger
 scrnsaverproto
 sdl
 sdl2
+sdl_image
 seahorse
 sed
 serf
@@ -832,6 +852,7 @@ vim-runtime
 vinagre
 vino
 virtualgl
+vlc
 volume_key
 vte-common
 vte3-ng
@@ -892,11 +913,13 @@ xorg-xhost
 xorg-xinit
 xorg-xinput
 xorg-xkbcomp
+xorg-xmessage
 xorg-xmodmap
 xorg-xprop
 xorg-xrandr
 xorg-xrdb
 xorg-xset
+xorg-xsetroot
 xproto
 xsel
 xvidcore
