@@ -1,5 +1,6 @@
 bumblebeed.service
-tlp.service
 NetworkManager.service
+tlp.service
 docker.service
+powertop.service
 autorandr.service

@@ -1,13 +1,15 @@
 alacritty-git
 autorandr-git
+bosh-cli
 chrome-gnome-shell-git
 cower
 direnv
 discord
+dropbox
+dropbox-cli
 envypn-font
 fisherman
-fontconfig-infinality-ultimate
-freetype2-infinality-ultimate
+git-duet
 git-extras
 google-chrome
 gtk-theme-arc-git
