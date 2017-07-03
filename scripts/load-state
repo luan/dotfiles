@@ -2,9 +2,11 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
+pacaur --noconfirm --noedit --needed -S - < $DIR/state/pkglist.txt
+
+sudo cp -i -r $DIR/state/fslayer/* /
+
 for srvc in $(cat $DIR/state/srvclist.txt); do
   sudo systemctl enable $srvc
 done
-
-pacaur -S - < $DIR/state/pkglist.txt
 
