@@ -193,6 +193,8 @@ client.background       $base07
 # Notification deamon
 exec --no-startup-id dunst
 
+bindsym $mod+Shift+z sticky toggle
+
 # LastPass key
 bindsym Mod1+shift+bar exec rofi -modi lpass:lpass-rofi -show lpass
 
@@ -236,9 +238,9 @@ set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
 
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
-  -notify   60 -notifier "xset dpms force off" \
-  -time     5  -locker   "$Locker" \
-  -killtime 10 -killer   "systemctl suspend"
+  -notify   300 -notifier "xset dpms force off" \
+  -time     10  -locker   "$Locker" \
+  -killtime 20 -killer   "systemctl suspend"
 
 # System Mode
 set $mode_system System (l) lock, (e) logout, (s) suspend, (h) hibernate, (r) reboot, (Shift+s) shutdown

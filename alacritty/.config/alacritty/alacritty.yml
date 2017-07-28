@@ -18,14 +18,6 @@ dimensions:
   columns: 80
   lines: 24
 
-# The FreeType rasterizer needs to know the device DPI for best results
-# (changes require restart)
-dpi:
-  x: 147.0
-  y: 147.0
-  # x: 96.0
-  # y: 96.0
-
 # Display tabs using this many cells (changes require restart)
 tabspaces: 8
 
@@ -53,11 +45,11 @@ font:
     style: Italic
 
   # Point size of the font
-  size: 9.5
+  size: 10.0
   # Offset is the extra space around each character. offset.y can be thought of
   # as modifying the linespacing, and offset.x as modifying the letter spacing.
   offset:
-    x: 0.0
+    x: -1.0
     y: 0.0
 
   # OS X only: use thin stroke font rendering. Thin strokes are suitable

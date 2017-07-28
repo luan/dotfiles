@@ -84,5 +84,5 @@ if is-entry-selected "$1"; then
     exit 1
   fi
 else
-  print-account-list
+  lpass status && print-account-list
 fi

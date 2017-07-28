@@ -16,6 +16,9 @@ set -gx GOPATH $HOME/workspace/go
 set -gx PATH $GOPATH/bin $PATH
 set -gx PATH $HOME/bin $PATH
 
+# lpass
+set -gx LPASS_DISABLE_PINENTRY 1
+
 set grc_wrap_options_ls -F --color
 
 if status --is-interactive
@@ -31,3 +34,7 @@ function pullify --description 'adds PRs as remotes'
   command git fetch origin
 end
 
+
+set -gx DISPLAY :0.0
+
+eval (direnv hook fish)

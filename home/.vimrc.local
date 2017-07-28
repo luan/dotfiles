@@ -1,18 +1,33 @@
 " colorscheme gruvbox
-if $LIGHT_MODE == "1"
+if $LIGHT_MODE ==# '1'
   set background=light
   colorscheme base16-atelierdune
 else
-  colorscheme base16-ashes
+  let ayucolor='dark'
+  colorscheme ayu
 endif
 
+let g:deoplete#sources#clang#libclang_path = '/usr/lib/libclang.so'
+let g:deoplete#sources#clang#clang_header = '/usr/lib/clang'
+au BufWrite *.c,*.cpp,*.h,*.hpp :Autoformat
+au FileType cpp setlocal foldmethod=syntax
 
-" testing rounded separators (extra-powerline-symbols):
-let g:airline_left_sep = "\uE0C6"
-let g:airline_right_sep = "\uE0C7"
+let s:projections = {
+      \ '*.c': {'type': 'c', 'alternate': ['{}.h']},
+      \ '*.h': {'type': 'c', 'alternate': ['{}.c']},
+      \ '*.cpp': {'type': 'cpp', 'alternate': ['{}.hpp']},
+      \ '*.hpp': {'type': 'cpp', 'alternate': ['{}.cpp']},
+      \ '*': {}
+      \ }
 
-" set the CN (column number) symbol:
-let g:airline_section_z = airline#section#create(["\uE0A1" . '%{line(".")}' . "\uE0A3" . '%{col(".")}'])
+function! s:ProjectionistDetect() abort
+  if &filetype ==# 'c' || &filetype ==# 'cpp'
+    let l:projections = deepcopy(s:projections)
+    call projectionist#append(getcwd(), l:projections)
+  endif
+endfunction
 
-let g:airline_symbols.branch = ''
-let g:airline_symbols.readonly = ''
+augroup c_projectionist
+  autocmd!
+  autocmd User ProjectionistDetect call s:ProjectionistDetect()
+augroup END

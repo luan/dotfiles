@@ -2,6 +2,12 @@ authors:
   luan: Luan Santos; cfcluan
   ls: Luan Santos
   ks: Kauana Santos; kau.grola
+  dz: Difan Zhao
+  tv: Tom Viehman
+  rdr: Rob Day Reynolds
+  jy: James Young
+  db: Danny Berger
+  ac: Arthur Chan
 
 email:
   prefix: pair
@@ -9,6 +15,12 @@ email:
 
 email_addresses:
   ls: lsantos@pivotal.io
+  dz: dzhao@pivotal.io
   nk: nkodabande@suse.com
+  tv: tviehman@pivotal.io
+  rdr: rdayreynolds@pivotal.io
+  jy: jayoung@pivotal.io
+  db: dberger@pivotal.io
+  ac: achan@pivotal.io
 
 global: true
