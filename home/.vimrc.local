@@ -3,8 +3,9 @@ if $LIGHT_MODE ==# '1'
   set background=light
   colorscheme base16-atelierdune
 else
-  let ayucolor='dark'
-  colorscheme ayu
+  " let ayucolor='dark'
+  " colorscheme ayu
+  colorscheme OceanicNext
 endif
 
 let g:deoplete#sources#clang#libclang_path = '/usr/lib/libclang.so'

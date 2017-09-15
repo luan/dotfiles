@@ -77,29 +77,41 @@ bindsym $mod+c focus child
 bindsym $mod+n workspace next
 bindsym $mod+p workspace prev
 
+
+set $w1 "1 "
+set $w2 "2 "
+set $w3 "3 "
+set $w4 "4 "
+set $w5 "5 "
+set $w6 "6"
+set $w7 "7"
+set $w8 "8"
+set $w9 "9 "
+set $w10 "10 "
+
 # switch to workspace
-bindsym $mod+1 workspace 1 
-bindsym $mod+2 workspace 2 
-bindsym $mod+3 workspace 3 
-bindsym $mod+4 workspace 4 
-bindsym $mod+5 workspace 5 
-bindsym $mod+6 workspace number 6
-bindsym $mod+7 workspace number 7
-bindsym $mod+8 workspace number 8
-bindsym $mod+9 workspace number 9
-bindsym $mod+0 workspace 10 
+bindsym $mod+1 workspace $w1
+bindsym $mod+2 workspace $w2
+bindsym $mod+3 workspace $w3
+bindsym $mod+4 workspace $w4
+bindsym $mod+5 workspace $w5
+bindsym $mod+6 workspace $w6
+bindsym $mod+7 workspace $w7
+bindsym $mod+8 workspace $w8
+bindsym $mod+9 workspace $w9
+bindsym $mod+0 workspace $w10
 
 # move focused container to workspace
-bindsym $mod+Shift+1 move container to workspace 1 
-bindsym $mod+Shift+2 move container to workspace 2 
-bindsym $mod+Shift+3 move container to workspace 3 
-bindsym $mod+Shift+4 move container to workspace 4 
-bindsym $mod+Shift+5 move container to workspace 5 
-bindsym $mod+Shift+6 move container to workspace number 6
-bindsym $mod+Shift+7 move container to workspace number 7
-bindsym $mod+Shift+8 move container to workspace number 8
-bindsym $mod+Shift+9 move container to workspace number 9
-bindsym $mod+Shift+0 move container to workspace 10 
+bindsym $mod+Shift+1 move container to workspace $w1
+bindsym $mod+Shift+2 move container to workspace $w2
+bindsym $mod+Shift+3 move container to workspace $w3
+bindsym $mod+Shift+4 move container to workspace $w4
+bindsym $mod+Shift+5 move container to workspace $w5
+bindsym $mod+Shift+6 move container to workspace $w6
+bindsym $mod+Shift+7 move container to workspace $w7
+bindsym $mod+Shift+8 move container to workspace $w8
+bindsym $mod+Shift+9 move container to workspace $w9
+bindsym $mod+Shift+0 move container to workspace $w10
 
 # reload the configuration file
 bindsym $mod+Shift+c reload
@@ -183,9 +195,9 @@ bar {
 
 # Basic color configuration using the Base16 variables for windows and borders.
 # Property Name         Border  BG      Text    Indicator Child Border
-client.focused          $base0D $base0D $base00 $base0D $base0D
+client.focused          $base0C $base0C $base00 $base0C $base0C
 client.focused_inactive $base01 $base01 $base05 $base03 $base01
-client.unfocused        $base00 $base00 $base05 $base01 $base01
+client.unfocused        $base02 $base01 $base05 $base01 $base01
 client.urgent           $base08 $base08 $base00 $base08 $base08
 client.placeholder      $base00 $base00 $base05 $base00 $base00
 client.background       $base07
@@ -199,8 +211,8 @@ bindsym $mod+Shift+z sticky toggle
 bindsym Mod1+shift+bar exec rofi -modi lpass:lpass-rofi -show lpass
 
 # Screen Shots
-bindsym Print       exec --no-startup-id scrot 'Screenshot %Y-%m-%d %H.%M.%S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
-# bindsym Shift+Print exec --no-startup-id scrot -s 'Screenshot %Y-%m-%d %H.%M.%S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
+bindsym --release Print       exec --no-startup-id scrot 'Screenshot %Y-%m-%d %H.%M.%S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
+bindsym --release Shift+Print exec --no-startup-id scrot -s /tmp/foo.png && xclip -selection clipboard -t image/png -i /tmp/foo.png && rm /tmp/foo.png
 
 # Brightness controls
 bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks
@@ -211,17 +223,24 @@ bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -q sset Master 5%+ && p
 bindsym XF86AudioLowerVolume exec --no-startup-id amixer -q sset Master 5%- && pkill -RTMIN+10 i3blocks
 bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle && pkill -RTMIN+10 i3blocks
 
+# Media player controls
+bindsym XF86AudioPause exec playerctl play-pause
+bindsym XF86AudioNext exec playerctl next
+bindsym XF86AudioPrev exec playerctl previous
+
 # Make Authy a floating window
-for_window [title="^Authy$"] move container to workspace 10 
+for_window [title="^Authy$"] move container to workspace $w10
 for_window [title="^Authy$"] floating enable
 
 # Name and assign certain workspaces
-assign [class="(?i)google-chrome"] 2 
-assign [class="discord"] 3 
-assign [class="(?i)slack"] 3 
-assign [class="(?i)zoom"] 4 
-assign [class="(?i)remmina"] 5 
-assign [title="Tibia"] 6 tibia
+assign [class="(?i)google-chrome"] $w2
+assign [class="(?i)firefox"] $w2
+assign [class="discord"] $w3
+assign [class="(?i)slack"] $w3
+assign [class="(?i)zoom"] $w4
+assign [class="(?i)remmina"] $w5
+
+for_window [class="Spotify"] move to workspace $w9
 
 # exec --no-startup-id google-chrome-stable
 # exec --no-startup-id discord
@@ -238,9 +257,9 @@ set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
 
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
-  -notify   300 -notifier "xset dpms force off" \
-  -time     10  -locker   "$Locker" \
-  -killtime 20 -killer   "systemctl suspend"
+  -notify   900 -notifier "xset dpms force off" \
+  -time     30  -locker   "$Locker" \
+  -killtime 60 -killer   "systemctl suspend"
 
 # System Mode
 set $mode_system System (l) lock, (e) logout, (s) suspend, (h) hibernate, (r) reboot, (Shift+s) shutdown
@@ -271,7 +290,7 @@ exec --no-startup-id xinput set-prop $touchpad "libinput Accel Speed" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0 1
 
 exec --no-startup-id compton -b --backend glx --vsync opengl
-exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
+# exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 
 exec --no-startup-id parcellite
 

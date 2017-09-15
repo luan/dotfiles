@@ -8,6 +8,9 @@ authors:
   jy: James Young
   db: Danny Berger
   ac: Arthur Chan
+  af: Alton Fong
+  ts: Tyler Schultz
+  zg: Zachary Gershman
 
 email:
   prefix: pair
@@ -22,5 +25,8 @@ email_addresses:
   jy: jayoung@pivotal.io
   db: dberger@pivotal.io
   ac: achan@pivotal.io
+  af: altonf@vmware.com
+  ts: tshultz@pivotal.io
+  zg: zgershman@pivotal.io
 
 global: true

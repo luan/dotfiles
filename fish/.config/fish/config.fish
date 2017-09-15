@@ -1,6 +1,6 @@
 # editors
 set -gx EDITOR vim
-set -gx GIT_EDITOR vim
+set -gx GIT_EDITOR nvim
 
 # git duet
 set -gx GIT_DUET_GLOBAL true
@@ -25,7 +25,7 @@ if status --is-interactive
   if test "$LIGHT_MODE" = "1"
     bash $HOME/.vim/scripts/base16-shell/scripts/base16-solarized-light.sh
   else
-    bash $HOME/.vim/scripts/base16-shell/scripts/base16-ashes.sh
+    bash $HOME/.vim/scripts/base16-shell/scripts/base16-tomorrow-night.sh
   end
 end
 
@@ -34,7 +34,8 @@ function pullify --description 'adds PRs as remotes'
   command git fetch origin
 end
 
-
 set -gx DISPLAY :0.0
 
 eval (direnv hook fish)
+
+set -gx SSOCA_ENVIRONMENT bosh-cpi
