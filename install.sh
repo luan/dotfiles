@@ -66,6 +66,7 @@ stow fish
 stow compton
 stow alacritty
 stow rofi
+stow polybar
 
 mkdir -p ~/.tmux/plugins
 

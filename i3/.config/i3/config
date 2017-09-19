@@ -3,7 +3,7 @@ set $term alacritty
 
 # Font for window titles. Will also be used by the bar unless a different font
 # is used in the bar {} block below.
-font pango:Iosevka Nerd Font 10
+font pango:TerminessTTF Nerd Font 10
 
 # focus not follow mouse
 focus_follows_mouse no
@@ -27,12 +27,6 @@ bindsym $mod+k focus up
 bindsym $mod+l focus right
 bindsym $mod+Tab workspace back_and_forth
 
-# alternatively, you can use the cursor keys:
-# bindsym $mod+Left focus left
-# bindsym $mod+Down focus down
-# bindsym $mod+Up focus up
-# bindsym $mod+Right focus right
-
 # move focused window
 bindsym $mod+Shift+h move left
 bindsym $mod+Shift+j move down
@@ -46,10 +40,10 @@ bindsym $mod+Shift+Up move up
 bindsym $mod+Shift+Right move right
 
 # split in horizontal orientation
-# bindsym $mod+b split h
+bindsym $mod+b split h
 
 # split in vertical orientation
-# bindsym $mod+v split v
+bindsym $mod+v split v
 
 # enter fullscreen mode for the focused container
 bindsym $mod+f fullscreen toggle
@@ -149,10 +143,8 @@ new_float  pixel 4
 smart_borders on
 smart_gaps on
 
-## Base16 Ocean
-# Author: Chris Kempson (http://chriskempson.com)
-#
-# You can use these variables anywhere in the i3 configuration file.
+gaps outer 5
+gaps inner 5
 
 set $base00 #1C2023
 set $base01 #393F45
@@ -166,32 +158,10 @@ set $base08 #C7AE95
 set $base09 #C7C795
 set $base0A #AEC795
 set $base0B #95C7AE
-set $base0C #95AEC7
+set $base0C #EAC07B
 set $base0D #AE95C7
 set $base0E #C795AE
 set $base0F #C79595
-
-bar {
-    separator_symbol " | "
-    position top
-    tray_output none
-    status_command i3blocks
-    font pango:Iosevka Nerd Font 14
-    height 50
-
-    colors {
-        background $base00
-        separator  $base01
-        statusline $base04
-
-        # State             Border  BG      Text
-        focused_workspace   $base05 $base0C $base00
-        active_workspace    $base05 $base03 $base00
-        inactive_workspace  $base03 $base01 $base05
-        urgent_workspace    $base08 $base08 $base00
-        binding_mode        $base03 $base0B $base01
-    }
-}
 
 # Basic color configuration using the Base16 variables for windows and borders.
 # Property Name         Border  BG      Text    Indicator Child Border
@@ -242,17 +212,6 @@ assign [class="(?i)remmina"] $w5
 
 for_window [class="Spotify"] move to workspace $w9
 
-# exec --no-startup-id google-chrome-stable
-# exec --no-startup-id discord
-# exec --no-startup-id slack
-# exec --no-startup-id /opt/google/chrome/google-chrome --profile-directory=Default --app-id=gaedmjdfmmahhbjefcbgaolhhanlaolb
-
-# exec i3-msg workspace 1 
-# exec --no-startup-id $term
-
-# Attempt to get links to actually open in the foreground
-# for_window [urgent=latest] focus
-
 set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
 
 # Autolock/turn off screen
@@ -278,10 +237,10 @@ mode "$mode_system" {
 
 bindsym $mod+Delete mode "$mode_system"
 
-mode "  " {
+mode "" {
     bindsym Menu mode "default"
 }
-bindsym Menu mode "  "
+bindsym Menu mode ""
 
 # TODO: make touchpad hack more generic
 set $touchpad "DLL07BE:01 06CB:7A13 Touchpad"
@@ -290,7 +249,9 @@ exec --no-startup-id xinput set-prop $touchpad "libinput Accel Speed" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0 1
 
 exec --no-startup-id compton -b --backend glx --vsync opengl
-# exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
+exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 
 exec --no-startup-id parcellite
+
+exec_always --no-startup-id "~/.config/i3/startup.sh"
 
