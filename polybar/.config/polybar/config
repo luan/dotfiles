@@ -26,7 +26,7 @@ underline-color = #fff
 spacing = 0
 
 line-size = 6
-line-color = #ccff0000
+line-color = ${colors.background}
 
 border-size = 0
 
@@ -64,7 +64,7 @@ format = <label-state> <label-mode>
 ; Default: %mode%
 label-mode = %mode%
 label-mode-padding = 2
-label-mode-background = #cc535388
+label-mode-background = #535388
 
 ; Available tokens:
 ;   %name%
