@@ -11,6 +11,7 @@ authors:
   af: Alton Fong
   ts: Tyler Schultz
   zg: Zachary Gershman
+  ja: Joshua Aresty
 
 email:
   prefix: pair
@@ -28,5 +29,6 @@ email_addresses:
   af: altonf@vmware.com
   ts: tshultz@pivotal.io
   zg: zgershman@pivotal.io
+  ja: joshua.aresty@emc.com
 
 global: true

@@ -71,6 +71,7 @@ bindsym $mod+c focus child
 bindsym $mod+n workspace next
 bindsym $mod+p workspace prev
 
+bindsym $mod+x [urgent=latest] focus
 
 set $w1 "1 "
 set $w2 "2 "
@@ -140,11 +141,11 @@ bindsym $mod+r mode "resize"
 
 new_window pixel 1
 new_float  pixel 4
-smart_borders on
+smart_borders no_gaps
 smart_gaps on
 
 gaps outer 5
-gaps inner 5
+gaps inner 10
 
 set $base00 #1C2023
 set $base01 #393F45
@@ -158,7 +159,7 @@ set $base08 #C7AE95
 set $base09 #C7C795
 set $base0A #AEC795
 set $base0B #95C7AE
-set $base0C #EAC07B
+set $base0C #AA803B
 set $base0D #AE95C7
 set $base0E #C795AE
 set $base0F #C79595

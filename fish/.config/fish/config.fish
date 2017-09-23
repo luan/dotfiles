@@ -34,6 +34,14 @@ function pullify --description 'adds PRs as remotes'
   command git fetch origin
 end
 
+function story --description 'sets gitmessage with story info'
+  if test -n "$argv[1]"
+    echo -e "\n\n[#"$argv[1]"](https://www.pivotaltracker.com/story/show/"$argv[1]")" > ~/.gitmessage
+  else
+    echo -n > ~/.gitmessage
+  end
+end
+
 set -gx DISPLAY :0.0
 
 eval (direnv hook fish)

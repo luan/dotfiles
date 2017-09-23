@@ -11,22 +11,19 @@ throttle-limit = 5
 
 [bar/top]
 width = 100%
-height = 48
+height = 40
 radius = 0.0
 fixed-center = false
 
 background = ${colors.background}
 foreground = ${colors.foreground}
 
-overline-size = 6
+overline-size = 3
 overline-color = #bc92f8
-underline-size = 6
+underline-size = 3
 underline-color = #fff
 
 spacing = 0
-
-line-size = 6
-line-color = ${colors.background}
 
 border-size = 0
 
@@ -34,10 +31,10 @@ padding-left = 0
 padding-right = 1
 
 module-margin-left = 1
-module-margin-right = 2
+module-margin-right = 1
 
-font-0 = TerminessTTF Nerd Font:pixelsize=22;4
-font-1 = TerminessTTF Nerd Font:pixelsize=14;4
+font-0 = TerminessTTF Nerd Font:pixelsize=18;2
+font-1 = TerminessTTF Nerd Font:pixelsize=12;2
 
 modules-left = i3
 modules-center = xwindow
@@ -105,42 +102,48 @@ label-urgent-padding-right = 1
 [module/cpu]
 type = internal/cpu
 interval = 2
-format-prefix = " "
-format-prefix-foreground = ${colors.foreground-alt}
-format = <label> <bar-load>
-; format-underline = #f90000
+format-prefix = 
+format-prefix-foreground = ${colors.foreground}
+format = <label> <ramp-coreload>
 label = %percentage:3%%
 
-bar-load-indicator = |
-bar-load-width = 8
-bar-load-foreground-0 = #55aa55
-bar-load-foreground-1 = #557755
-bar-load-foreground-2 = #f5a70a
-bar-load-foreground-3 = #ff5555
-bar-load-fill = ━
-bar-load-empty = ─
-bar-load-empty-foreground = #444444
+ramp-coreload-0 = %{O-4}▁
+
+ramp-coreload-0-foreground = #5f819d
+ramp-coreload-1 = %{O-4}▂
+ramp-coreload-1-foreground = #5f819d
+ramp-coreload-2 = %{O-4}▃
+ramp-coreload-2-foreground = #f0c674
+ramp-coreload-3 = %{O-4}▄
+ramp-coreload-3-foreground = #f0c674
+ramp-coreload-4 = %{O-4}▅
+ramp-coreload-4-foreground = #de935f
+ramp-coreload-5 = %{O-4}▆
+ramp-coreload-5-foreground = #de935f
+ramp-coreload-6 = %{O-4}▇
+ramp-coreload-6-foreground = #a54242
+ramp-coreload-7 = %{O-4}█
+ramp-coreload-7-foreground = #a54242
 
 [module/memory]
 type = internal/memory
 interval = 2
 format = <label> <bar-used>
-format-prefix = " "
-format-prefix-foreground = ${colors.foreground-alt}
-; format-underline = #4bffdc
+format-prefix = 
+format-prefix-foreground = ${colors.foreground}
 
 label = %gb_used:8%/%gb_total%
 
 ; Only applies if <bar-used> is used
-bar-used-indicator = |
-bar-used-width = 8
+bar-used-indicator =
+bar-used-width = 14
 bar-used-foreground-0 = #55aa55
 bar-used-foreground-1 = #557755
 bar-used-foreground-2 = #f5a70a
 bar-used-foreground-3 = #ff5555
-bar-used-fill = ━
-bar-used-empty = ─
-bar-used-empty-foreground = #444444
+bar-used-fill = %{O-1}█
+bar-used-empty = %{O-1}▁
+bar-used-empty-foreground = #666
 
 [module/network]
 type = internal/network
@@ -171,7 +174,7 @@ format-packetloss = <animation-packetloss> <label-connected>
 ;   %downspeed% [wireless+wired]
 ;   %linkspeed% [wired]
 ; Default: %ifname% %local_ip%
-label-connected = %{F#6699ff99}%essid%%{F-} %{T2} %downspeed:7%  %upspeed:7%%{T-}
+label-connected = %{F#66aa66}%essid%%{F-} %{T2} %downspeed:7%  %upspeed:7%%{T-}
 
 ; Available tokens:
 ;   %ifname%    [wireless+wired]
@@ -180,7 +183,7 @@ label-disconnected = not connected
 label-disconnected-foreground = #66ffffff
 
 ramp-signal-0 = " "
-format-prefix-foreground = ${colors.foreground-alt}
+format-prefix-foreground = ${colors.foreground}
 format-disconnected-underline = #ff7f7f
 format-connected-underline = #7fff7f
 
@@ -209,10 +212,10 @@ ramp-volume-1 = 
 ramp-volume-2 = 
 
 format-muted-prefix = " "
-format-muted-foreground = ${colors.foreground-alt}
+format-muted-foreground = #666
 label-muted = muted
 
-bar-volume-width = 8
+bar-volume-width = 10
 bar-volume-foreground-0 = #55aa55
 bar-volume-foreground-1 = #55aa55
 bar-volume-foreground-2 = #55aa55
@@ -221,13 +224,10 @@ bar-volume-foreground-4 = #55aa55
 bar-volume-foreground-5 = #f5a70a
 bar-volume-foreground-6 = #ff5555
 bar-volume-gradient = false
-bar-volume-indicator = |
-bar-volume-indicator-font = 2
-bar-volume-fill = ─
-bar-volume-fill-font = 2
-bar-volume-empty = ─
-bar-volume-empty-font = 2
-bar-volume-empty-foreground = ${colors.foreground-alt}
+bar-volume-indicator = %{O-4}┃
+bar-volume-fill = %{O-1}━
+bar-volume-empty = %{O-1}─
+bar-volume-empty-foreground = #666
 
 [module/battery]
 type = internal/battery
@@ -294,33 +294,6 @@ animation-charging-4 = 
 ; Framerate in milliseconds
 animation-charging-framerate = 750
 
-[module/powermenu]
-type = custom/menu
-
-format-spacing = 1
-
-label-open = ⏻
-label-open-foreground = ${colors.secondary}
-label-close =  cancel
-label-close-foreground = ${colors.secondary}
-label-separator = |
-label-separator-foreground = ${colors.foreground-alt}
-
-menu-0-0 = reboot
-menu-0-0-exec = menu-open-1
-menu-0-1 = power off
-menu-0-1-exec = menu-open-2
-
-menu-1-0 = cancel
-menu-1-0-exec = menu-open-0
-menu-1-1 = reboot
-menu-1-1-exec = sudo reboot
-
-menu-2-0 = power off
-menu-2-0-exec = sudo poweroff
-menu-2-1 = cancel
-menu-2-1-exec = menu-open-0
-
 [settings]
 screenchange-reload = true
 ;compositing-background = xor
@@ -338,7 +311,7 @@ exec = ~/.config/polybar/spotify.sh
 exec-if = pgrep -x spotify
 tail = true
 interval = 0.2
-format-prefix = " "
+format-prefix =
 format-prefix-foreground = #81b71a
 format-padding = 1
 
@@ -346,7 +319,7 @@ format-padding = 1
 type = custom/script
 exec = ~/.config/polybar/packages.sh
 tail = true
-interval = 5
+interval = 60
 format-padding = 0
 
 

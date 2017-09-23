@@ -16,8 +16,8 @@ main() {
 	else
 		echo -n "%{u#00000000}"
 	fi
-
-  echo -n "$artist %{F#cc555555}-%{F-} "
+	echo -n "%{A1:i3-msg workspace number 9:}%{F#81b71a}%{A} %{F-}"
+	echo -n "$artist %{F#cc555555}-%{F-} "
 	echo -n "$title"
 	echo -n "%{u#00000000}  "
 	echo -n " %{A1:playerctl previous:}%{A} "

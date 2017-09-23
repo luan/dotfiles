@@ -48,3 +48,5 @@
   pushInsteadOf = "https://github.com/"
 [submodule]
   fetchJobs = 16
+[commit]
+  template = ~/.gitmessage
