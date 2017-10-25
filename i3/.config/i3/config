@@ -80,7 +80,7 @@ set $w4 "4 "
 set $w5 "5 "
 set $w6 "6"
 set $w7 "7"
-set $w8 "8"
+set $w8 "8 "
 set $w9 "9 "
 set $w10 "10 "
 
@@ -205,7 +205,7 @@ for_window [title="^Authy$"] floating enable
 
 # Name and assign certain workspaces
 assign [class="(?i)google-chrome"] $w2
-assign [class="(?i)firefox"] $w2
+assign [class="(?i)firefox"] $w8
 assign [class="discord"] $w3
 assign [class="(?i)slack"] $w3
 assign [class="(?i)zoom"] $w4

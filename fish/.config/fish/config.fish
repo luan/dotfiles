@@ -1,5 +1,7 @@
+alias vim nvim
+
 # editors
-set -gx EDITOR vim
+set -gx EDITOR nvim
 set -gx GIT_EDITOR nvim
 
 # git duet

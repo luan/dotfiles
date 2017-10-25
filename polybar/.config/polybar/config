@@ -38,7 +38,7 @@ font-1 = TerminessTTF Nerd Font:pixelsize=12;2
 
 modules-left = i3
 modules-center = xwindow
-modules-right = spotify network memory cpu battery volume date packages
+modules-right = spotify wifi wired memory cpu battery volume date packages
 
 
 [module/xwindow]
@@ -145,7 +145,49 @@ bar-used-fill = %{O-1}█
 bar-used-empty = %{O-1}▁
 bar-used-empty-foreground = #666
 
-[module/network]
+[module/wired]
+type = internal/network
+interface = enp14s0u1u2
+interval = 3.0
+
+; Available tags:
+;   <label-connected> (default)
+;   <ramp-signal>
+format-connected = <ramp-signal> <label-connected>
+
+; Available tags:
+;   <label-disconnected> (default)
+format-disconnected = <label-disconnected>
+
+; Available tags:
+;   <label-connected> (default)
+;   <label-packetloss>
+;   <animation-packetloss>
+format-packetloss = <animation-packetloss> <label-connected>
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+;   %local_ip%  [wireless+wired]
+;   %essid%     [wireless]
+;   %signal%    [wireless]
+;   %upspeed%   [wireless+wired]
+;   %downspeed% [wireless+wired]
+;   %linkspeed% [wired]
+; Default: %ifname% %local_ip%
+label-connected = %{F#66aa66}%linkspeed%%{F-} %{T2} %downspeed:7%  %upspeed:7%%{T-}
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+; Default: (none)
+; label-disconnected = not connected
+; label-disconnected-foreground = #66ffffff
+
+ramp-signal-0 = " "
+format-prefix-foreground = ${colors.foreground}
+format-disconnected-underline = #ff7f7f
+format-connected-underline = #7fff7f
+
+[module/wifi]
 type = internal/network
 interface = wlp2s0
 interval = 3.0
@@ -179,8 +221,8 @@ label-connected = %{F#66aa66}%essid%%{F-} %{T2} %downspeed:7%  %upspeed:7%
 ; Available tokens:
 ;   %ifname%    [wireless+wired]
 ; Default: (none)
-label-disconnected = not connected
-label-disconnected-foreground = #66ffffff
+; label-disconnected = not connected
+; label-disconnected-foreground = #66ffffff
 
 ramp-signal-0 = " "
 format-prefix-foreground = ${colors.foreground}
