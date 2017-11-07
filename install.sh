@@ -60,7 +60,6 @@ stow home
 stow x11
 stow autorandr
 stow i3
-stow i3blocks
 stow dunst
 stow fish
 stow compton
