@@ -1,6 +1,6 @@
 #!/bin/bash
 
-xrandr --dpi 178
+xrandr --dpi 192
 xrdb -merge -I$HOME $HOME/.Xresources-internal-display
 
 xset r rate 200 30
