@@ -1,6 +1,7 @@
 [user]
   email = cfcluan@gmail.com
   name = Luan Santos
+	signingkey = 0xCD0E63A032001A8A
 [color]
   ui = true
 [color "branch"]
@@ -13,7 +14,7 @@
   old = red bold
   new = green bold
 [alias]
-  ci = duet-commit
+  ci = duet-commit -S
   co = checkout
   cp = cherry-pick -x
   st = status
