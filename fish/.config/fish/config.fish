@@ -16,7 +16,11 @@ set -gx PATH $HOME/bin $PATH
 set -gx PATH /usr/local/go/bin $PATH
 set -gx GOPATH $HOME/workspace
 set -gx PATH $GOPATH/bin $PATH
-set -gx PATH $HOME/bin $PATH
+
+# rust
+source $HOME/.cargo/env
+set -gx LD_LIBRARY_PATH (rustc --print sysroot)/lib
+
 
 # lpass
 set -gx LPASS_DISABLE_PINENTRY 1
