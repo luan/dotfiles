@@ -1,7 +1,7 @@
 #!/bin/bash
 
-xrandr --dpi 152
-xrdb -merge -I$HOME $HOME/.Xresources-147
+xrandr --dpi 96
+xrdb -merge -I$HOME $HOME/.Xresources-96
 
 xset r rate 200 30
 setxkbmap -option ctrl:nocaps

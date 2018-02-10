@@ -8,10 +8,13 @@ secondary = #e60053
 [settings]
 throttle-ms = 50
 throttle-limit = 5
+dpi = ${xrdb:Xft.dpi:96}
 
 [bar/top]
+; monitor=DP-1-2
 width = 100%
 height = 40
+; height = 27 * 3
 radius = 0.0
 fixed-center = false
 
@@ -34,12 +37,17 @@ module-margin-left = 1
 module-margin-right = 1
 
 font-0 = TerminessTTF Nerd Font:pixelsize=18;2
-font-1 = TerminessTTF Nerd Font:pixelsize=12;2
+; font-1 = TerminessTTF Nerd Font:pixelsize=12;2
+; font-0 = TerminessTTF Nerd Font:pixelsize=12;2
+font-1 = TerminessTTF Nerd Font:pixelsize=8;2
 
 modules-left = i3
 modules-center = xwindow
 modules-right = spotify wifi wired memory cpu battery volume date packages
 
+tray-position = right
+tray-padding = 2
+tray-maxsize = 1000
 
 [module/xwindow]
 type = internal/xwindow
@@ -335,13 +343,6 @@ animation-charging-3 = 
 animation-charging-4 = 
 ; Framerate in milliseconds
 animation-charging-framerate = 750
-
-[settings]
-screenchange-reload = true
-;compositing-background = xor
-;compositing-background = screen
-;compositing-foreground = source
-;compositing-border = over
 
 [global/wm]
 margin-top = 5

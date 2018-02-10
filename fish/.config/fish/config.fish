@@ -21,10 +21,6 @@ set -gx PATH $GOPATH/bin $PATH
 source $HOME/.cargo/env
 set -gx LD_LIBRARY_PATH (rustc --print sysroot)/lib
 
-
-# lpass
-set -gx LPASS_DISABLE_PINENTRY 1
-
 set grc_wrap_options_ls -F --color
 
 if status --is-interactive
@@ -53,3 +49,4 @@ set -gx DISPLAY :0.0
 eval (direnv hook fish)
 
 set -gx SSOCA_ENVIRONMENT bosh-cpi
+
