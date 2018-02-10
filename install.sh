@@ -12,6 +12,13 @@ clone() {
 
 sudo pacman -Syu --needed --noconfirm yajl git expac
 
+if ! which trizen; then
+  pushd "$(mktemp -d)"
+    git clone https://aur.archlinux.org/trizen.git
+    (cd trizen && makepkg -i --noconfirm)
+  popd
+fi
+
 stow home
 stow x11
 stow autorandr
