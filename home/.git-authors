@@ -12,6 +12,7 @@ authors:
   ts: Tyler Schultz
   zg: Zachary Gershman
   ja: Joshua Aresty
+  cd: Chris Dutra
 
 email:
   prefix: pair
@@ -30,5 +31,6 @@ email_addresses:
   ts: tshultz@pivotal.io
   zg: zgershman@pivotal.io
   ja: joshua.aresty@emc.com
+  cd: cdutra@pivotal.io
 
 global: true
