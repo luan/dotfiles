@@ -18,14 +18,14 @@ sudo pacman -Syu --needed --noconfirm yajl git expac
 
 # if ! which pacaur; then
 #   pushd "$(mktemp -d)"
-#     git clone https://aur.archlinux.org/cower.git 
+#     git clone https://aur.archlinux.org/cower.git
 #     gpg --recv-keys --keyserver hkp://pgp.mit.edu 1EB2638FF56C0C53
 #     (cd cower ; makepkg -i --noconfirm)
 #     git clone https://aur.archlinux.org/pacaur.git
 #     (cd pacaur && makepkg -i --noconfirm)
 #   popd
 # fi
-# 
+#
 # pac acpi
 # pac alacritty-git
 # pac alsa-utils

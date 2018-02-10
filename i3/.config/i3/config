@@ -80,7 +80,7 @@ set $w4 "4 "
 set $w5 "5 "
 set $w6 "6"
 set $w7 "7"
-set $w8 "8 "
+set $w8 "8 "
 set $w9 "9 "
 set $w10 "10 "
 
@@ -206,7 +206,7 @@ for_window [title="^Gnee"] floating enable
 
 # Name and assign certain workspaces
 assign [class="(?i)google-chrome"] $w2
-assign [class="(?i)firefox"] $w8
+assign [class="(?i)firefox"] $w2
 assign [class="discord"] $w3
 assign [class="(?i)slack"] $w3
 assign [class="(?i)franz"] $w3
@@ -255,8 +255,10 @@ exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0
 exec --no-startup-id compton -b --backend glx --vsync opengl
 exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 
-exec --no-startup-id parcellite
-exec --no-startup-id redshift-gtk
-
 exec_always --no-startup-id "~/.config/i3/startup.sh"
+
+exec --no-startup-id parcellite
+exec --no-startup-id redshift-qt
+exec --no-startup-id dropbox
+
 
