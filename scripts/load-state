@@ -2,9 +2,9 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-pacaur --noconfirm --noedit --needed -Sr - < $DIR/state/pkglist.txt
-pacaur --noconfirm --noedit --needed -S - < $DIR/state/aurlist.txt
-pacaur --noconfirm -Rsu $(comm -23 <(pacman -Qq | sort) <(sort $DIR/state/pkglist.txt $DIR/state/aurlist.txt))
+trizen --noconfirm --noedit --needed -Sr - < $DIR/state/pkglist.txt
+trizen --noconfirm --noedit --needed -S - < $DIR/state/aurlist.txt
+trizen --noconfirm -Rsu $(comm -23 <(pacman -Qq | sort) <(sort $DIR/state/pkglist.txt $DIR/state/aurlist.txt))
 
 sudo cp -i -r $DIR/state/fslayer/* /
 

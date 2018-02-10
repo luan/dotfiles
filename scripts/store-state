@@ -4,6 +4,6 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 mkdir -p $DIR/state
 find /etc/systemd/system/*.wants/ -name '*.service' | cut -d'/' -f6 | grep -v '@' > $DIR/state/srvclist.txt
-pacaur -Qqn > $DIR/state/pkglist.txt
-pacaur -Qqm > $DIR/state/aurlist.txt
+trizen -Qqn > $DIR/state/pkglist.txt
+trizen -Qqm > $DIR/state/aurlist.txt
 

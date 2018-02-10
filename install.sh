@@ -10,67 +10,22 @@ clone() {
   set -e
 }
 
-pac() {
-  pacaur -S --noedit --noconfirm --needed "$@"
-}
-
 sudo pacman -Syu --needed --noconfirm yajl git expac
-
-# if ! which pacaur; then
-#   pushd "$(mktemp -d)"
-#     git clone https://aur.archlinux.org/cower.git
-#     gpg --recv-keys --keyserver hkp://pgp.mit.edu 1EB2638FF56C0C53
-#     (cd cower ; makepkg -i --noconfirm)
-#     git clone https://aur.archlinux.org/pacaur.git
-#     (cd pacaur && makepkg -i --noconfirm)
-#   popd
-# fi
-#
-# pac acpi
-# pac alacritty-git
-# pac alsa-utils
-# pac compton
-# pac diff-so-fancy
-# pac direnv
-# pac dunst
-# pac fasd
-# pac fish
-# pac git-extras
-# pac grc
-# pac i3-wm
-# pac i3blocks-git
-# pac i3lock
-# pac jq
-# pac lastpass-cli
-# pac powerline-fonts-git
-# pac rofi
-# pac stow
-# pac sysstat
-# pac tmux
-# pac ttf-font-awesome
-# pac ttf-iosevka
-# pac ttf-iosevka-term
-# pac ttf-ms-fonts
-# pac xautolock
-# pac xclip
-# pac xdg-utils
-# pac xsel
 
 stow home
 stow x11
 stow autorandr
 stow i3
 stow dunst
-stow fish
 stow compton
 stow alacritty
 stow rofi
 stow polybar
 
-mkdir -p ~/.tmux/plugins
+mkdir -p ~/.tmux
 
-clone luan/vimfiles    .vim
-clone tmux-plugins/tpm .tmux/plugins/tpm
+clone luan/vimfiles    .config/vim
+clone luan/tmuxfiles   .config/tmux
 
 mkdir -p "$HOME/workspace/go"
 export GOPATH="$HOME/workspace/go"
@@ -86,7 +41,6 @@ else
 fi
 
 
-#user=$(whoami)
-#sudo chsh -s "$(which fish)" "$user"
-#fish <(curl -L https://github.com/oh-my-fish/oh-my-fish/raw/master/bin/install) --path=~/.local/share/omf --config=~/.dotfiles/omf/
+user=$(whoami)
+sudo chsh -s "$(which zsh)" "$user"
 
