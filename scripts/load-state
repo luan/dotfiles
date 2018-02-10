@@ -1,14 +1,16 @@
 #!/bin/bash
 
+set -e -x -o pipefail
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-trizen --noconfirm --noedit --needed -Sr - < $DIR/state/pkglist.txt
-trizen --noconfirm --noedit --needed -S - < $DIR/state/aurlist.txt
-trizen --noconfirm -Rsu $(comm -23 <(pacman -Qq | sort) <(sort $DIR/state/pkglist.txt $DIR/state/aurlist.txt))
+trizen --noconfirm --noedit --needed -Sr - < "$DIR/state/pkglist.txt"
+trizen --noconfirm --noedit --needed -S - < "$DIR/state/aurlist.txt"
+trizen --noconfirm -Rsu "$(comm -23 <(pacman -Qq | sort) <(sort "$DIR/state/pkglist.txt" "$DIR/state/aurlist.txt"))"
 
-sudo cp -i -r $DIR/state/fslayer/* /
+sudo cp -i -r "$DIR/state/fslayer/*" /
 
-for srvc in $(cat $DIR/state/srvclist.txt); do
-  sudo systemctl enable $srvc
-done
+while read -r srvc; do
+  sudo systemctl enable "$srvc"
+done < "$DIR/state/srvclist.txt"
 

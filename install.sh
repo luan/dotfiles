@@ -47,7 +47,8 @@ else
   echo "Skipping gitconfig"
 fi
 
+if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
+  sudo chsh -s "$(which zsh)" "$LOGNAME"
+fi
 
-user=$(whoami)
-sudo chsh -s "$(which zsh)" "$user"
-
+"$dotfiles_dir/scripts/load-state"
