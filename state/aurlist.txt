@@ -32,11 +32,9 @@ libc++
 libc++abi
 light
 meteor-js
-neovim-git
 nerd-fonts-complete
 ngrok
 nvme-cli-git
-oni
 otf-fira-code
 polybar
 powerline-fonts-git

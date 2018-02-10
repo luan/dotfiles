@@ -19,20 +19,23 @@ if ! which trizen; then
   popd
 fi
 
-stow home
-stow x11
-stow autorandr
-stow i3
-stow dunst
-stow compton
-stow alacritty
-stow rofi
-stow polybar
+stow -R home
+stow -R x11
+stow -R autorandr
+stow -R i3
+stow -R dunst
+stow -R compton
+stow -R alacritty
+stow -R rofi
+stow -R polybar
 
-mkdir -p ~/.tmux
+mkdir -p ~/.config
 
-clone luan/vimfiles    .config/vim
-clone luan/tmuxfiles   .config/tmux
+clone luan/vimfiles  .config/vim  || true
+clone luan/tmuxfiles .config/tmux || true
+
+(cd $HOME/.config/tmux && ./install)
+(cd $HOME/.config/vim  && ./install)
 
 mkdir -p "$HOME/workspace/go"
 export GOPATH="$HOME/workspace/go"

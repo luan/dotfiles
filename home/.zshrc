@@ -65,3 +65,5 @@ eval "$(direnv hook zsh)"
 export DISPLAY=:0
 
 
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
