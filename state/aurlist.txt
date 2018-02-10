@@ -3,7 +3,6 @@ alacritty-terminfo-git
 autorandr-git
 bosh-cli
 cloudfoundry-cli
-cower
 direnv
 discord
 downgrader
@@ -11,7 +10,6 @@ dropbox
 dropbox-cli
 envypn-font
 firefox-nightly
-fisherman
 franz
 gcc5
 gcsfuse
@@ -19,11 +17,7 @@ git-extras
 google-chrome
 google-cloud-sdk
 grc
-i3blocks-git
-icu55
-j4-dmenu-desktop
 jdk8
-jsawk-git
 kakoune-git
 keybase-bin
 kitty-git
@@ -37,16 +31,9 @@ ngrok
 nvme-cli-git
 otf-fira-code
 polybar
-powerline-fonts-git
 pragmatapro-local
 private-internet-access-vpn
-python-lz4
-python2-gtkglext
-python2-lz4
 rbenv
-redshift-qt
-redshiftconf
-rencode
 ruby-build
 signal-desktop-bin
 siji-git

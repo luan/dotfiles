@@ -5,6 +5,6 @@ if $LIGHT_MODE ==# '1'
 else
   " let ayucolor='dark'
   " colorscheme ayu
-  colorscheme OceanicNext
+  " colorscheme OceanicNext
 endif
 

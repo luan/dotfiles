@@ -30,7 +30,6 @@ avahi
 baobab
 bash
 bbswitch
-bc
 bdf-unifont
 bind-tools
 binutils
@@ -64,7 +63,6 @@ cgmanager
 chromaprint
 cifs-utils
 clang
-cmake
 colord
 compton
 coreutils
@@ -116,7 +114,6 @@ fftw
 file
 filesystem
 findutils
-fish
 flac
 flex
 fontconfig
@@ -185,7 +182,6 @@ gstreamer
 gtk-update-icon-cache
 gtk2
 gtk3
-gtkglext
 gtkmm
 gtkmm3
 gtkspell
@@ -370,7 +366,6 @@ libinput
 libiptcdata
 libjpeg-turbo
 libkate
-libkeybinder3
 libksba
 libldap
 liblqr
@@ -408,7 +403,6 @@ libpam-google-authenticator
 libpaper
 libpcap
 libpciaccess
-libpeas
 libpgm
 libpipeline
 libplist
@@ -594,7 +588,6 @@ pambase
 pamixer
 pango
 pangomm
-pangox-compat
 parcellite
 parted
 patch
@@ -691,7 +684,6 @@ python-pyqt5
 python-pyscard
 python-pyusb
 python-setuptools
-python-setuptools-scm
 python-sip
 python-six
 python-xdg
@@ -703,9 +695,7 @@ python2-gobject2
 python2-notify
 python2-numpy
 python2-olefile
-python2-opengl
 python2-packaging
-python2-pillow
 python2-pip
 python2-pyparsing
 python2-setuptools
@@ -735,7 +725,6 @@ refind-efi
 reiserfsprogs
 remmina
 rest
-rhash
 ripgrep
 rofi
 rsync
@@ -744,7 +733,6 @@ rtmpdump
 rubber
 ruby
 run-parts
-rustup
 rxvt-unicode
 rxvt-unicode-terminfo
 s-nail
@@ -864,7 +852,6 @@ xdg-user-dirs-gtk
 xdg-utils
 xdotool
 xf86-input-libinput
-xf86-video-dummy
 xfsprogs
 xkeyboard-config
 xmlstarlet
@@ -876,7 +863,6 @@ xorg-mkfontdir
 xorg-mkfontscale
 xorg-server
 xorg-server-common
-xorg-server-xvfb
 xorg-setxkbmap
 xorg-xauth
 xorg-xfd
