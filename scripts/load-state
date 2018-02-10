@@ -1,14 +1,21 @@
 #!/bin/bash
 
-set -e -x -o pipefail
+set -e -o pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-trizen --noconfirm --noedit --needed -Sr - < "$DIR/state/pkglist.txt"
-trizen --noconfirm --noedit --needed -S - < "$DIR/state/aurlist.txt"
-trizen --noconfirm -Rsu "$(comm -23 <(pacman -Qq | sort) <(sort "$DIR/state/pkglist.txt" "$DIR/state/aurlist.txt"))"
+to_install=$(comm -23 <(sort "$DIR/state/pkglist.txt" "$DIR/state/aurlist.txt") <(trizen -Qq | sort))
+to_remove=$(comm -23 <(pacman -Qq | sort) <(sort "$DIR/state/pkglist.txt" "$DIR/state/aurlist.txt"))
 
-sudo cp -i -r "$DIR/state/fslayer/*" /
+for pkg in $to_install; do
+  trizen --noconfirm --noedit --needed -S "$pkg"
+done
+
+for pkg in $to_remove; do
+  trizen --noconfirm -Rsu "$pkg"
+done
+
+sudo cp -rf "$DIR"/state/fslayer/* /
 
 while read -r srvc; do
   sudo systemctl enable "$srvc"
