@@ -2,8 +2,13 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-mkdir -p $DIR/state
-find /etc/systemd/system/*.wants/ -name '*.service' | cut -d'/' -f6 | grep -v '@' > $DIR/state/srvclist.txt
-trizen -Qqn > $DIR/state/pkglist.txt
-trizen -Qqm > $DIR/state/aurlist.txt
+mkdir -p "$DIR/state"
 
+find /etc/systemd/system/*.wants/ -name '*.service' | cut -d'/' -f6 | grep -v '@' > "$DIR/state/srvclist.txt"
+trizen -Qqn > "$DIR/state/pkglist.txt"
+trizen -Qqm > "$DIR/state/aurlist.txt"
+
+for f in $(find "$DIR/state/fslayer" -type f | sed "s=$DIR/state/fslayer==g"); do
+  sudo cp -rf "$f" "$DIR/state/fslayer$f"
+  sudo chown "$LOGNAME:$LOGNAME" "$DIR/state/fslayer$f"
+done
