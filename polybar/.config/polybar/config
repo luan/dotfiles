@@ -45,7 +45,7 @@ modules-left = i3
 modules-center = xwindow
 modules-right = spotify wifi wired memory cpu battery volume date packages
 
-tray-position = right
+tray-position = center
 tray-padding = 2
 tray-maxsize = 1000
 

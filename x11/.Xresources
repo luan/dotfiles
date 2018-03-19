@@ -57,3 +57,7 @@ Xft.hinting: true
 Xft.hintstyle: hintslight
 Xft.lcdfilter: lcddefault
 Xft.rgba: rgb
+
+Xcursor.theme: cursor-theme
+Xcursor.size: 48
+

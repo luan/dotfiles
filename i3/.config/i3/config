@@ -249,13 +249,9 @@ exec --no-startup-id xinput set-prop $touchpad "libinput Tapping Enabled" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Accel Speed" 1
 exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0 1
 
-exec --no-startup-id compton -b --backend glx --vsync opengl
+#exec --no-startup-id compton -b --backend glx --vsync opengl
 exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 
 exec_always --no-startup-id "~/.config/i3/startup.sh"
 
 exec --no-startup-id parcellite
-exec --no-startup-id redshift-gtk
-exec --no-startup-id dropbox
-
-
