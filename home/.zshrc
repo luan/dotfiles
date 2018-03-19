@@ -25,6 +25,7 @@ antigen bundle git-extras
 antigen bundle git
 antigen bundle systemd
 antigen bundle yarn
+antigen bundle rbenv
 
 antigen bundle unixorn/warhol.plugin.zsh
 antigen bundle asuran/zsh-docker-machine
@@ -61,9 +62,9 @@ source $HOME/.vim/scripts/base16-shell/scripts/base16-tomorrow-night.sh
 export SSOCA_ENVIRONMENT=bosh-cpi
 
 eval "$(direnv hook zsh)"
+eval "$(rbenv init -)"
 
 export DISPLAY=:0
-
-
+export XDG_CONFIG_HOME=$HOME/.config
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
