@@ -144,9 +144,6 @@ new_float  pixel 4
 smart_borders no_gaps
 smart_gaps on
 
-gaps outer 5
-gaps inner 10
-
 set $base00 #1C2023
 set $base01 #393F45
 set $base02 #565E65
