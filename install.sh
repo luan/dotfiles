@@ -28,10 +28,11 @@ stow -R compton
 stow -R alacritty
 stow -R rofi
 stow -R polybar
+stow -R sxiv
 
 mkdir -p ~/.config
 
-clone luan/vimfiles  .config/vim  || true
+clone luan/nvim  .config/nvim  || true
 clone luan/tmuxfiles .config/tmux || true
 
 (cd $HOME/.config/tmux && ./install)
