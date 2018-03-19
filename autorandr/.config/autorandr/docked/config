@@ -15,7 +15,6 @@ mode 3840x2160
 pos 0x0
 rate 60.00
 output DP-1-2
-gamma 1.0:0.909:0.833
 mode 3840x2160
 pos 0x0
 primary
