@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [[ "${BLOCK_BUTTON}" -eq 1 ]]; then
+  i3-nagbar -t warning -m 'Do you really want to logout?' -b 'Yes, logout' 'i3-msg exit' > /dev/null 2>&1
+fi
+
+echo "$USER "
