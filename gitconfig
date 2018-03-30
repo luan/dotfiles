@@ -14,7 +14,8 @@
   old = red bold
   new = green bold
 [alias]
-  ci = duet-commit -S
+  ci = duet-commit
+  commit = duet-commit
   co = checkout
   cp = cherry-pick -x
   st = status
@@ -51,3 +52,4 @@
   fetchJobs = 16
 [commit]
   template = ~/.gitmessage
+  gpgsign = true
