@@ -11,9 +11,7 @@ off
 output DP-1-3
 off
 output eDP-1
-mode 3840x2160
-pos 0x0
-rate 60.00
+off
 output DP-1-2
 mode 3840x2160
 pos 0x0

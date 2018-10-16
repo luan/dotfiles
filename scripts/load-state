@@ -11,10 +11,6 @@ for pkg in $to_install; do
   trizen --noconfirm --noedit --needed -S "$pkg"
 done
 
-for pkg in $to_remove; do
-  trizen --noconfirm -Rsu "$pkg"
-done
-
 sudo cp -rf "$DIR"/state/fslayer/* /
 
 while read -r srvc; do

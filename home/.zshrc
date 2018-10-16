@@ -54,12 +54,9 @@ export PATH=/usr/local/go/bin:$PATH
 export GOPATH=$HOME/workspace
 export PATH=$GOPATH/bin:$PATH
 
-source $HOME/.cargo/env
 export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib
 
-source $HOME/.vim/scripts/base16-shell/scripts/base16-tomorrow-night.sh
-
-export SSOCA_ENVIRONMENT=bosh-cpi
+export SSOCA_ENVIRONMENT=bosh
 
 eval "$(direnv hook zsh)"
 eval "$(rbenv init -)"
@@ -67,4 +64,7 @@ eval "$(rbenv init -)"
 export DISPLAY=:0
 export XDG_CONFIG_HOME=$HOME/.config
 
+bindkey \^U backward-kill-line
+
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+source /usr/share/nvm/init-nvm.sh
