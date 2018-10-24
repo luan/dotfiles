@@ -1,9 +1,7 @@
 bluetooth.service
 bumblebeed.service
-postgresql.service
 tlp.service
 NetworkManager.service
-gpsd.service
-docker.service
-autorandr.service
+postgresql.service
+tlp-sleep.service
 systemd-timesyncd.service

@@ -5,3 +5,7 @@ fish/.config/fish/functions
 fish/.config/fish/conf.d
 fish/.config/fish/completions
 fish/.config/fish/fishd.*
+home/bin/bosh
+home/bin/credhub
+home/bin/fly
+home/bin/ssoca

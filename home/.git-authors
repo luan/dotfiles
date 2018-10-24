@@ -15,6 +15,7 @@ authors:
   ja: Joshua Aresty
   cd: Chris Dutra
   mx: Michael Xu
+  sh: Sebastian Heid
 
 email:
   prefix: pair
@@ -36,5 +37,6 @@ email_addresses:
   ja: joshua.aresty@emc.com
   cd: cdutra@pivotal.io
   mx: mxu@pivotal.io
+  sh: sebastian.heid@sap.com
 
 global: true

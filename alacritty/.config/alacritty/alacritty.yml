@@ -45,7 +45,7 @@ font:
     style: Italic
 
   # Point size of the font
-  size: 11.0
+  size: 9.5
   # Offset is the extra space around each character. offset.y can be thought of
   # as modifying the linespacing, and offset.x as modifying the letter spacing.
   offset:
@@ -56,6 +56,7 @@ font:
   # for retina displays, but for non-retina you probably want this set to
   # false.
   use_thin_strokes: true
+  scale_with_dpi: true
 
 # Should display the render timer
 render_timer: false
@@ -149,6 +150,8 @@ selection:
   semantic_escape_chars: ",│`|:\"' ()[]{}<>"
 
 hide_cursor_when_typing: true
+
+live_config_reload: true
 
 # Key bindings
 #
@@ -294,3 +297,4 @@ key_bindings:
   - { key: F10,      mods: Super,   chars: "\x1b[21;3~"                  }
   - { key: F11,      mods: Super,   chars: "\x1b[23;3~"                  }
   - { key: F12,      mods: Super,   chars: "\x1b[24;3~"                  }
+

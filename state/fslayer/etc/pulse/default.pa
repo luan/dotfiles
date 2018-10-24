@@ -30,9 +30,7 @@ load-module module-card-restore
 load-module module-augment-properties
 
 ### Should be after module-*-restore but before module-*-detect
-# load-module module-switch-on-port-available
-
-load-module module-switch-on-connect
+load-module module-switch-on-port-available
 
 ### Load audio drivers statically
 ### (it's probably better to not load these drivers manually, but instead
@@ -69,6 +67,7 @@ load-module module-bluetooth-discover
 .endif
 
 ### Load several protocols
+load-module module-dbus-protocol
 .ifexists module-esound-protocol-unix.so
 load-module module-esound-protocol-unix
 .endif
@@ -87,14 +86,15 @@ load-module module-native-protocol-unix
 #load-module module-null-sink sink_name=rtp format=s16be channels=2 rate=44100 sink_properties="device.description='RTP Multicast Sink'"
 #load-module module-rtp-send source=rtp.monitor
 
-### Load additional modules from GConf settings. This can be configured with the paprefs tool.
+### Load additional modules from GSettings. This can be configured with the paprefs tool.
 ### Please keep in mind that the modules configured by paprefs might conflict with manually
 ### loaded modules.
-.ifexists module-gconf.so
+.ifexists module-gsettings.so
 .nofail
-load-module module-gconf
+load-module module-gsettings
 .fail
 .endif
+
 
 ### Automatically restore the default sink/source when changed by the user
 ### during runtime
@@ -140,10 +140,3 @@ load-module module-filter-apply
 ### Make some devices default
 #set-default-sink output
 #set-default-source input
-
-### Enable Echo/Noise-Cancelation
-# load-module module-echo-cancel source_master="alsa_input.usb-Generic_USB_Audio_200901010001-00.analog-stereo" aec_method=webrtc aec_args="analog_gain_control=0 digital_gain_control=1" source_name=echoCancel_source sink_name=echoCancel_sink
-load-module module-echo-cancel use_master_format=1 aec_method=webrtc aec_args="analog_gain_control=0 digital_gain_control=1" source_name=echoCancel_source sink_name=echoCancel_sink
-set-default-source echoCancel_source
-set-default-sink echoCancel_sink
-
