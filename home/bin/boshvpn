@@ -1,0 +1,2 @@
+#!/bin/bash
+ssoca -e bosh openvpn exec --sudo --reconnect
