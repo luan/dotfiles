@@ -1,7 +1,0 @@
-bluetooth.service
-bumblebeed.service
-tlp.service
-NetworkManager.service
-postgresql.service
-tlp-sleep.service
-systemd-timesyncd.service

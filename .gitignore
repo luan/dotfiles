@@ -9,3 +9,13 @@ home/bin/bosh
 home/bin/credhub
 home/bin/fly
 home/bin/ssoca
+gnupg/.gnupg/crls.d/
+gnupg/.gnupg/private-keys-v1.d/
+gnupg/.gnupg/pubring.kbx
+gnupg/.gnupg/pubring.kbx~
+gnupg/.gnupg/reader_0.status
+gnupg/.gnupg/reader_1.status
+gnupg/.gnupg/sshcontrol
+gnupg/.gnupg/tofu.db
+gnupg/.gnupg/trustdb.gpg
+

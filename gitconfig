@@ -14,8 +14,8 @@
   old = red bold
   new = green bold
 [alias]
-  ci = duet-commit
-  commit = duet-commit
+  ci = commit
+  commit = commit
   co = checkout
   cp = cherry-pick -x
   st = status
@@ -52,6 +52,6 @@
   fetchJobs = 16
 [commit]
   template = ~/.gitmessage
-  # gpgsign = true
+  gpgsign = true
 [hub]
   protocol = https

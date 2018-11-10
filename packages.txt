@@ -6,10 +6,8 @@ fwupd
 google-chrome
 htop
 hub
-mplus
 mysql
 neovim
-nerd-font
 nerd-fonts-complete
 nerd-fonts-mplus
 noto-fonts-emoji
