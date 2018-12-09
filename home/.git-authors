@@ -16,6 +16,8 @@ authors:
   cd: Chris Dutra
   mx: Michael Xu
   sh: Sebastian Heid
+  mp: Max Petersen
+  dw: Dale Wick
 
 email:
   prefix: pair
@@ -38,5 +40,7 @@ email_addresses:
   cd: cdutra@pivotal.io
   mx: mxu@pivotal.io
   sh: sebastian.heid@sap.com
+  mp: mpetersen@pivotal.io
+  dw: dwick@pivotal.io
 
 global: true

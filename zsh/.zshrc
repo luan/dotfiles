@@ -67,8 +67,8 @@ bindkey '^[3;5~' delete-char
 bindkey '\^U' backward-kill-line
 
 # Aliases
-alias ls='ls --color=auto'
-alias ll='ls -larth --color=auto'
+alias ls='ls --color'
+alias ll='ls -larth --color'
 alias grep='grep --color'
 alias be='bundle exec'
 alias vim=nvim
@@ -104,3 +104,11 @@ source $HOME/.config/zsh/*.zsh
 eval "$(rbenv init -)"
 [[ -s "/etc/grc.zsh" ]] && source /etc/grc.zsh
 source /usr/share/nvm/init-nvm.sh
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/home/luan/google-cloud-sdk/path.zsh.inc' ]; then . '/home/luan/google-cloud-sdk/path.zsh.inc'; fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f '/home/luan/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/luan/google-cloud-sdk/completion.zsh.inc'; fi
