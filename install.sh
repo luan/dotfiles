@@ -51,3 +51,6 @@ fi
 rustup default stable
 
 sudo systemctl enable --now udisks2.service
+
+chmod 700 ~/.gnupg
+curl https://keybase.io/cfcluan/pgp_keys.asc | gpg --import
