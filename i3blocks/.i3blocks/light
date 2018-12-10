@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if ! which light; then
+  exit 0
+fi
+
 echo "$(light)%"
 
 case $BLOCK_BUTTON in

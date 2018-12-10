@@ -10,7 +10,10 @@ clone() {
   set -e
 }
 
-sudo pacman -Syu --needed --noconfirm git yay base-devel stow
+sudo pacman -Syu --needed --noconfirm git base-devel stow
+
+git clone https://aur.archlinux.org/yay.git /tmp/yay
+(cd /tmp/yay && makepkg -si --noconfirm)
 
 stow -R home
 stow -R gnupg
@@ -28,8 +31,8 @@ clone luan/tmuxfiles .config/tmux || true
 
 (cd $HOME/.config/tmux && ./install)
 
-mkdir -p "$HOME/workspace/go"
-export GOPATH="$HOME/workspace/go"
+mkdir -p "$HOME/workspace"
+export GOPATH="$HOME/workspace"
 
 if ! grep --quiet "path=$dotfiles_dir/gitconfig" "$HOME/.gitconfig"; then
 cat << EOF >> "$HOME/.gitconfig"
@@ -45,3 +48,6 @@ if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
   sudo chsh -s "$(which zsh)" "$LOGNAME"
 fi
 
+rustup default stable
+
+sudo systemctl enable --now udisks2.service

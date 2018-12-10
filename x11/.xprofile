@@ -2,3 +2,14 @@
 # WIDTH=$(echo  "scale=2; 3840*$SCALE" | bc | cut -d "." -f1)
 # HEIGHT=$(echo "scale=2; 2160*$SCALE" | bc | cut -d "." -f1)
 # xrandr --output eDP-1 --auto --panning ${WIDTH}x${HEIGHT}+0+0 --scale ${SCALE}x${SCALE} --output DP-1-2 --auto --panning 3840x2160+${WIDTH}+0 --right-of eDP-1
+
+[[ -f ~/.Xresources ]] && xrdb -merge -I$HOME ~/.Xresources
+
+export BROWSER=google-chrome-stable
+export TERMINAL=alacritty
+export QT_STYLE_OVERRIDE=gtk+
+export PATH=$HOME/bin:$PATH
+export SSH_AUTH_SOCK="/run/user/"$(id -u)"/gnupg/S.gpg-agent.ssh"
+gpg-connect-agent updatestartuptty /bye
+
+xset r rate 200 30

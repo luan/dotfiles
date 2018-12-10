@@ -18,7 +18,8 @@ bindsym $mod+Return exec $term
 bindsym $mod+Shift+q kill
 
 # start dmenu (a program launcher)
-bindsym $mod+d exec "rofi -combi-modi window,drun,run -show combi -modi combi"
+bindsym $mod+d exec "rofi -combi-modi window,drun,run -show combi -modi combi
+bindsym $mod+shift+v exec "rofi -modi 'clipboard:greenclip print' -show clipboard -run-command '{cmd}'"
 
 # change focus
 bindsym $mod+h focus left
@@ -115,26 +116,26 @@ bindsym $mod+Shift+r restart
 
 # resize window (you can also use the mouse for that)
 mode "resize" {
-# These bindings trigger as soon as you enter the resize mode
+  # These bindings trigger as soon as you enter the resize mode
 
-# Pressing left will shrink the window’s width.
-# Pressing right will grow the window’s width.
-# Pressing up will shrink the window’s height.
-# Pressing down will grow the window’s height.
+  # Pressing left will shrink the window’s width.
+  # Pressing right will grow the window’s width.
+  # Pressing up will shrink the window’s height.
+  # Pressing down will grow the window’s height.
   bindsym h resize shrink width 10 px or 10 ppt
-    bindsym j resize grow height 10 px or 10 ppt
-    bindsym k resize shrink height 10 px or 10 ppt
-    bindsym l resize grow width 10 px or 10 ppt
+  bindsym j resize grow height 10 px or 10 ppt
+  bindsym k resize shrink height 10 px or 10 ppt
+  bindsym l resize grow width 10 px or 10 ppt
 
-# same bindings, but for the arrow keys
-    bindsym Left resize shrink width 10 px or 10 ppt
-    bindsym Down resize grow height 10 px or 10 ppt
-    bindsym Up resize shrink height 10 px or 10 ppt
-    bindsym Right resize grow width 10 px or 10 ppt
+  # same bindings, but for the arrow keys
+  bindsym Left resize shrink width 10 px or 10 ppt
+  bindsym Down resize grow height 10 px or 10 ppt
+  bindsym Up resize shrink height 10 px or 10 ppt
+  bindsym Right resize grow width 10 px or 10 ppt
 
-# back to normal: Enter or Escape
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+  # back to normal: Enter or Escape
+  bindsym Return mode "default"
+  bindsym Escape mode "default"
 }
 
 bindsym $mod+r mode "resize"
@@ -144,18 +145,17 @@ new_float  pixel 4
 smart_borders on
 smart_gaps on
 
-
 # Notification deamon
 exec --no-startup-id dunst
 
 bindsym $mod+Shift+z sticky toggle
 
 # LastPass key
-bindsym Mod1+shift+bar exec rofi -modi lpass:lpass-rofi -show lpass
+bindsym Mod1+shift+bar exec lpass-rofi
 
 # Screen Shots
-bindsym --release Print       exec --no-startup-id scrot '%Y-%m-%d %H %M %S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
-bindsym --release Shift+Print exec --no-startup-id scrot -s /tmp/foo.png && xclip -selection clipboard -t image/png -i /tmp/foo.png && rm /tmp/foo.png
+bindsym --release Print       exec --no-startup-id screengrab -f
+bindsym --release Shift+Print exec --no-startup-id screengrab -r
 
 # Brightness controls
 bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks
@@ -175,6 +175,7 @@ bindsym XF86AudioPrev exec playerctl previous
 for_window [title="^Authy$"] move container to workspace $w10
 for_window [title="^Authy$"] floating enable
 for_window [title="^Gnee"] floating enable
+for_window [title="^ScreenGrab"] floating enable
 
 # Name and assign certain workspaces
 assign [class="(?i)google-chrome"] $w2
@@ -188,33 +189,33 @@ assign [class="(?i)tibia"] $w8
 
 for_window [class="Spotify"] move to workspace $w9
 
-set $Locker i3lock -c 333333 -i ~/.wallpapers/*.png -f && sleep 1
+set $Locker i3lock -c 333333 -i ~/wallpapers/*.png -f && sleep 1
 
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
--notify   900 -notifier "xset dpms force off" \
--time     30  -locker   "$Locker" \
--killtime 60 -killer   "systemctl suspend"
+                               -notify   900 -notifier "xset dpms force off" \
+                               -time     30  -locker   "$Locker" \
+                               -killtime 60 -killer   "systemctl suspend"
 
 # System Mode
 set $mode_system System (l) lock, (e) logout, (s) suspend, (h) hibernate, (r) reboot, (Shift+s) shutdown
 mode "$mode_system" {
-bindsym l exec --no-startup-id $Locker, mode "default"
-bindsym e exit
-bindsym s exec --no-startup-id $Locker && systemctl suspend, mode "default"
-bindsym h exec --no-startup-id $Locker && systemctl hibernate, mode "default"
-bindsym r exec --no-startup-id systemctl reboot, mode "default"
-bindsym Shift+s exec --no-startup-id  systemctl poweroff -i, mode "default"
+  bindsym l exec --no-startup-id $Locker, mode "default"
+  bindsym e exit
+  bindsym s exec --no-startup-id $Locker && systemctl suspend, mode "default"
+  bindsym h exec --no-startup-id $Locker && systemctl hibernate, mode "default"
+  bindsym r exec --no-startup-id systemctl reboot, mode "default"
+  bindsym Shift+s exec --no-startup-id  systemctl poweroff -i, mode "default"
 
-# back to normal: Enter or Escape
-bindsym Return mode "default"
-bindsym Escape mode "default"
+  # back to normal: Enter or Escape
+  bindsym Return mode "default"
+  bindsym Escape mode "default"
 }
 
 bindsym $mod+Delete mode "$mode_system"
 
 mode "" {
-bindsym Menu mode "default"
+  bindsym Menu mode "default"
 }
 bindsym Menu mode ""
 
@@ -229,7 +230,8 @@ exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 
 # exec_always --no-startup-id "~/.config/i3/startup.sh"
 
-exec --no-startup-id parcellite
+# exec --no-startup-id parcellite
+exec --no-startup-id greenclip daemon
 exec --no-startup-id udiskie
 
 set $base00 #32302f
@@ -260,7 +262,7 @@ client.background       $base07
 
 bar {
     position top
-    tray_output primary
+    # tray_output primary
     status_command i3blocks
 
     colors {

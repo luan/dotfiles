@@ -1,0 +1,132 @@
+/*
+ * ROFI color theme
+ *
+ * Based on Base16 Material Color Scheme (https://github.com/ntpeters/base16-materialtheme-scheme)
+ *
+ * User: Tomaszal
+ * Copyright: Tomas Zaluckij
+ */
+
+* {
+	base00: #32302f;
+	base01: #3c3836;
+	base02: #504945;
+	base03: #665c54;
+	base04: #bdae93;
+	base05: #d5c4a1;
+	base06: #ebdbb2;
+	base07: #fbf1c7;
+	base08: #fb4934;
+	base09: #fe8019;
+	base0A: #fabd2f;
+	base0B: #b8bb26;
+	base0C: #8ec07c;
+	base0D: #83a598;
+	base0E: #d3869b;
+	base0F: #d65d0e;
+
+	/*base0D: #00BCD4;*/
+
+	spacing: 0;
+	background-color: transparent;
+
+  font: "M+ 2c light 13";
+}
+
+window {
+	transparency: "real";
+	fullscreen: false;
+	background-color: #263238AA; /*base00 + CC (80% opacity)*/
+}
+
+mainbox {
+	children: [inputbar, message, sidebar, listview];
+	spacing: 30px;
+	margin: 0%;
+	padding: 30px 0;
+	border: 2px;
+	border-color: @base0D;
+  border-radius: 30px;
+}
+
+inputbar {
+	padding: 0 30px;
+	children: [prompt, textbox-prompt-colon, entry, case-indicator];
+}
+
+prompt {
+	text-color: @base0D;
+}
+
+textbox-prompt-colon {
+	expand: false;
+	str: ":";
+	margin: 0 1ch 0 0;
+	text-color: @base0D;
+}
+
+entry {
+	text-color: @base07;
+}
+
+case-indicator {
+	text-color: @base0F;
+}
+
+sidebar, message {
+	border: 1px 0;
+	border-color: @base0D;
+}
+
+button, textbox {
+	background-color: @base03;
+	text-color: @base07;
+	padding: 5px;
+}
+
+button selected {
+	background-color: @base0D;
+}
+
+listview {
+	scrollbar: true;
+	margin: 0 10px 0 30px;
+}
+
+scrollbar {
+	background-color: @base03;
+	handle-color: @base0D;
+	handle-width: 10px;
+	border: 0 1px;
+	border-color: @base0D;
+	margin: 0 0 0 20px;
+}
+
+element {
+	padding: 5px;
+	highlight: bold underline;
+}
+
+element normal {
+	background-color: transparent;
+}
+
+element selected {
+	background-color: @base0D;
+}
+
+element alternate {
+	/* background-color: @base02; */
+}
+
+element normal normal, element selected normal, element alternate normal {
+	text-color: @base07;
+}
+
+element normal urgent, element selected urgent, element alternate urgent {
+	text-color: @base0F;
+}
+
+element normal active, element selected active, element alternate active {
+	text-color: @base0B;
+}
