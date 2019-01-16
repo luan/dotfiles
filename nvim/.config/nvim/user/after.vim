@@ -8,3 +8,13 @@ augroup config#after
   autocmd VimEnter * GitGutterDisable
 augroup end
 let g:SignatureEnabledAtStartup = 0 " Do not show marks
+
+function! SaveIfUnsaved()
+  if &modified
+    :silent! w
+  endif
+endfunction
+au CursorHold * :call SaveIfUnsaved()
+" Read the file on focus/buffer enter
+au FocusGained,BufEnter * :silent! !
+

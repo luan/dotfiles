@@ -21,6 +21,8 @@ bindsym $mod+Shift+q kill
 bindsym $mod+d exec "rofi -combi-modi window,drun,run -show combi -modi combi
 bindsym $mod+shift+v exec "rofi -modi 'clipboard:greenclip print' -show clipboard -run-command '{cmd}'"
 
+focus_wrapping force
+
 # change focus
 bindsym $mod+h focus left
 bindsym $mod+j focus down
@@ -154,8 +156,10 @@ bindsym $mod+Shift+z sticky toggle
 bindsym Mod1+shift+bar exec lpass-rofi
 
 # Screen Shots
-bindsym --release Print       exec --no-startup-id screengrab -f
-bindsym --release Shift+Print exec --no-startup-id screengrab -r
+# bindsym --release Print       exec --no-startup-id screengrab -f
+# bindsym --release Shift+Print exec --no-startup-id screengrab -r
+bindsym --release Print       exec --no-startup-id scrot '%Y-%m-%d %H %M %S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
+bindsym --release Shift+Print exec --no-startup-id scrot -s /tmp/foo.png && xclip -selection clipboard -t image/png -i /tmp/foo.png && rm /tmp/foo.png
 
 # Brightness controls
 bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks
@@ -170,6 +174,8 @@ bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle &
 bindsym XF86AudioPause exec playerctl play-pause
 bindsym XF86AudioNext exec playerctl next
 bindsym XF86AudioPrev exec playerctl previous
+
+bindsym $mod+shift+a exec amixer -q sset Capture toggle && pkill -RTMIN+11 i3blocks
 
 # Make Authy a floating window
 for_window [title="^Authy$"] move container to workspace $w10
@@ -264,6 +270,7 @@ bar {
     position top
     # tray_output primary
     status_command i3blocks
+    output primary
 
     colors {
       background $base00

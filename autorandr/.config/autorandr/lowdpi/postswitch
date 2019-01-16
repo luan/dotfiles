@@ -6,3 +6,4 @@ xrdb -merge -I$HOME $HOME/.Xresources-96
 xset r rate 200 30
 setxkbmap -option ctrl:nocaps
 
+pkill -9 dunst

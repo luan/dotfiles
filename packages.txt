@@ -7,14 +7,12 @@ deepin-gtk-theme
 deepin-qt5integration
 diff-so-fancy
 direnv
-discord
 docker
 dropbox
 dropbox-cli
 dunst-git
 fasd
 fwupd
-gcc5
 google-chrome
 gtk-chtheme
 gtk3-mushrooms

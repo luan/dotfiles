@@ -12,7 +12,7 @@ clone() {
 
 sudo pacman -Syu --needed --noconfirm git base-devel stow
 
-git clone https://aur.archlinux.org/yay.git /tmp/yay
+git clone https://aur.archlinux.org/yay.git /tmp/yay || true
 (cd /tmp/yay && makepkg -si --noconfirm)
 
 stow -R home
@@ -20,7 +20,7 @@ stow -R gnupg
 stow -R ssh
 stow -R yay
 
-yay -S --needed - < packages.txt
+#yay -S --needed - < packages.txt
 
 mkdir -p ~/.config
 

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+set -e -o pipefail -u
+
+hypervisor-from-iaas() {
+  case $1 in
+    warden* )
+      echo warden-boshlite
+      ;;
+    vsphere* )
+      echo vsphere-esxi
+      ;;
+    vcloud* )
+      echo vcloud-esxi
+      ;;
+    openstack* )
+      echo openstack-kvm
+      ;;
+    google* )
+      echo google-kvm
+      ;;
+    azure* )
+      echo azure-hyperv
+      ;;
+    aws* )
+      echo aws-xen-kvm
+      ;;
+    * )
+      echo "$1 is not a valid IaaS name." >&2
+      exit 1
+      ;;
+  esac
+}
+
+main() {
+  local os=ubuntu-xenial
+  local iaas=warden
+  local version=latest
+  local destination=$HOME/deployments/stemcells
+
+  while getopts ":o:i:v:d:h" opt; do
+    case ${opt} in
+      o )
+        os=$OPTARG
+        ;;
+      i )
+        iaas=$OPTARG
+        ;;
+      v )
+        version=$OPTARG
+        ;;
+      d )
+        destination=$OPTARG
+        ;;
+      h )
+        echo -e "Usage: get-stemcell [OPTION]..."
+        echo -e "Downloads stemcell via stemcell-core-index into specified directory."
+        echo
+        echo -e "All arguments are optional. Options:"
+        echo -e "\t-o\tStemcell operating system (default: ubuntu-xenial)"
+        echo -e "\t-i\tStemcell iaas (default: warden)"
+        echo -e "\t-v\tStemcell version. Use 'latest' for latest published, 'rc' for latest candidate and number for specific version (e.g. 170) (default: latest)"
+        echo -e "\t-d\tDirectory to download stemcell into (default: ~/deployments/stemcells)"
+        echo -e "\t-h\tShow this help message"
+        exit 0
+        ;;
+      \? )
+        echo "Invalid Option: -$OPTARG" 1>&2
+        exit 1
+        ;;
+      : )
+        echo "Invalid Option: -$OPTARG requires an argument" 1>&2
+        exit 1
+        ;;
+    esac
+  done
+
+  mkdir -p "$destination"
+
+  local repo_location
+  repo_location="$(mktemp -d)"
+
+  echo "Fetching stemcell index..."
+  git clone --quiet --depth 1 --single-branch https://github.com/bosh-io/stemcells-core-index "$repo_location"
+
+  if [ "$version" == "latest" ]; then
+    version=$(find "${repo_location}/published/${os}" -type d | awk -F '/' '{ print $NF  }' | sort -n | tail -n1)
+  elif [ "$version" == "rc" ]; then
+    version=$(find "${repo_location}/dev/${os}" -type d | awk -F '/' '{ print $NF  }' | sort -n | tail -n1)
+  fi
+
+
+  local url
+  local hypervisor
+  local filename
+  hypervisor=$(hypervisor-from-iaas "$iaas")
+  filename=bosh-stemcell-${version}-${hypervisor}-${os}-go_agent.tgz
+  url="https://s3.amazonaws.com/bosh-core-stemcells-candidate/${iaas}/${filename}"
+
+  if [ -f "$destination/$filename" ]; then
+    echo "$filename already present in $destination."
+    exit 0
+  fi
+
+  echo "Downloading ${os} stemcell version ${version} for ${iaas}."
+  echo -e "\tFrom: ${url}"
+  echo -e "\tTo:   ${destination}/${filename}"
+  aria2c -x 16 -s 16 "$url" -d "$destination"
+
+  rm -rf "$repo_location"
+}
+
+main "$@"

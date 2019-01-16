@@ -29,7 +29,7 @@
     # If width is 0, window will fit to longest message
     # Positive x value is measured from the left of the screen, negative x is measured from the right
     # Positive y value is measured from the top of the screen
-    geometry = "350x5-50+75"
+    geometry = "600x6-50+75"
 
     font = m+ 2p light 14
     markup = yes
@@ -62,7 +62,7 @@
     frame_width = 2
     frame_color = "#333333"
 
-    max_icon_size = 32
+    max_icon_size = 64
     icon_path = /usr/share/icons/Numix-Circle/48/apps/:/usr/share/icons/Adwaita/32x32/apps/:/usr/share/icons/Adwaita/32x32/status/:/usr/share/icons/Adwaita/32x32/devices/
     startup_notification = false
     dmenu = /usr/bin/dmenu -p dunst:
@@ -85,6 +85,6 @@
     context = mod1+shift+period
 
 [Slack]
-    appname = slack
+    appname = Slack
     new_icon = slack
     format = "<b>%s</b>\n%b\n%p"
