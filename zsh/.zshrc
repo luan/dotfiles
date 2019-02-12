@@ -67,7 +67,7 @@ bindkey '^[3;5~' delete-char
 bindkey '\^U' backward-kill-line
 
 # Aliases
-alias ls='ls --color=auto'
+alias ls='ls --color -C'
 alias ll='ls -larth --color'
 alias grep='grep --color'
 alias be='bundle exec'
