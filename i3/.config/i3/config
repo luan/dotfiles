@@ -144,6 +144,7 @@ bindsym $mod+r mode "resize"
 
 new_window pixel 1
 new_float  pixel 4
+gaps inner 3
 smart_borders on
 smart_gaps on
 
@@ -239,6 +240,7 @@ exec --no-startup-id feh --randomize --bg-fill ~/.wallpapers/*
 # exec --no-startup-id parcellite
 exec --no-startup-id greenclip daemon
 exec --no-startup-id udiskie
+exec --no-startup-id xbanish
 
 set $base00 #32302f
 set $base01 #3c3836
@@ -270,7 +272,7 @@ bar {
     position top
     # tray_output primary
     status_command i3blocks
-    output primary
+    # output DP-2~1
 
     colors {
       background $base00
