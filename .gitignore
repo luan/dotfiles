@@ -18,4 +18,6 @@ gnupg/.gnupg/reader_1.status
 gnupg/.gnupg/sshcontrol
 gnupg/.gnupg/tofu.db
 gnupg/.gnupg/trustdb.gpg
-
+ssh/.ssh/*_rsa*
+ssh/.ssh/authorized_keys
+ssh/.ssh/known_hosts.old
