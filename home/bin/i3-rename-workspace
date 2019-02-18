@@ -86,6 +86,7 @@ WINDOW_ICONS = {
     'nautilus': fa.icons['copy'],
     'nemo': fa.icons['copy'],
     'openscad': fa.icons['cube'],
+    'parsecd': fa.icons['gamepad'],
     'pavucontrol': fa.icons['volume-up'],
     'postman': fa.icons['space-shuttle'],
     'rhythmbox': fa.icons['play'],
