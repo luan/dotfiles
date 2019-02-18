@@ -15,9 +15,9 @@ volume=$(echo "${statusLine}" | awk -F ' ' '{print $5}' | tr -d '[]%')
 if [[ "${status}" == "on" ]]; then
   echo "${volume}%"
   echo "${volume}%"
-  echo "#ee3333"
+  echo "#FF5370"
 else
   echo "off"
   echo "off"
-  echo "#aa9999"
+  echo "#F07178"
 fi

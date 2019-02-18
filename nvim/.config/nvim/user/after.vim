@@ -14,11 +14,11 @@ function! SaveIfUnsaved()
     :silent! w
   endif
 endfunction
-" au CursorHold * :call SaveIfUnsaved()
+au CursorHold * :call SaveIfUnsaved()
 " Read the file on focus/buffer enter
 au FocusGained,BufEnter * :silent! !
 
-let g:ale_open_list = 1
+" let g:ale_open_list = 1
 
 map <up> <nop>
 map <down> <nop>

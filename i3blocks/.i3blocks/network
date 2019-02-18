@@ -5,9 +5,9 @@ IP_ADDRESS=$(ip route get 1 | awk '{print $7;exit}')
 if [[ "${IP_ADDRESS}" != "" ]]; then
   echo " ${IP_ADDRESS}"
   echo "${IP_ADDRESS}"
-  echo "#a8e285"
+  echo "#C3E88D"
 else
   echo " offline"
   echo "offline"
-  echo "#dd9680"
+  echo "#F07178"
 fi

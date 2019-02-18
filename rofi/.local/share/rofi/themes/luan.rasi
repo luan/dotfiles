@@ -25,18 +25,36 @@
 	base0E: #d3869b;
 	base0F: #d65d0e;
 
-	/*base0D: #00BCD4;*/
+  base00: #263238;
+  base01: #2E3C43;
+  base02: #314549;
+  base03: #546E7A;
+  base04: #B2CCD6;
+  base05: #EEFFFF;
+  base06: #EEFFFF;
+  base07: #FFFFFF;
+  base08: #F07178;
+  base09: #F78C6C;
+  base0A: #FFCB6B;
+  base0B: #C3E88D;
+  base0C: #89DDFF;
+  base0D: #82AAFF;
+  base0E: #C792EA;
+  base0F: #FF5370;
 
 	spacing: 0;
 	background-color: transparent;
 
-  font: "M+ 2c light 13";
+  font: "mononoki Nerd Font 13";
 }
 
 window {
 	transparency: "real";
 	fullscreen: false;
-	background-color: #263238AA; /*base00 + CC (80% opacity)*/
+	background-color: @base00;
+  border-radius: 20px;
+	border: 3px;
+	border-color: @base0D;
 }
 
 mainbox {
@@ -44,9 +62,7 @@ mainbox {
 	spacing: 30px;
 	margin: 0%;
 	padding: 30px 0;
-	border: 2px;
-	border-color: @base0D;
-  border-radius: 30px;
+  border-radius: 20px;
 }
 
 inputbar {
@@ -88,11 +104,6 @@ button selected {
 	background-color: @base0D;
 }
 
-listview {
-	scrollbar: true;
-	margin: 0 10px 0 30px;
-}
-
 scrollbar {
 	background-color: @base03;
 	handle-color: @base0D;
@@ -105,6 +116,7 @@ scrollbar {
 element {
 	padding: 5px;
 	highlight: bold underline;
+  padding: 7px 30px;
 }
 
 element normal {
@@ -112,11 +124,11 @@ element normal {
 }
 
 element selected {
-	background-color: @base0D;
+	background-color: @base03;
 }
 
 element alternate {
-	/* background-color: @base02; */
+	background-color: @base01;
 }
 
 element normal normal, element selected normal, element alternate normal {
@@ -128,5 +140,5 @@ element normal urgent, element selected urgent, element alternate urgent {
 }
 
 element normal active, element selected active, element alternate active {
-	text-color: @base0B;
+	text-color: @base0C;
 }

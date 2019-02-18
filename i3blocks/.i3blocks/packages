@@ -9,9 +9,9 @@ count=$(checkupdates | wc -l)
 if [ "$count" -gt 0 ]; then
   echo " $count"
   echo " $count"
-  echo "#00cc66"
+  echo "#C3E88D"
 else
   echo ""
   echo ""
-  echo "#666666"
+  echo "#314549"
 fi
