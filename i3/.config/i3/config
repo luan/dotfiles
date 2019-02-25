@@ -148,8 +148,6 @@ bindsym $mod+Shift+z sticky toggle
 bindsym Mod1+shift+bar exec lpass-rofi
 
 # Screen Shots
-# bindsym --release Print       exec --no-startup-id screengrab -f
-# bindsym --release Shift+Print exec --no-startup-id screengrab -r
 bindsym --release Print       exec --no-startup-id scrot '%Y-%m-%d %H %M %S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
 bindsym --release Shift+Print exec --no-startup-id scrot -s /tmp/foo.png && xclip -selection clipboard -t image/png -i /tmp/foo.png && rm /tmp/foo.png
 
@@ -170,22 +168,7 @@ bindsym XF86AudioPrev exec playerctl previous
 bindsym $mod+shift+a exec amixer -q sset Capture toggle && pkill -RTMIN+11 i3blocks
 
 # Make Authy a floating window
-for_window [title="^Authy$"] move container to workspace number 10
 for_window [title="^Authy$"] floating enable
-for_window [title="^Gnee"] floating enable
-for_window [title="^ScreenGrab"] floating enable
-
-# Name and assign certain workspaces
-assign [class="(?i)google-chrome"] number 2
-assign [class="(?i)firefox"] number 2
-assign [class="discord"] number 3
-assign [class="(?i)slack"] number 3
-assign [class="(?i)franz"] number 3
-assign [class="(?i)zoom"] number 4
-assign [class="(?i)remmina"] number 5
-assign [class="(?i)tibia"] number 8
-
-for_window [class="Spotify"] move to workspace number 9
 
 set $Locker i3lock -c 333333 -i ~/wallpapers/*.png -f && sleep 1
 

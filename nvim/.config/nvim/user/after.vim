@@ -36,3 +36,6 @@ imap <left> <nop>
 imap <right> <nop>
 
 colorscheme base16-material
+let g:lightline = {
+      \ 'colorscheme': 'material',
+      \ }
