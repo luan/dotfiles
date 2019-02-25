@@ -21,3 +21,4 @@ gnupg/.gnupg/trustdb.gpg
 ssh/.ssh/*_rsa*
 ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
+ssh/.ssh/known_hosts

@@ -55,4 +55,4 @@ sudo systemctl enable --now udisks2.service
 chmod 700 ~/.gnupg
 curl https://keybase.io/cfcluan/pgp_keys.asc | gpg --import
 
-sudo pip install i3ipc nerdfonts
+sudo pip install i3ipc fontawesome

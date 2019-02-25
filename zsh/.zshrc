@@ -112,3 +112,6 @@ if [ -f '/home/luan/google-cloud-sdk/path.zsh.inc' ]; then . '/home/luan/google-
 
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/luan/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/luan/google-cloud-sdk/completion.zsh.inc'; fi
+
+# Added by Krypton
+export GPG_TTY=$(tty)
