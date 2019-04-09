@@ -148,8 +148,7 @@ bindsym $mod+Shift+z sticky toggle
 bindsym Mod1+shift+bar exec lpass-rofi
 
 # Screen Shots
-bindsym --release Print       exec --no-startup-id scrot '%Y-%m-%d %H %M %S.png' -e 'mv -f "$f" ~/Dropbox/Screenshots'
-bindsym --release Shift+Print exec --no-startup-id scrot -s /tmp/foo.png && xclip -selection clipboard -t image/png -i /tmp/foo.png && rm /tmp/foo.png
+bindsym --release Print       exec --no-startup-id flameshot gui
 
 # Brightness controls
 bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks

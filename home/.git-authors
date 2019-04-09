@@ -18,6 +18,7 @@ authors:
   sh: Sebastian Heid
   mp: Max Petersen
   dw: Dale Wick
+  as: Aakash Shah
 
 email:
   prefix: pair
@@ -42,5 +43,6 @@ email_addresses:
   sh: sebastian.heid@sap.com
   mp: mpetersen@pivotal.io
   dw: dwick@pivotal.io
+  as: ashah@pivotal.io
 
 global: true

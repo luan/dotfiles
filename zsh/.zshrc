@@ -115,3 +115,5 @@ if [ -f '/home/luan/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/luan/g
 
 # Added by Krypton
 export GPG_TTY=$(tty)
+
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
