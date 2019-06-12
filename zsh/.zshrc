@@ -2,6 +2,8 @@ if ! type antibody 1> /dev/null 2>&1; then
   curl -sL git.io/antibody | sh -s
 fi
 
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+
 source <(antibody init)
 
 antibody bundle zdharma/fast-syntax-highlighting
@@ -87,7 +89,7 @@ export PATH=/usr/local/bin:$PATH
 export PATH=$HOME/bin:$PATH
 
 export PATH=/usr/local/go/bin:$PATH
-export GOPATH=$HOME/workspace
+export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
 
 export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib
@@ -113,7 +115,6 @@ if [ -f '/home/luan/google-cloud-sdk/path.zsh.inc' ]; then . '/home/luan/google-
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/luan/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/luan/google-cloud-sdk/completion.zsh.inc'; fi
 
-# Added by Krypton
-export GPG_TTY=$(tty)
-
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+
+for c in $(ls --color=none $XDG_CONFIG_HOME/zsh/*.zsh); do source $c; done

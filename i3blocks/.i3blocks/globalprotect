@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if ! command -v globalprotect > /dev/null; then
+  exit 0
+fi
+
+STATUS=$(globalprotect show --status | sed 's/GlobalProtect status: //')
+
+if [[ "${STATUS}" != "Connected" ]]; then
+  echo " ${STATUS}"
+  echo "${STATUS}"
+  echo "#C3E88D"
+else
+  echo " ${STATUS}"
+  echo "${STATUS}"
+  echo "#F07178"
+fi
