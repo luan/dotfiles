@@ -145,7 +145,8 @@ exec_always --no-startup-id i3-rename-workspace
 bindsym $mod+Shift+z sticky toggle
 
 # LastPass key
-bindsym Mod1+shift+bar exec lpass-rofi
+# bindsym Mod1+shift+bar exec lpass-rofi
+bindsym Mod1+shift+bar exec rofi -modi 1pass:op-rofi -show 1pass
 
 # Screen Shots
 bindsym --release Print       exec --no-startup-id flameshot gui

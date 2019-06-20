@@ -19,6 +19,7 @@ authors:
   mp: Max Petersen
   dw: Dale Wick
   as: Aakash Shah
+  cb: Connor Braa
 
 email:
   prefix: pair
@@ -44,5 +45,6 @@ email_addresses:
   mp: mpetersen@pivotal.io
   dw: dwick@pivotal.io
   as: ashah@pivotal.io
+  cb: cbraa@pivotal.io
 
 global: true

@@ -2,3 +2,5 @@
 " Do things that need to happen very early such as:
 " let g:fzf_command_prefix = 'Fuzzy'
 " ...
+
+let g:autosave = 1

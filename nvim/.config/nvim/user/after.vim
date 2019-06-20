@@ -9,15 +9,6 @@ augroup config#after
 augroup end
 let g:SignatureEnabledAtStartup = 0 " Do not show marks
 
-function! SaveIfUnsaved()
-  if &modified
-    :silent! w
-  endif
-endfunction
-au CursorHold * :call SaveIfUnsaved()
-" Read the file on focus/buffer enter
-au FocusGained,BufEnter * :silent! !
-
 " let g:ale_open_list = 1
 
 map <up> <nop>
@@ -41,7 +32,7 @@ let g:lightline.colorscheme = 'material'
 function! CFCLIIntegrationTransform(cmd) abort
   let l:cmd = a:cmd
 
-  if $TARGET_V7 ==# 'true'
+  if $TARGET_V7 ==# 'true' && l:cmd =~# 'ginkgo'
     let l:cmd = l:cmd.' --tags V7'
   endif
 
