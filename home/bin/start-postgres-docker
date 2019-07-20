@@ -1,0 +1,17 @@
+#!/bin/sh
+
+if [ "$1" = "-f" ]; then
+    echo "Stopping... "
+    docker stop postgres96
+    echo "Removing... "
+    docker rm postgres96
+fi
+
+echo "Starting... "
+docker start postgres96 || docker run \
+    --name postgres96 \
+    -p 5432:5432 \
+    --tmpfs /var/lib/postgresql/data:rw \
+    -e POSTGRES_PASSWORD= \
+    -d \
+    postgres:9.6

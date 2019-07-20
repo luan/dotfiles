@@ -3,7 +3,7 @@ set $term alacritty
 
 # Font for window titles. Will also be used by the bar unless a different font
 # is used in the bar {} block below.
-font pango:mononoki Nerd Font 8
+font pango:mononoki Nerd Font 11
 
 # focus not follow mouse
 focus_follows_mouse no
@@ -249,7 +249,7 @@ bar {
     # tray_output primary
     status_command i3blocks
     # output DP-2~1
-    font pango:mononoki Nerd Font 12
+    font pango:mononoki Nerd Font 16
 
     colors {
         background $base00

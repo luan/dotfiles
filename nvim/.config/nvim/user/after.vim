@@ -11,21 +11,6 @@ let g:SignatureEnabledAtStartup = 0 " Do not show marks
 
 " let g:ale_open_list = 1
 
-map <up> <nop>
-map <down> <nop>
-map <left> <nop>
-map <right> <nop>
-
-xmap <up> <nop>
-xmap <down> <nop>
-xmap <left> <nop>
-xmap <right> <nop>
-
-imap <up> <nop>
-imap <down> <nop>
-imap <left> <nop>
-imap <right> <nop>
-
 colorscheme base16-material
 let g:lightline.colorscheme = 'material'
 
@@ -33,7 +18,7 @@ function! CFCLIIntegrationTransform(cmd) abort
   let l:cmd = a:cmd
 
   if $TARGET_V7 ==# 'true' && l:cmd =~# 'ginkgo'
-    let l:cmd = l:cmd.' --tags V7'
+    let l:cmd = substitute(l:cmd, 'ginkgo', 'ginkgo --tags V7', 1)
   endif
 
   if getcwd() =~# 'cli' && l:cmd =~# 'integration'

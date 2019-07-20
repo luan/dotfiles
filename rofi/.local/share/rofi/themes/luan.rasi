@@ -49,7 +49,7 @@
 }
 
 window {
-	transparency: "real";
+	transparency: "screenshot";
 	fullscreen: false;
 	background-color: @base00;
   border-radius: 20px;
@@ -58,7 +58,7 @@ window {
 }
 
 mainbox {
-	children: [inputbar, message, sidebar, listview];
+	children: [inputbar, message, mode-switcher, listview];
 	spacing: 30px;
 	margin: 0%;
 	padding: 30px 0;
@@ -89,7 +89,7 @@ case-indicator {
 	text-color: @base0F;
 }
 
-sidebar, message {
+mode-switcher, message {
 	border: 1px 0;
 	border-color: @base0D;
 }

@@ -20,6 +20,7 @@ authors:
   dw: Dale Wick
   as: Aakash Shah
   cb: Connor Braa
+  cs: Chris Selzo
 
 email:
   prefix: pair
@@ -46,5 +47,6 @@ email_addresses:
   dw: dwick@pivotal.io
   as: ashah@pivotal.io
   cb: cbraa@pivotal.io
+  cs: cselzo@pivotal.io
 
 global: true

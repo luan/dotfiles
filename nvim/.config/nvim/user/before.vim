@@ -3,4 +3,4 @@
 " let g:fzf_command_prefix = 'Fuzzy'
 " ...
 
-let g:autosave = 1
+" let g:autosave = 1
