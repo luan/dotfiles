@@ -3,11 +3,11 @@
 IP_ADDRESS=$(ip route get 1 | awk '{print $7;exit}')
 
 if [[ "${IP_ADDRESS}" != "" ]]; then
-  echo " ${IP_ADDRESS}"
-  echo "${IP_ADDRESS}"
+  echo ""
+  echo "online"
   echo "#C3E88D"
 else
-  echo " offline"
+  echo " "
   echo "offline"
   echo "#F07178"
 fi
