@@ -1,6 +1,6 @@
 #!/bin/bash
 
-volume=$(/usr/lib/i3blocks/volume)
+volume=$(/usr/lib/i3blocks/volume/volume)
 val=$(echo $volume | tr -d '%')
 
 if [ $val == "MUTE" ]; then
