@@ -1,52 +1,11 @@
 authors:
-  luan: Luan Santos; cfcluan
-  ls: Luan Santos
+  ls: Luan Santos; cfcluan
   ks: Kauana Santos; kau.grola
-  dz: Difan Zhao
-  tv: Tom Viehman
-  rdr: Rob Day Reynolds
-  jy: James Young
-  db: Danny Berger
-  eve: Eve Quintana
-  ac: Arthur Chan
-  af: Alton Fong
-  ts: Tyler Schultz
-  zg: Zachary Gershman
-  ja: Joshua Aresty
-  cd: Chris Dutra
-  mx: Michael Xu
-  sh: Sebastian Heid
-  mp: Max Petersen
-  dw: Dale Wick
-  as: Aakash Shah
-  cb: Connor Braa
-  cs: Chris Selzo
 
 email:
   prefix: pair
   domain: gmail.com
 
 email_addresses:
-  ls: lsantos@pivotal.io
-  dz: dzhao@pivotal.io
-  nk: nkodabande@suse.com
-  tv: tviehman@pivotal.io
-  rdr: rdayreynolds@pivotal.io
-  jy: jayoung@pivotal.io
-  db: dberger@pivotal.io
-  eve: jquintana@pivotal.io
-  ac: achan@pivotal.io
-  af: altonf@vmware.com
-  ts: tshultz@pivotal.io
-  zg: zgershman@pivotal.io
-  ja: joshua.aresty@emc.com
-  cd: cdutra@pivotal.io
-  mx: mxu@pivotal.io
-  sh: sebastian.heid@sap.com
-  mp: mpetersen@pivotal.io
-  dw: dwick@pivotal.io
-  as: ashah@pivotal.io
-  cb: cbraa@pivotal.io
-  cs: cselzo@pivotal.io
 
 global: true

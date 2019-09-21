@@ -1,3 +1,0 @@
-#!/bin/bash
-ssoca env set-option auth.open_command "[xdg-open]"
-ssoca -e bosh openvpn exec --sudo --reconnect

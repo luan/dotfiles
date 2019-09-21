@@ -90,9 +90,11 @@ WINDOW_ICONS = {
     'pavucontrol': fa.icons['volume-up'],
     'postman': fa.icons['space-shuttle'],
     'rhythmbox': fa.icons['play'],
+    'signal': fa.icons['comment-dots'],
     'slack': fa.icons['slack'],
     'slic3r.pl': fa.icons['cube'],
     'spotify': fa.icons['spotify'],  # could also use the 'spotify' icon
+    'station': fa.icons['comments'],
     'steam': fa.icons['steam'],
     'subl': fa.icons['file-alt'],
     'subl3': fa.icons['file-alt'],
@@ -111,13 +113,12 @@ WINDOW_ICONS = {
 # This icon is used for any application not in the list above
 DEFAULT_ICON = fa.icons['window-maximize']
 
-SEPARATOR = "<span alpha='50%'>|</span>"
+SEPARATOR = "|"
 
 # Global setting that determines whether workspaces will be automatically
 # re-numbered in ascending order with a "gap" left on each monitor. This is
 # overridden via command-line flag.
 RENUMBER_WORKSPACES = False
-
 
 def ensure_window_icons_lowercase():
     for cls in WINDOW_ICONS:
@@ -145,7 +146,7 @@ def icon_for_window(window):
         'No icon available for window with classes: %s' % str(classes))
     return DEFAULT_ICON
 
-def icon_for_window_with_markup(window):
+def icon_for_window_with_pango_markup(window):
     icon = icon_for_window(window)
 
     if window.focused:
@@ -156,10 +157,8 @@ def icon_for_window_with_markup(window):
     i3.command('[id=%s] title_format %s %s <small>%%title</small>' % (window.window, icon, SEPARATOR))
     return icon
 
-
 def rename_workspace(old, new):
     i3.command('rename workspace "%s" to "%s"' % (old, new))
-
 
 # renames all workspaces based on the windows present
 # also renumbers them in ascending order, with one gap left between monitors
@@ -172,7 +171,8 @@ def rename_workspaces(i3):
         ws_info = ws_infos[ws_index]
 
         name_parts = parse_workspace_name(workspace.name)
-        new_icons = ' '.join([icon_for_window_with_markup(w) for w in workspace.leaves()])
+        # new_icons = ' '.join([icon_for_window_with_markup(w) for w in workspace.leaves()])
+        new_icons = ' '.join([icon_for_window(w) for w in workspace.leaves()])
 
         # As we enumerate, leave one gap in workspace numbers between each monitor.
         # This leaves a space to insert a new one later.
@@ -186,7 +186,8 @@ def rename_workspaces(i3):
 
         new_name = construct_workspace_name(
             NameParts(
-                num=new_num, shortname=name_parts.shortname, icons=new_icons))
+                num=new_num,
+                shortname=name_parts.shortname, icons=new_icons))
         if workspace.name == new_name:
             continue
         rename_workspace(workspace.name, new_name)

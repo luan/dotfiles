@@ -1,0 +1,377 @@
+[colors]
+background = #00422668
+foreground = #fde7e9
+foreground-alt = #f9b79d
+primary = #Da5f8a
+secondary = #3c2466
+
+[settings]
+throttle-ms = 50
+throttle-limit = 5
+dpi = ${xrdb:Xft.dpi:96}
+
+[bar/top]
+; monitor=DP-1-2
+width = 100%
+height = 32
+; height = 27 * 3
+radius = 0.0
+fixed-center = true
+
+background = ${colors.background}
+foreground = ${colors.foreground}
+
+; overline-size = 2
+; overline-color = #bc91f8
+; underline-size = 2
+; underline-color = #fff
+
+spacing = 0
+
+border-size = 0
+
+padding-left = 0
+padding-right = 0
+
+module-margin-left = 1
+module-margin-right = 1
+
+font-0 = xos4 Terminus:pixelsize=10;2
+font-1 = Font Awesome 5 Free:style=Solid:pixelsize=12;2
+font-2 = Font Awesome 5 Brands:style=Solid:pixelsize=12;2
+font-3 = TerminessTTF Nerd Font:style=Solid:pixelsize=12;2
+font-4 = monospace:pixelsize=10;2
+font-5 = sans:pixelsize=10;2
+
+modules-left = wired memory cpu spotify
+modules-center = i3
+modules-right =  dunst microphone volume wifi battery packages date
+
+tray-position = right
+tray-padding = 2
+tray-maxsize = 24
+enable-ipc = true
+
+[module/xwindow]
+type = internal/xwindow
+label = %title:0:30:...%
+
+[module/i3]
+type = internal/i3
+index-sort = true
+wrapping-scroll = false
+strip-wsnumbers = true
+
+; Available tags:
+;   <label-state> (default) - gets replaced with <label-(focused|unfocused|visible|urgent)>
+;   <label-mode> (default)
+format = <label-state> <label-mode>
+
+; Available tokens:
+;   %mode%
+; Default: %mode%
+label-mode = %mode%
+label-mode-padding = 2
+label-mode-background = #535388
+
+; Available tokens:
+;   %name%
+;   %icon%
+;   %index%
+;   %output%
+; Default: %icon%  %name%
+; label-focused = %{R}%icon% %name%
+label-focused-foreground = #fde7e9
+label-focused-padding-right = 1
+
+; Available tokens:
+;   %name%
+;   %icon%
+;   %index%
+; Default: %icon%  %name%
+label-unfocused-foreground = #a84a7a
+label-unfocused-padding-right = 1
+
+; Available tokens:
+;   %name%
+;   %icon%
+;   %index%
+; Default: %icon%  %name%
+label-visible-padding-right = 1
+
+; Available tokens:
+;   %name%
+;   %icon%
+;   %index%
+; Default: %icon%  %name%
+label-urgent-foreground = #000000
+label-urgent-background = #bd2c40
+label-urgent-padding-right = 1
+
+[module/cpu]
+type = internal/cpu
+interval = 2
+format-prefix = 
+format-prefix-foreground = ${colors.foreground}
+format = <label> <ramp-coreload>
+label = %percentage:3%%
+
+ramp-coreload-0 = %{O-4}▁
+
+ramp-coreload-0-foreground = #5f819d
+ramp-coreload-1 = %{O-4}▂
+ramp-coreload-1-foreground = #5f819d
+ramp-coreload-2 = %{O-4}▃
+ramp-coreload-2-foreground = #f0c674
+ramp-coreload-3 = %{O-4}▄
+ramp-coreload-3-foreground = #f0c674
+ramp-coreload-4 = %{O-4}▅
+ramp-coreload-4-foreground = #de935f
+ramp-coreload-5 = %{O-4}▆
+ramp-coreload-5-foreground = #de935f
+ramp-coreload-6 = %{O-4}▇
+ramp-coreload-6-foreground = #a54242
+ramp-coreload-7 = %{O-4}█
+ramp-coreload-7-foreground = #a54242
+
+[module/memory]
+type = internal/memory
+interval = 2
+format = <label> <bar-used>
+format-prefix = 
+format-prefix-foreground = ${colors.foreground}
+
+label = %gb_used:8%/%gb_total%
+
+; Only applies if <bar-used> is used
+bar-used-indicator =
+bar-used-width = 14
+bar-used-foreground-0 = #55aa55
+bar-used-foreground-1 = #557755
+bar-used-foreground-2 = #f5a70a
+bar-used-foreground-3 = #ff5555
+bar-used-fill = %{O-1}█
+bar-used-empty = %{O-1}▁
+bar-used-empty-foreground = #666
+
+[module/wired]
+type = internal/network
+interface = enp0s31f6
+interval = 3.0
+
+; Available tags:
+;   <label-connected> (default)
+;   <ramp-signal>
+format-connected = <ramp-signal> <label-connected>
+
+; Available tags:
+;   <label-disconnected> (default)
+format-disconnected = <label-disconnected>
+
+; Available tags:
+;   <label-connected> (default)
+;   <label-packetloss>
+;   <animation-packetloss>
+format-packetloss = <animation-packetloss> <label-connected>
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+;   %local_ip%  [wireless+wired]
+;   %essid%     [wireless]
+;   %signal%    [wireless]
+;   %upspeed%   [wireless+wired]
+;   %downspeed% [wireless+wired]
+;   %linkspeed% [wired]
+; Default: %ifname% %local_ip%
+label-connected = %{F#66aa66}%linkspeed%%{F-} %{T2} %downspeed:7%  %upspeed:7%%{T-}
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+; Default: (none)
+; label-disconnected = not connected
+; label-disconnected-foreground = #66ffffff
+
+ramp-signal-0 = " "
+format-prefix-foreground = ${colors.foreground}
+; format-disconnected-underline = #ff7f7f
+; format-connected-underline = #7fff7f
+
+[module/wifi]
+type = internal/network
+interface = wlp2s0
+interval = 3.0
+
+; Available tags:
+;   <label-connected> (default)
+;   <ramp-signal>
+format-connected = <ramp-signal> <label-connected>
+
+; Available tags:
+;   <label-disconnected> (default)
+format-disconnected = <label-disconnected>
+
+; Available tags:
+;   <label-connected> (default)
+;   <label-packetloss>
+;   <animation-packetloss>
+format-packetloss = <animation-packetloss> <label-connected>
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+;   %local_ip%  [wireless+wired]
+;   %essid%     [wireless]
+;   %signal%    [wireless]
+;   %upspeed%   [wireless+wired]
+;   %downspeed% [wireless+wired]
+;   %linkspeed% [wired]
+; Default: %ifname% %local_ip%
+label-connected = %{F#66aa66}%essid%%{F-} %{T2} %downspeed:7%  %upspeed:7%%{T-}
+
+; Available tokens:
+;   %ifname%    [wireless+wired]
+; Default: (none)
+; label-disconnected = not connected
+; label-disconnected-foreground = #66ffffff
+
+ramp-signal-0 = " "
+format-prefix-foreground = ${colors.foreground}
+; format-disconnected-underline = #ff7f7f
+; format-connected-underline = #7fff7f
+
+[module/date]
+type = internal/date
+interval = 1
+
+date = " %a %D"
+date-alt = " %Y-%m-%d"
+time = %H:%M:%S
+time-alt = %H:%M:%S
+
+; format-underline = #0a6cf5
+label = %{u#ccccff}%{F#ccccff}%date%%{F-}%{u#fff}  %time%
+format-prefix-foreground = ${colors.foreground-alt}
+
+[module/volume]
+type = internal/pulseaudio
+
+use-ui-max = true
+
+format-volume = %{A3:rofi-pulseaudio:}<ramp-volume> <label-volume>%{A}
+format-muted =  0%
+format-muted-foreground = #a84a7a
+format-volume-foreground = #fde7e9
+
+ramp-volume-0 = 
+ramp-volume-1 = 
+ramp-volume-2 = 
+
+click-right = rofi-pulseaudio
+
+[module/microphone]
+type = custom/ipc
+
+hook-0 = ~/.config/polybar/microphone.sh
+initial = 1
+
+click-left = ponymix -t source toggle ; polybar-msg -p %pid% hook microphone 1
+scroll-up = ponymix -t source increase 5 ; polybar-msg -p %pid% hook microphone 1
+scroll-down = ponymix -t source decrease 5 ; polybar-msg -p %pid% hook microphone 1
+click-right = rofi-pulseaudio source output
+
+[module/battery]
+type = internal/battery
+battery = BAT0
+adapter = AC
+full-at = 100
+
+; see "man date" for details on how to format the time string
+; NOTE: if you want to use syntax tags here you need to use %%{...}
+; Default: %H:%M:%S
+time-format = %H:%M
+
+; Available tags:
+;   <label-charging> (default)
+;   <bar-capacity>
+;   <ramp-capacity>
+;   <animation-charging>
+format-charging = <animation-charging> <label-charging>
+
+; Available tags:
+;   <label-discharging> (default)
+;   <bar-capacity>
+;   <ramp-capacity>
+format-discharging = <ramp-capacity> <label-discharging>
+
+; Available tags:
+;   <label-full> (default)
+;   <bar-capacity>
+;   <ramp-capacity>
+format-full =
+
+; Available tokens:
+;   %percentage% (default)
+;   %time%
+;   %consumption% (shows current charge rate in watts)
+label-charging = %percentage%% (%time%)
+
+; Available tokens:
+;   %percentage% (default)
+;   %time%
+;   %consumption% (shows current discharge rate in watts)
+label-discharging = %percentage%% (%time%)
+
+; Available tokens:
+;   %percentage% (default)
+label-full = Charged
+
+; Only applies if <ramp-capacity> is used
+ramp-capacity-0 = 
+ramp-capacity-1 = 
+ramp-capacity-2 = 
+ramp-capacity-3 = 
+ramp-capacity-4 = 
+
+; Only applies if <bar-capacity> is used
+bar-capacity-width = 10
+
+; Only applies if <animation-charging> is used
+animation-charging-0 = 
+animation-charging-1 = 
+animation-charging-2 = 
+animation-charging-3 = 
+animation-charging-4 = 
+; Framerate in milliseconds
+animation-charging-framerate = 750
+
+[global/wm]
+margin-top = 5
+margin-bottom = 5
+
+[module/spotify]
+type = custom/script
+exec = ~/.config/polybar/spotify.sh
+exec-if = pgrep -x spotify
+tail = true
+; interval = 0
+format-prefix =
+format-padding = 1
+
+[module/packages]
+type = custom/script
+exec = ~/.config/polybar/packages.sh
+tail = true
+interval = 60
+format-padding = 0
+
+[module/dunst]
+type = custom/ipc
+
+hook-0 = pkill dunst -USR2 && echo %{F#fde7e9}%{F-}
+hook-1 = pkill dunst -USR1 && echo %{F#a84a7a}%{F-}
+initial = 1
+
+click-left  = polybar-msg -p %pid% hook dunst 1
+click-right = polybar-msg -p %pid% hook dunst 2
+
+; vim:ft=dosini
+

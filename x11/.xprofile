@@ -4,7 +4,6 @@
 # xrandr --output eDP-1 --auto --panning ${WIDTH}x${HEIGHT}+0+0 --scale ${SCALE}x${SCALE} --output DP-1-2 --auto --panning 3840x2160+${WIDTH}+0 --right-of eDP-1
 
 [[ -f ~/.Xresources ]] && xrdb -merge -I$HOME ~/.Xresources
-[[ -f ~/.Xresources-147 ]] && xrdb -merge -I$HOME ~/.Xresources-147
 
 export BROWSER=google-chrome-stable
 export TERMINAL=alacritty

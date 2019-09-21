@@ -1,9 +1,0 @@
-#!/bin/bash
-
-xrandr --dpi 152
-xrdb -merge -I$HOME $HOME/.Xresources-147
-
-xset r rate 200 30
-setxkbmap -option ctrl:nocaps
-
-pkill -9 dunst

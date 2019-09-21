@@ -41,9 +41,9 @@
 Rxvt.font: xft:Iosevka Term:size=8.5
 Rxvt.scrollBar: false
 
-Xft.antialias: true
+Xft.antialias: 1
 Xft.autohint: 0
-Xft.hinting: true
+Xft.hinting: 1
 Xft.hintstyle: hintslight
 Xft.lcdfilter: lcddefault
 Xft.rgba: rgb

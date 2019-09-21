@@ -1,0 +1,50 @@
+/**
+ * Settings used in every rofi option menu:
+ *  - i3layoutmenu
+ *  - mpdmenu
+ *  - powermenu
+ *  - scrotmenu
+ */
+@import "settings.rasi"
+* {
+  background-color: transparent;
+  text-color: @foreground;
+  font: @icon-font-small;
+}
+
+#window {
+  children: [ inputbar, listview ];
+  width: 320px;
+}
+
+#element {
+  padding: @option-element-padding;
+  margin: @list-element-margin;
+  background-color: @background-light;
+}
+
+#element.selected {
+  background-color: @accent;
+  text-color: @background;
+}
+
+#textbox-prompt-colon {
+  expand: false;
+  padding: @apps-textbox-prompt-colon-padding;
+}
+
+#inputbar {
+  children: [ textbox-prompt-colon, entry ];
+  margin: @inputbar-margin;
+}
+
+#entry {
+  text-color: @accent;
+  padding: @entry-padding;
+}
+
+inputbar,
+textbox-prompt-colon,
+entry {
+  background-color: @background-light;
+}

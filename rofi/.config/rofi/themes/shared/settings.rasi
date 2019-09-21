@@ -1,0 +1,14 @@
+/**
+ * Allows to change the settings of every menu simply by editing this file
+ */
+@import "colorschemes/purple.rasi"
+@import "resolutions/3440x1444.rasi"
+
+element-icon {
+  size: 2.0ch;
+}
+
+window {
+  border-radius: 10px;
+  width: 900px;
+}
