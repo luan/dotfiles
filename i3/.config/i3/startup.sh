@@ -2,15 +2,20 @@
 
 function main
 {
-  killall polybar
-  killall feh
-  killall compton
-  killall dunst
 
-  polybar top -r &
+  killall feh
   feh --randomize --bg-fill ~/.wallpapers/* &
-  compton -b --backend glx --vsync
+
+  if pgrep -x compton >/dev/null; then
+    pkill -USR1 compton
+  else
+    compton -b --backend glx --vsync
+  fi
+
+  killall dunst
   dunst &
+
+  restart-polybar
 }
 
 main "$@"

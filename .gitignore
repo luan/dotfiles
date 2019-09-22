@@ -1,10 +1,6 @@
 secrets
 .DS_Store
 .dropbox
-fish/.config/fish/functions
-fish/.config/fish/conf.d
-fish/.config/fish/completions
-fish/.config/fish/fishd.*
 home/bin/bosh
 home/bin/credhub
 home/bin/fly
@@ -22,3 +18,4 @@ ssh/.ssh/*_rsa*
 ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
 ssh/.ssh/known_hosts
+home/bin/__pycache__/

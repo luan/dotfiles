@@ -10,21 +10,24 @@ throttle-ms = 50
 throttle-limit = 5
 dpi = ${xrdb:Xft.dpi:96}
 
+[bar/top-gap]
+monitor = ${env:MONITOR:}
+
+height = 32
+width = 100%
+background = ${colors.background}
+foreground = ${colors.background}
+modules-left = blank
+
 [bar/top]
-; monitor=DP-1-2
+override-redirect = true
 width = 100%
 height = 32
-; height = 27 * 3
 radius = 0.0
 fixed-center = true
 
 background = ${colors.background}
 foreground = ${colors.foreground}
-
-; overline-size = 2
-; overline-color = #bc91f8
-; underline-size = 2
-; underline-color = #fff
 
 spacing = 0
 
@@ -51,6 +54,10 @@ tray-position = right
 tray-padding = 2
 tray-maxsize = 24
 enable-ipc = true
+
+[module/blank]
+type = custom/text
+content =  
 
 [module/xwindow]
 type = internal/xwindow
