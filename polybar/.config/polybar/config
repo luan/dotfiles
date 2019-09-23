@@ -1,16 +1,10 @@
-[colors]
-background = rgba(0, 0, 0, 0)
-foreground = ${xrdb:foreground}
-foreground-alt = ${xrdb:color14}
-primary = ${xrdb:color1}
-secondary = ${xrdb:color3}
-muted = ${xrdb:color8}
-urgent = ${xrdb:color4}
+include-file = ~/.cache/wal/polybar-colors
 
 [settings]
 throttle-ms = 50
 throttle-limit = 5
 dpi = ${xrdb:Xft.dpi:96}
+compositing-foreground = lighten
 
 [bar/top-gap]
 height = 32

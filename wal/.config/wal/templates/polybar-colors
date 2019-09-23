@@ -1,0 +1,8 @@
+[colors]
+background = #77{background.strip}
+foreground = {foreground}
+foreground-alt = {color14}
+primary = {color1}
+secondary = {color3}
+muted = {color8}
+urgent = {color4}
