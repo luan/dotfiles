@@ -184,6 +184,8 @@ exec --no-startup-id xautolock -detectsleep \
 
 bindsym $mod+Delete exec powermenu
 
+bindsym $mod+Insert exec systemctl start --user wal.service
+
 mode "" {
   bindsym Menu mode "default"
 }
