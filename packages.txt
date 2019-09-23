@@ -20,6 +20,7 @@ caffeine-ng
 cantarell-fonts
 clang
 cmake
+colorz
 compton
 coreutils
 curl
@@ -113,7 +114,8 @@ pulseaudio
 pulseaudio-alsa
 pygtk
 python
-python-colorz
+python-fontawesome
+python-i3ipc
 python-pip
 python-pynvim
 python-pywal
@@ -186,6 +188,7 @@ xdotool
 xf86-input-libinput
 xf86-video-vesa
 xfsprogs
+xgetres
 xkeyboard-config
 xorg-setxkbmap
 xorg-xbacklight

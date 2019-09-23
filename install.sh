@@ -15,12 +15,27 @@ sudo pacman -Syu --needed --noconfirm git base-devel stow
 git clone https://aur.archlinux.org/yay.git /tmp/yay || true
 (cd /tmp/yay && makepkg -si --noconfirm)
 
-stow -R home
+stow -R alacritty
+stow -R autorandr
+stow -R compton
+stow -R dunst
+stow -R fontconfig
 stow -R gnupg
+stow -R gtk
+stow -R home
+stow -R i3
+stow -R nvim
+stow -R polybar
+stow -R rofi
 stow -R ssh
+stow -R sxiv
+stow -R systemd
+stow -R wal
+stow -R x11
 stow -R yay
+stow -R zsh
 
-#yay -S --needed - < packages.txt
+yay -S --needed --noconfirm - < packages.txt
 
 mkdir -p ~/.config
 
@@ -51,8 +66,8 @@ fi
 rustup default stable
 
 sudo systemctl enable --now udisks2.service
+systemctl --user enable --now wal.timer
 
 chmod 700 ~/.gnupg
 curl https://keybase.io/cfcluan/pgp_keys.asc | gpg --import
 
-sudo pip install i3ipc fontawesome

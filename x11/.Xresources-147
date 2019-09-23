@@ -1,2 +1,3 @@
-Xft.dpi: 160
-rofi.dpi: 160
+Xft.dpi: 147
+rofi.dpi: 147
+polybar.height: 49

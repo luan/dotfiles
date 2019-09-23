@@ -1,5 +1,5 @@
 [colors]
-background = #77{background.strip}
+background = #99{background.strip}
 foreground = {foreground}
 foreground-alt = {color14}
 primary = {color1}

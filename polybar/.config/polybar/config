@@ -3,19 +3,20 @@ include-file = ~/.cache/wal/polybar-colors
 [settings]
 throttle-ms = 50
 throttle-limit = 5
-dpi = ${xrdb:Xft.dpi:96}
 compositing-foreground = lighten
 
 [bar/top-gap]
-height = 32
+dpi = ${xrdb:Xft.dpi:96}
+height = ${xrdb:polybar.height:32}
 width = 100%
 background = ${colors.background}
 foreground = ${colors.background}
 modules-left = blank
 
 [bar/top]
+dpi = ${xrdb:Xft.dpi:96}
 width = 100%
-height = 32
+height = ${xrdb:polybar.height:32}
 radius = 0.0
 fixed-center = true
 
@@ -32,16 +33,16 @@ padding-right = 0
 module-margin-left = 1
 module-margin-right = 1
 
-font-0 = xos4 Terminus:pixelsize=10;2
+font-0 = Iosevka Term:pixelsize=10;2
 font-1 = Font Awesome 5 Free:style=Solid:pixelsize=12;2
 font-2 = Font Awesome 5 Brands:style=Solid:pixelsize=12;2
 font-3 = TerminessTTF Nerd Font:style=Solid:pixelsize=12;2
 font-4 = monospace:pixelsize=10;2
 font-5 = sans:pixelsize=10;2
 
-modules-left = wired memory cpu spotify
+modules-left = wired wifi memory cpu spotify
 modules-center = i3
-modules-right =  dunst microphone volume wifi battery packages date time
+modules-right =  battery dunst microphone volume packages date time
 
 tray-position = right
 tray-padding = 2
