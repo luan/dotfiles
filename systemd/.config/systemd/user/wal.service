@@ -1,0 +1,7 @@
+[Unit]
+Description=Change wallpaper and theme randomly
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '/usr/bin/wal -i ~/.wallpapers --backend colorz -s'
+Environment="DISPLAY=:0"

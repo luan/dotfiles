@@ -1,0 +1,9 @@
+[Unit]
+Description=Change wallpaper and theme peridically
+
+[Timer]
+OnBootSec=30min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
