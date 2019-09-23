@@ -3,5 +3,6 @@ Description=Change wallpaper and theme randomly
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c '/usr/bin/wal -i ~/.wallpapers --backend colorz -s'
+ExecStart=/bin/bash -c '/usr/bin/wal -i ~/.wallpapers --backend colorz -s && killall dunst'
+
 Environment="DISPLAY=:0"
