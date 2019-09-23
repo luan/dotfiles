@@ -4,7 +4,7 @@ function main
 {
 
   killall feh
-  feh --randomize --bg-fill ~/.wallpapers/* &
+  feh --bg-fill "$(< "${HOME}/.cache/wal/wal")" &
 
   if pgrep -x compton >/dev/null; then
     pkill -USR1 compton

@@ -1,9 +1,11 @@
 [colors]
-background = #00422668
-foreground = #fde7e9
-foreground-alt = #f9b79d
-primary = #Da5f8a
-secondary = #3c2466
+background = rgba(0, 0, 0, 0)
+foreground = ${xrdb:foreground}
+foreground-alt = ${xrdb:color14}
+primary = ${xrdb:color1}
+secondary = ${xrdb:color3}
+muted = ${xrdb:color8}
+urgent = ${xrdb:color4}
 
 [settings]
 throttle-ms = 50
@@ -11,8 +13,6 @@ throttle-limit = 5
 dpi = ${xrdb:Xft.dpi:96}
 
 [bar/top-gap]
-monitor = ${env:MONITOR:}
-
 height = 32
 width = 100%
 background = ${colors.background}
@@ -20,7 +20,6 @@ foreground = ${colors.background}
 modules-left = blank
 
 [bar/top]
-override-redirect = true
 width = 100%
 height = 32
 radius = 0.0
@@ -48,7 +47,7 @@ font-5 = sans:pixelsize=10;2
 
 modules-left = wired memory cpu spotify
 modules-center = i3
-modules-right =  dunst microphone volume wifi battery packages date
+modules-right =  dunst microphone volume wifi battery packages date time
 
 tray-position = right
 tray-padding = 2
@@ -79,7 +78,7 @@ format = <label-state> <label-mode>
 ; Default: %mode%
 label-mode = %mode%
 label-mode-padding = 2
-label-mode-background = #535388
+label-mode-background = ${colors.primary}
 
 ; Available tokens:
 ;   %name%
@@ -88,7 +87,7 @@ label-mode-background = #535388
 ;   %output%
 ; Default: %icon%  %name%
 ; label-focused = %{R}%icon% %name%
-label-focused-foreground = #fde7e9
+label-focused-foreground = ${colors.foreground}
 label-focused-padding-right = 1
 
 ; Available tokens:
@@ -96,7 +95,7 @@ label-focused-padding-right = 1
 ;   %icon%
 ;   %index%
 ; Default: %icon%  %name%
-label-unfocused-foreground = #a84a7a
+label-unfocused-foreground = ${colors.secondary}
 label-unfocused-padding-right = 1
 
 ; Available tokens:
@@ -111,8 +110,8 @@ label-visible-padding-right = 1
 ;   %icon%
 ;   %index%
 ; Default: %icon%  %name%
-label-urgent-foreground = #000000
-label-urgent-background = #bd2c40
+label-urgent-foreground = ${colors.background}
+label-urgent-background = ${colors.urgent}
 label-urgent-padding-right = 1
 
 [module/cpu]
@@ -200,8 +199,6 @@ label-connected = %{F#66aa66}%linkspeed%%{F-} %{T2} %downspeed:7%  %upspee
 
 ramp-signal-0 = " "
 format-prefix-foreground = ${colors.foreground}
-; format-disconnected-underline = #ff7f7f
-; format-connected-underline = #7fff7f
 
 [module/wifi]
 type = internal/network
@@ -247,16 +244,27 @@ format-prefix-foreground = ${colors.foreground}
 
 [module/date]
 type = internal/date
-interval = 1
+interval = 60
 
 date = " %a %D"
 date-alt = " %Y-%m-%d"
+
+format-prefix = 
+label = %date%
+format-prefix-foreground = ${colors.foreground-alt}
+format-foreground = ${colors.foreground-alt}
+
+[module/time]
+type = internal/date
+interval = 1
+
 time = %H:%M:%S
 time-alt = %H:%M:%S
 
-; format-underline = #0a6cf5
-label = %{u#ccccff}%{F#ccccff}%date%%{F-}%{u#fff}  %time%
-format-prefix-foreground = ${colors.foreground-alt}
+format-prefix =  
+label = %time%
+format-prefix-foreground = ${colors.foreground}
+format-label-foreground = ${colors.urgent}
 
 [module/volume]
 type = internal/pulseaudio
@@ -265,8 +273,8 @@ use-ui-max = true
 
 format-volume = %{A3:rofi-pulseaudio:}<ramp-volume> <label-volume>%{A}
 format-muted =  0%
-format-muted-foreground = #a84a7a
-format-volume-foreground = #fde7e9
+format-muted-foreground = ${colors.muted}
+format-volume-foreground = ${colors.foreground}
 
 ramp-volume-0 = 
 ramp-volume-1 = 
@@ -373,8 +381,8 @@ format-padding = 0
 [module/dunst]
 type = custom/ipc
 
-hook-0 = pkill dunst -USR2 && echo %{F#fde7e9}%{F-}
-hook-1 = pkill dunst -USR1 && echo %{F#a84a7a}%{F-}
+hook-0 = pkill dunst -USR2 && echo %{F$(xgetres foreground)}%{F-}
+hook-1 = pkill dunst -USR1 && echo %{F$(xgetres color2)}%{F-}
 initial = 1
 
 click-left  = polybar-msg -p %pid% hook dunst 1

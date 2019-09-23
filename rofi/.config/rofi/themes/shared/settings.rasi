@@ -1,7 +1,7 @@
 /**
  * Allows to change the settings of every menu simply by editing this file
  */
-@import "colorschemes/purple.rasi"
+@import "~/.cache/wal/colors-rofi.rasi"
 @import "resolutions/3440x1444.rasi"
 
 element-icon {

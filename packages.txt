@@ -113,8 +113,10 @@ pulseaudio
 pulseaudio-alsa
 pygtk
 python
+python-colorz
 python-pip
 python-pynvim
+python-pywal
 python2
 rbenv
 readline

@@ -31,3 +31,4 @@ endfunction
 let g:test#custom_transformations = { 'cfcli': function('CFCLIIntegrationTransform') }
 let g:test#transformation = 'cfcli'
 
+au BufNewFile,BufRead /*.rasi setf css

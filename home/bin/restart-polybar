@@ -5,6 +5,6 @@ if pgrep -x polybar >/dev/null; then
   exit
 fi
 
-polybar -r top-gap &
 polybar -r top &
+# polybar -r top-gap &
 
