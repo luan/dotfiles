@@ -1,9 +1,9 @@
 configuration {
-	font: "Google Sans 12";
-	show-match: true;
-	theme: "themes/appsmenu";
+  font: "Google Sans 12";
+  show-match: true;
+  theme: "themes/appsmenu";
 
-	show-icons:         true;
+  show-icons:         true;
   icon-theme:         "Numix-Circle";
   cycle:              true;
   hide-scrollbar:     true;

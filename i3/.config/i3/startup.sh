@@ -2,20 +2,31 @@
 
 function main
 {
+  dropbox stop
+  while pgrep -x dropbox >/dev/null; do
+    sleep 1;
+  done
 
-  killall feh
-  feh --bg-fill "$(< "${HOME}/.cache/wal/wal")" &
+  killall -q polybar compton feh dunst
+  feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
 
-  if pgrep -x compton >/dev/null; then
-    pkill -USR1 compton
-  else
-    compton -b --backend glx --vsync
-  fi
+  while pgrep -x polybar >/dev/null; do
+    sleep 1;
+  done
 
-  killall dunst
   dunst &
 
-  restart-polybar
+  polybar -r top &
+
+  dropbox start
+
+  sleep 5
+
+  while pgrep -x compton >/dev/null; do
+    sleep 1;
+  done
+
+  compton -b --backend glx --vsync
 }
 
 main "$@"

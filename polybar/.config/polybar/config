@@ -44,9 +44,10 @@ modules-left = wired wifi memory cpu spotify
 modules-center = i3
 modules-right =  battery dunst microphone volume packages date time
 
-tray-position = right
+tray-position = none
 tray-padding = 2
 tray-maxsize = 24
+
 enable-ipc = true
 
 [module/blank]
@@ -270,6 +271,7 @@ format-volume = %{A3:rofi-pulseaudio:}<ramp-volume> <label-volume>%{A}
 format-muted =  0%
 format-muted-foreground = ${colors.muted}
 format-volume-foreground = ${colors.foreground}
+interval = 1
 
 ramp-volume-0 = 
 ramp-volume-1 = 
