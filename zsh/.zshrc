@@ -1,3 +1,21 @@
+# Environment
+export LANG=en_US.UTF-8
+
+export EDITOR='nvim'
+export GIT_EDITOR='nvim'
+
+export GIT_DUET_GLOBAL=1
+export GIT_DUET_ROTATE_AUTHOR=1
+export GIT_DUET_CO_AUTHORED_BY=1
+
+export PATH=/usr/local/bin:$PATH
+export PATH=$HOME/bin:$PATH
+
+export PATH=/usr/local/go/bin:$PATH
+export GOPATH=$HOME/src/server/go
+export PATH=$GOPATH/bin:$PATH
+export PATH=/home/linuxbrew/.linuxbrew/bin:$PATH
+
 if ! type antibody 1> /dev/null 2>&1; then
   curl -sL git.io/antibody | sh -s
 fi
@@ -10,7 +28,6 @@ antibody bundle zdharma/fast-syntax-highlighting
 antibody bundle zsh-users/zsh-autosuggestions
 antibody bundle zsh-users/zsh-history-substring-search
 antibody bundle zsh-users/zsh-completions
-antibody bundle marzocchi/zsh-notify
 antibody bundle unixorn/warhol.plugin.zsh
 
 # Enable autocompletions
@@ -76,26 +93,7 @@ alias grep='grep --color'
 alias be='bundle exec'
 alias vim=nvim
 
-# Environment
-export LANG=en_US.UTF-8
-
-export EDITOR='nvim'
-export GIT_EDITOR='nvim'
-
-export GIT_DUET_GLOBAL=1
-export GIT_DUET_ROTATE_AUTHOR=1
-export GIT_DUET_CO_AUTHORED_BY=1
-
-export PATH=/usr/local/bin:$PATH
-export PATH=$HOME/bin:$PATH
-
-export PATH=/usr/local/go/bin:$PATH
-export GOPATH=$HOME/go
-export PATH=$GOPATH/bin:$PATH
-
 export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib
-
-export SSOCA_ENVIRONMENT=bosh
 
 # No duplicates in $PATH
 typeset -U path
@@ -106,7 +104,10 @@ eval "$(direnv hook zsh)"
 source $HOME/.config/zsh/*.zsh
 eval "$(rbenv init -)"
 [[ -s "/etc/grc.zsh" ]] && source /etc/grc.zsh
-source /usr/share/nvm/init-nvm.sh
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "/home/linuxbrew/.linuxbrew/opt/nvm/nvm.sh" ] && . "/home/linuxbrew/.linuxbrew/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/home/linuxbrew/.linuxbrew/opt/nvm/etc/bash_completion.d/nvm" ] && . "/home/linuxbrew/.linuxbrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
