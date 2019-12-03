@@ -174,15 +174,15 @@ bindsym $mod+shift+a exec amixer -q sset Capture toggle && pkill -RTMIN+11 i3blo
 for_window [title="^Authy$"] floating enable
 for_window [instance="origin.exe"] floating enable
 
-set $Locker i3lock -c 333333 -i ~/.wallpapers/* -f && sleep 1
+set $Locker lock-session
 
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
-                               -notify   900 -notifier "xset dpms force off" \
-                               -time     30  -locker   "$Locker" \
-                               -killtime 60 -killer   "systemctl suspend"
+                               -notify   5 -notifier "xset dpms force off" \
+                               -time     1 -locker   "$Locker"
 
 bindsym $mod+Delete exec powermenu
+bindsym $mod+shift+Delete exec lock-session
 
 bindsym $mod+Insert exec systemctl start --user wal.service
 
@@ -201,7 +201,6 @@ exec_always --no-startup-id "~/.config/i3/startup.sh"
 
 # exec_always --no-startup-id "~/.config/i3/startup.sh"
 
-# exec --no-startup-id parcellite
 exec --no-startup-id greenclip daemon
 exec --no-startup-id udiskie
 exec --no-startup-id xbanish

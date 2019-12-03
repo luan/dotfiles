@@ -20,12 +20,13 @@ case $chosen in
         systemctl reboot
         ;;
     $lock)
-        i3lock -c 333333 -i ~/.wallpapers/* -f
+        playerctl pause
+        lock-session
         ;;
     $suspend)
-        mpc -q pause
+        playerctl pause
         amixer set Master mute
-        i3lock -c 333333 -i ~/.wallpapers/* -f
+        lock-session
         systemctl suspend
         ;;
     $log_out)
