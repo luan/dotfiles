@@ -32,3 +32,8 @@ let g:test#custom_transformations = { 'cfcli': function('CFCLIIntegrationTransfo
 let g:test#transformation = 'cfcli'
 
 au BufNewFile,BufRead /*.rasi setf css
+
+if filereadable(expand('<sfile>:h') . '/post-after.vim')
+  runtime user/post-after.vim
+endif
+
