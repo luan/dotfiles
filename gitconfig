@@ -50,8 +50,5 @@
   pushInsteadOf = "https://github.com/"
 [submodule]
   fetchJobs = 16
-[commit]
-  template = ~/.gitmessage
-  gpgsign = true
 [hub]
   protocol = https
