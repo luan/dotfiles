@@ -372,7 +372,7 @@ format-padding = 1
 type = custom/script
 exec = ~/.config/polybar/packages.sh
 tail = true
-interval = 60
+interval = 3600
 format-padding = 0
 
 [module/dunst]

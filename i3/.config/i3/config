@@ -57,6 +57,7 @@ bindsym $mod+w layout tabbed
 bindsym $mod+e layout toggle split
 
 bindsym $mod+m move workspace to output left
+bindsym $mod+Shift+m exec i3-output-swap
 
 # toggle tiling / floating
 bindsym $mod+Shift+space floating toggle
@@ -185,10 +186,10 @@ set $Locker lock-session
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
                                -notify   5 -notifier "xset dpms force off" \
-                               -time     1 -locker   "$Locker"
+                               -time     5 -locker   "$Locker"
 
 bindsym $mod+Delete exec powermenu
-bindsym $mod+shift+Delete exec lock-session
+bindsym $mod+shift+Delete exec playerctl pause ; exec $Locker
 
 bindsym $mod+Insert exec systemctl start --user wal.service
 
