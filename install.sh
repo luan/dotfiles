@@ -68,6 +68,4 @@ rustup default stable
 sudo systemctl enable --now udisks2.service
 systemctl --user enable --now wal.timer
 
-chmod 700 ~/.gnupg
-curl https://keybase.io/cfcluan/pgp_keys.asc | gpg --import
 
