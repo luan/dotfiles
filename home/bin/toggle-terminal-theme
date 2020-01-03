@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -x
+
+file="${XDG_RUNTIME_DIR}/lighttheme"
+
+if [ -f "$file" ]; then
+  rm -f "$file"
+  sed -i 's/colors: \*light/colors: *dark/' ~/.config/alacritty/alacritty.yml
+else
+  touch "$file"
+  sed -i 's/colors: \*dark/colors: *light/' ~/.config/alacritty/alacritty.yml
+fi

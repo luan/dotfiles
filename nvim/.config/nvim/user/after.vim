@@ -11,8 +11,15 @@ let g:SignatureEnabledAtStartup = 0 " Do not show marks
 
 " let g:ale_open_list = 1
 
-colorscheme base16-material
-let g:lightline.colorscheme = 'material'
+if filereadable($XDG_RUNTIME_DIR . '/lighttheme')
+  set background=light
+  let g:lightline.colorscheme = 'solarized'
+  colorscheme base16-solarized-light
+else
+  set background=dark
+  colorscheme base16-material
+  let g:lightline.colorscheme = 'material'
+endif
 
 function! CFCLIIntegrationTransform(cmd) abort
   let l:cmd = a:cmd
