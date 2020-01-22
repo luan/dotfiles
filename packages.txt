@@ -1,4 +1,3 @@
-1password-cli
 accountsservice
 acl
 adwaita-icon-theme
@@ -101,7 +100,6 @@ pacman
 pacman-contrib
 pacman-mirrorlist
 pango
-paper-icon-theme
 parsec-bin
 parted
 pavucontrol
@@ -137,11 +135,9 @@ sed
 shellcheck
 signal-desktop-bin
 slack-desktop
-spotify
 sqlite
 stalonetray
 station
-steam
 stow
 strace
 sudo
@@ -167,7 +163,6 @@ ttf-joypixels
 ttf-liberation
 ttf-mononoki
 ttf-montserrat
-ttf-mplus
 ttf-twemoji-color
 ttf-ubuntu-font-family
 udiskie

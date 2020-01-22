@@ -1,12 +1,11 @@
-output DP-1
+output DP1
 off
-output HDMI-1
+output DP2
 off
-output DP-2
+output VIRTUAL1
 off
-output HDMI-2
-off
-output eDP-1
+output eDP1
+crtc 0
 mode 3840x2160
 pos 0x0
 primary

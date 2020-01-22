@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 
-function main
-{
-  dropbox stop
+set -x
+
+dropbox-run() {
+  if command -v dropbox-cli; then
+    dropbox-cli "$@"
+  else
+    dropbox "$@"
+  fi
+}
+
+main() {
+  dropbox-run stop
   while pgrep -x dropbox >/dev/null; do
     sleep 1;
   done
@@ -18,15 +27,15 @@ function main
 
   polybar -r top &
 
-  dropbox start
+  dropbox-run start
 
   sleep 5
+
+  compton -b --backend glx --vsync
 
   while pgrep -x compton >/dev/null; do
     sleep 1;
   done
-
-  compton -b --backend glx --vsync
 }
 
 main "$@"

@@ -24,7 +24,6 @@ stow -R gnupg
 stow -R gtk
 stow -R home
 stow -R i3
-stow -R nvim
 stow -R polybar
 stow -R rofi
 stow -R ssh
@@ -35,7 +34,7 @@ stow -R x11
 stow -R yay
 stow -R zsh
 
-yay -S --needed --noconfirm - < packages.txt
+# yay -S --needed --noconfirm - < packages.txt
 
 mkdir -p ~/.config
 

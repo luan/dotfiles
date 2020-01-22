@@ -156,17 +156,17 @@ bindsym Mod1+shift+bar exec rofi -modi 1pass:op-rofi -show 1pass
 bindsym --release Print       exec --no-startup-id flameshot gui
 
 # Brightness controls
-bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5 && pkill -RTMIN+11 i3blocks
-bindsym XF86MonBrightnessDown exec --no-startup-id light -U 5 && pkill -RTMIN+11 i3blocks
+bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5
+bindsym XF86MonBrightnessDown exec --no-startup-id light -U 5
 
 # Audio controls
-bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -q sset Master 5%+ && pkill -RTMIN+10 i3blocks
-bindsym XF86AudioLowerVolume exec --no-startup-id amixer -q sset Master 5%- && pkill -RTMIN+10 i3blocks
-bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle && pkill -RTMIN+10 i3blocks
+bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -q sset Master 5%+
+bindsym XF86AudioLowerVolume exec --no-startup-id amixer -q sset Master 5%-
+bindsym XF86AudioMute        exec --no-startup-id amixer -q sset Master toggle
 
-bindcode 179 exec --no-startup-id amixer -q sset Master 5%+ && pkill -RTMIN+10 i3blocks
-bindcode 148 exec --no-startup-id amixer -q sset Master 5%- && pkill -RTMIN+10 i3blocks
-bindcode 163 exec --no-startup-id amixer -q sset Master toggle && pkill -RTMIN+10 i3blocks
+bindcode 179 exec --no-startup-id amixer -q sset Master 5%+
+bindcode 148 exec --no-startup-id amixer -q sset Master 5%-
+bindcode 163 exec --no-startup-id amixer -q sset Master toggle
 
 bindcode 180 exec --no-startup-id xcalib -i -a
 
@@ -175,21 +175,19 @@ bindsym XF86AudioPause exec playerctl play-pause
 bindsym XF86AudioNext exec playerctl next
 bindsym XF86AudioPrev exec playerctl previous
 
-bindsym $mod+shift+a exec amixer -q sset Capture toggle && pkill -RTMIN+11 i3blocks
+bindsym $mod+shift+a exec amixer -q sset Capture toggle
 
 # Make Authy a floating window
 for_window [title="^Authy$"] floating enable
 for_window [instance="origin.exe"] floating enable
 
-set $Locker lock-session
-
 # Autolock/turn off screen
 exec --no-startup-id xautolock -detectsleep \
                                -notify   5 -notifier "xset dpms force off" \
-                               -time     5 -locker   "$Locker"
+                               -time     5 -locker   "lock-session"
 
 bindsym $mod+Delete exec powermenu
-bindsym $mod+shift+Delete exec playerctl pause ; exec $Locker
+bindsym $mod+shift+Delete exec playerctl pause ; exec lock-session
 
 bindsym $mod+Insert exec systemctl start --user wal.service
 
@@ -198,15 +196,9 @@ mode "" {
 }
 bindsym Menu mode ""
 
-# TODO: make touchpad hack more generic
-set $touchpad "DLL07BE:01 06CB:7A13 Touchpad"
-exec --no-startup-id xinput set-prop $touchpad "libinput Tapping Enabled" 1
-exec --no-startup-id xinput set-prop $touchpad "libinput Accel Speed" 1
-exec --no-startup-id xinput set-prop $touchpad "libinput Click Method Enabled" 0 1
+exec configure-touchpad
 
 exec_always --no-startup-id "~/.config/i3/startup.sh"
-
-# exec_always --no-startup-id "~/.config/i3/startup.sh"
 
 exec --no-startup-id greenclip daemon
 exec --no-startup-id udiskie

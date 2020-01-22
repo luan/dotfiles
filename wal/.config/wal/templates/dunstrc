@@ -64,7 +64,7 @@
 
     max_icon_size = 64
     icon_path = /usr/share/icons/Numix-Circle/48/apps/:/usr/share/icons/Adwaita/32x32/apps/:/usr/share/icons/Adwaita/32x32/status/:/usr/share/icons/Adwaita/32x32/devices/
-    startup_notification = true
+    startup_notification = false
     dmenu = rofi -dmenu
     browser = /usr/bin/google-chrome-stable
 

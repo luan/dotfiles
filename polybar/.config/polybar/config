@@ -42,7 +42,7 @@ font-5 = sans:pixelsize=10;2
 
 modules-left = wired wifi memory cpu spotify
 modules-center = i3
-modules-right =  battery dunst microphone volume packages date time
+modules-right =  battery dunst microphone volume xbacklight packages date time
 
 tray-position = none
 tray-padding = 2
@@ -57,6 +57,21 @@ content =  
 [module/xwindow]
 type = internal/xwindow
 label = %title:0:30:...%
+
+[module/xbacklight]
+type = internal/xbacklight
+format = <ramp> <label>
+label = %percentage%%
+ramp-0 = 
+ramp-1 = 
+ramp-2 = 
+ramp-3 = 
+ramp-4 = 
+ramp-5 = 
+
+; Use the following command to list available cards:
+; $ ls -1 /sys/class/backlight/
+card = intel_backlight
 
 [module/i3]
 type = internal/i3
