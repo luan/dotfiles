@@ -1,0 +1,34 @@
+#!/usr/bin/env python2
+
+import os
+import subprocess
+
+
+def changed_files():
+    master = subprocess.check_output(["/usr/bin/git", "merge-base", "@{upstream}", "HEAD"]).strip()
+    output = subprocess.check_output(["/usr/bin/git", "diff", "--name-only", master])
+    return output.split('\n')
+
+
+def closest_build_file(path):
+    dirname = os.path.dirname(path)
+    while dirname:
+        build_path = os.path.join(dirname, 'BUILD')
+        if os.path.exists(build_path):
+            return build_path
+        dirname = os.path.dirname(dirname)
+
+
+build_files = set()
+paths = changed_files()
+for path in paths:
+    if path.startswith('dropbox/proto') or path.startswith('go/src/dropbox/proto'):
+        continue
+    if os.path.exists(path):
+        build_files.add(closest_build_file(path))
+
+
+cmd = ['bzl', '--allow-deletes', 'gen'] + ['//%s' % os.path.dirname(build_path) for build_path in build_files]
+
+print ' '.join(cmd)
+subprocess.check_call(cmd)
