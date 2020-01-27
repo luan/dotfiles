@@ -393,8 +393,8 @@ format-padding = 0
 [module/dunst]
 type = custom/ipc
 
-hook-0 = pkill dunst -USR2 && echo %{F$(xgetres foreground)}%{F-}
-hook-1 = pkill dunst -USR1 && echo %{F$(xgetres color2)}%{F-}
+hook-0 = pkill dunst -USR2 ; echo %{F$(xgetres foreground)}%{F-}
+hook-1 = pkill dunst -USR1 ; echo %{F$(xgetres color2)}%{F-}
 initial = 1
 
 click-left  = polybar-msg -p %pid% hook dunst 1
