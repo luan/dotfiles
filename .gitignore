@@ -15,6 +15,7 @@ gnupg/.gnupg/sshcontrol
 gnupg/.gnupg/tofu.db
 gnupg/.gnupg/trustdb.gpg
 ssh/.ssh/*_rsa*
+ssh/.ssh/*_ecdsa*
 ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
 ssh/.ssh/known_hosts
