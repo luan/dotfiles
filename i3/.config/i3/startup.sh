@@ -16,7 +16,7 @@ main() {
     sleep 1;
   done
 
-  killall -q polybar compton feh dunst
+  killall -q polybar picom feh dunst
   feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
 
   while pgrep -x polybar >/dev/null; do
@@ -31,9 +31,9 @@ main() {
 
   sleep 5
 
-  compton -b --backend glx --vsync
+  picom -b
 
-  while pgrep -x compton >/dev/null; do
+  while pgrep -x picom >/dev/null; do
     sleep 1;
   done
 }

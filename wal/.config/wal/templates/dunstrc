@@ -66,7 +66,20 @@
     icon_path = /usr/share/icons/Numix-Circle/48/apps/:/usr/share/icons/Adwaita/32x32/apps/:/usr/share/icons/Adwaita/32x32/status/:/usr/share/icons/Adwaita/32x32/devices/
     startup_notification = false
     dmenu = rofi -dmenu
-    browser = /usr/bin/google-chrome-stable
+    browser = /usr/bin/firefox -new-tab
+
+    ### mouse
+
+    # Defines action of mouse event
+    # Possible values are:
+    # * none: Don't do anything.
+    # * do_action: If the notification has exactly one action, or one is marked as default,
+    #              invoke it. If there are multiple and no default, open the context menu.
+    # * close_current: Close current notification.
+    # * close_all: Close all notifications.
+    mouse_left_click = do_action
+    mouse_middle_click = close_current
+    mouse_right_click = close_all
 
 [shortcuts]
     # Available modifiers are "ctrl", "mod1", "mod2", "mod3", and "mod4"
@@ -83,6 +96,14 @@
 
     # Context menu
     context = mod1+shift+period
+
+[experimental]
+    # Calculate the dpi to use on a per-monitor basis.
+    # If this setting is enabled the Xft.dpi value will be ignored and instead
+    # dunst will attempt to calculate an appropriate dpi value for each monitor
+    # using the resolution and physical size. This might be useful in setups
+    # where there are multiple screens with very different dpi values.
+    per_monitor_dpi = false
 
 [Slack]
     appname = Slack
