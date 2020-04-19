@@ -1,0 +1,12 @@
+output eDP1
+off
+output DP2
+off
+output VIRTUAL1
+off
+output DP1
+crtc 0
+mode 3440x1440
+pos 0x0
+primary
+rate 49.99

@@ -1,6 +1,8 @@
 #!/bin/bash
 
-xset r rate 200 30
+# Also set in /etc/lightdm/lightdm.conf
+xset r rate 200 20
+# Also set in /etc/X11/xorg.conf.d/00-keyboard.conf
 setxkbmap -option ctrl:nocaps
 
 pkill -9 dunst

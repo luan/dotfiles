@@ -2,7 +2,7 @@
 
 
 lock() {
-	#$1 image path
+  #$1 image path
   insidecolor=00000000
   ringcolor=ffffffff
   keyhlcolor=d23c3dff
