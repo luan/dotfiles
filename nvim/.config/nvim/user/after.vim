@@ -17,7 +17,6 @@ if filereadable($XDG_RUNTIME_DIR . '/lighttheme')
   colorscheme base16-solarized-light
 else
   set background=dark
-  colorscheme challenger_deep
   let g:lightline.colorscheme = 'material'
 endif
 
