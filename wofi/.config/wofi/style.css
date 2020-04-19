@@ -1,0 +1,39 @@
+window {
+  opacity: 0.9;
+  margin: 5px;
+  /* border: 2px solid --wofi-color0; */
+  background-color: --wofi-color0;
+  color: --wofi-color1;
+  border-radius: 5px;
+}
+
+#entry {
+  border-radius: 5px;
+}
+
+#entry:selected {
+  background-color: --wofi-color2;
+}
+
+#input {
+  margin: 5px;
+  border: none;
+  background-color: --wofi-color0;
+  color: --wofi-color1;
+}
+
+#inner-box {
+  margin: 5px;
+}
+
+#outer-box {
+  margin: 5px;
+}
+
+#scroll {
+  margin: 5px;
+}
+
+#text {
+  margin: 5px;
+}

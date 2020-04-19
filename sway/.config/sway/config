@@ -1,8 +1,6 @@
 # Default config for sway
-#
-# Copy this to ~/.config/sway/config and edit it to your liking.
-#
-# Read `man 5 sway` for a complete reference.
+
+ exec_always "systemctl --user import-environment"
 
 # Variables {
     # Logo key. Use Mod1 for Alt.
@@ -17,8 +15,8 @@
     # Your preferred application launcher
     # Note: pass the final command to swaymsg so that the resulting window can be opened
     # on the original workspace that the command was run on.
-    set $menu wofi --show drun,run | xargs swaymsg exec --
-    # set $menu appsmenu
+    set $menu wofi -p Run --show drun,run | xargs swaymsg exec --
+    # set $menu ~/bin/appsmenu
 # }
 
 # Output configuration {
@@ -42,10 +40,10 @@ bindswitch --reload lid:off output $laptop enable
 
 # Idle configuration {
 exec swayidle -w \
-         timeout 300 'swaylock -f -c 000000' \
+         timeout 300 'lock-session' \
          timeout 600 'swaymsg "output * dpms off"' \
               resume 'swaymsg "output * dpms on"' \
-         before-sleep 'swaylock -f -c 000000'
+         before-sleep 'lock-session'
 bindsym $mod+shift+Delete exec playerctl pause ; exec lock-session
 # }
 
@@ -258,7 +256,7 @@ bar {
 
 # Clipboard {
     exec wl-paste -t text --watch clipman store
-    bindsym $mod+shift+v exec clipman pick
+    bindsym $mod+shift+v exec clipman pick -t wofi
 # }
 
 default_border pixel 2
@@ -305,5 +303,11 @@ for_window [instance="origin.exe"] floating enable
 bindsym $mod+period exec makoctl invoke
 bindsym Alt+space exec makoctl dismiss
 bindsym Alt+Shift+space exec makoctl dismiss --all
+bindsym $mod+Delete exec powermenu
+
+exec_always import-gsettings \
+    gtk-theme:gtk-theme-name \
+    icon-theme:gtk-icon-theme-name \
+    cursor-theme:gtk-cursor-theme-name
 
 include /etc/sway/config.d/*

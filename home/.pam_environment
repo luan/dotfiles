@@ -1,0 +1,1 @@
+PATH           DEFAULT=/home/@{PAM_USER}/bin:/usr/local/bin:${PATH}
