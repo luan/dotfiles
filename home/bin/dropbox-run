@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+if command -v dropbox-cli; then
+  dropbox-cli "$@"
+else
+  dropbox "$@"
+fi
