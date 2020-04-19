@@ -16,7 +16,7 @@ main() {
     sleep 1;
   done
 
-  killall -q polybar picom feh dunst
+  killall -q polybar picom feh dunst xbanish xautolock
   feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
 
   while pgrep -x polybar >/dev/null; do
@@ -28,6 +28,7 @@ main() {
   polybar -r top &
 
   dropbox-run start
+  xbanish &
 
   sleep 5
 
@@ -36,6 +37,11 @@ main() {
   while pgrep -x picom >/dev/null; do
     sleep 1;
   done
+
+  xautolock -detectsleep \
+    -corners ---- \
+    -notify   4 -notifier "xset s activate" \
+    -time     5 -locker   "lock-session"
 }
 
 main "$@"

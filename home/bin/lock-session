@@ -18,19 +18,29 @@ lock() {
   font="sans-serif"
   locktext='Type password to unlock...'
 
-	i3lock \
-		-t -i "$1" \
-		--timepos='x+110:h-70' \
-		--datepos='x+43:h-45' \
-		--clock --date-align 1 --datestr "$locktext" \
-		--insidecolor=$insidecolor --ringcolor=$ringcolor --line-uses-inside \
-		--keyhlcolor=$keyhlcolor --bshlcolor=$bshlcolor --separatorcolor=$separatorcolor \
-		--insidevercolor=$insidevercolor --insidewrongcolor=$insidewrongcolor \
-		--ringvercolor=$ringvercolor --ringwrongcolor=$ringwrongcolor --indpos='x+280:h-70' \
-		--radius=30 --ring-width=4 --veriftext='' --wrongtext='' \
-		--verifcolor="$verifcolor" --timecolor="$timecolor" --datecolor="$datecolor" \
-		--time-font="$font" --date-font="$font" --layout-font="$font" --verif-font="$font" --wrong-font="$font" \
-		--noinputtext='' --force-clock --pass-media-keys
+  if [[ -z "$WAYLAND_DISPLAY" ]]; then
+    i3lock \
+      -t -i "$1" \
+      --timepos='x+110:h-70' \
+      --datepos='x+43:h-45' \
+      --clock --date-align 1 --datestr "$locktext" \
+      --insidecolor=$insidecolor --ringcolor=$ringcolor --line-uses-inside \
+      --keyhlcolor=$keyhlcolor --bshlcolor=$bshlcolor --separatorcolor=$separatorcolor \
+      --insidevercolor=$insidevercolor --insidewrongcolor=$insidewrongcolor \
+      --ringvercolor=$ringvercolor --ringwrongcolor=$ringwrongcolor --indpos='x+280:h-70' \
+      --radius=30 --ring-width=4 --veriftext='' --wrongtext='' \
+      --verifcolor="$verifcolor" --timecolor="$timecolor" --datecolor="$datecolor" \
+      --time-font="$font" --date-font="$font" --layout-font="$font" --verif-font="$font" --wrong-font="$font" \
+      --noinputtext='' --force-clock --pass-media-keys
+  else
+    swaylock -F -s fill -i "$1" \
+      --indicator-radius=65 --indicator-thickness=20 \
+      --inside-color=$insidecolor --ring-color=$ringcolor --line-uses-inside \
+      --key-hl-color=$keyhlcolor --bs-hl-color=$bshlcolor --separator-color=$separatorcolor \
+      --inside-ver-color=$insidevercolor --inside-wrong-color=$insidewrongcolor \
+      --ring-ver-color=$ringvercolor --ring-wrong-color=$ringwrongcolor \
+      --font "$font" -l
+  fi
 }
 
 lock "$(< "${HOME}/.cache/wal/wal")" && sleep 1
