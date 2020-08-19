@@ -46,6 +46,7 @@ WINDOW_ICONS = {
     'blender': fa.icons['cube'],
     'chromium': fa.icons['chrome'],
     'cura': fa.icons['cube'],
+    'code-oss': fa.icons['code'],
     'darktable': fa.icons['image'],
     'discord': fa.icons['discord'],
     'eclipse': fa.icons['code'],

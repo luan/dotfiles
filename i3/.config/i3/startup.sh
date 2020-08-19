@@ -11,10 +11,10 @@ dropbox-run() {
 }
 
 main() {
-  dropbox-run stop
-  while pgrep -x dropbox >/dev/null; do
-    sleep 1;
-  done
+  # dropbox-run stop
+  # while pgrep -x dropbox >/dev/null; do
+  #   sleep 1;
+  # done
 
   killall -q polybar picom feh dunst xbanish xautolock
   feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
@@ -27,7 +27,7 @@ main() {
 
   polybar -r top &
 
-  dropbox-run start
+  # dropbox-run start
   xbanish &
 
   sleep 5

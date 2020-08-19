@@ -5,11 +5,11 @@ off
 output DP1
 crtc 0
 mode 3440x1440
-pos 3840x0
+pos 1920x0
 primary
 rate 49.99
 output eDP1
 crtc 1
-mode 3840x2160
-pos 0x1180
-rate 60.00
+mode 1920x1080
+pos 0x736
+rate 59.96

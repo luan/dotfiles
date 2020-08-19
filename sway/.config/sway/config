@@ -84,6 +84,7 @@ input type:touchpad {
     # Reload the configuration file
     bindsym $mod+Shift+c nop
     bindsym --release $mod+Shift+c reload
+    bindsym $mod+Shift+z sticky toggle
 
     # Exit sway (logs you out of your Wayland session)
     bindsym $mod+Shift+e exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -b 'Yes, exit sway' 'swaymsg exit'
@@ -213,14 +214,13 @@ input type:touchpad {
 
 ## Screengrabbing {
     # screenshot area
-    bindsym --release Print         exec --no-startup-id grim -g "$(slurp)" - | wl-copy
+    bindsym --release Print         exec --no-startup-id grim -g "$(slurp)" - | swappy -f -
 # }
 
 ## Brightness controls {
     bindsym XF86MonBrightnessUp   exec --no-startup-id light -A 5
     bindsym XF86MonBrightnessDown exec --no-startup-id light -U 5
 # }
-
 
 ## Sound {
     bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -q sset Master 5%+
@@ -271,7 +271,9 @@ bindsym --whole-window --border $mod+shift+button5 gaps inner current plus 5
 focus_follows_mouse no
 focus_wrapping workspace
 
-font pango:TerminessTTF Nerd Font 14
+font pango:Iosevka 12
+titlebar_padding 1
+titlebar_border_thickness 0
 
 exec --no-startup-id i3-rename-workspace
 exec --no-startup-id udiskie
@@ -293,8 +295,9 @@ client.background       $color7
 
 title_align center
 
-assign [class="zoom"] workspace number 4
+assign [class="zoom"] number 4
 for_window [window_role="About"] floating enable
+for_window [class="zoom" instance="^$"] floating enable
 
 # Make Authy a floating window
 for_window [title="^Authy$"] floating enable
@@ -309,5 +312,9 @@ exec_always import-gsettings \
     gtk-theme:gtk-theme-name \
     icon-theme:gtk-icon-theme-name \
     cursor-theme:gtk-cursor-theme-name
+
+seat * hide_cursor 5000
+
+exec /usr/lib/xdg-desktop-portal -r
 
 include /etc/sway/config.d/*

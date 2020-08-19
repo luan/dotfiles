@@ -1,6 +1,6 @@
 #!/bin/bash
 
-xrdb -merge -I$HOME $HOME/.Xresources-mobile
+xrdb -merge -I$HOME $HOME/.Xresources-96
 DPI="$(xrdb -query | grep 'Xft.dpi:' | awk '{ print $2 }')"
 xrandr --dpi "$DPI"
 

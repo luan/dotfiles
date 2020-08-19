@@ -120,3 +120,7 @@ if [ -f '/home/luan/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/luan/g
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 
 for c in $(ls --color=none $XDG_CONFIG_HOME/zsh/*.zsh); do source $c; done
+
+eval $(keychain --eval --dir $HOME/.config/keychain --quiet --noask --agents gpg,ssh id_rsa)
+
+[ -s "/home/luan/.scm_breeze/scm_breeze.sh" ] && source "/home/luan/.scm_breeze/scm_breeze.sh"

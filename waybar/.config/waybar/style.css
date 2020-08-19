@@ -5,13 +5,12 @@
   border-radius: 0;
   font-family: "Roboto Mono", "Font Awesome 5 Free", "Font Awesome 5 Brands", "TerminessTTF Nerd Font", monospace;
   /* font-family: 'Iosevka Term', 'Font Awesome 5 Free', 'SFNS Display',  Helvetica, Arial, sans-serif; */
-  font-size: 12px;
+  font-size: 14px;
   min-height: 0;
 }
 
-#clock span {
-  color: red;
-  font-size: 40px;
+#clock {
+  font-size: 18px;
 }
 
 window#waybar {

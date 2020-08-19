@@ -15,6 +15,8 @@ sudo pacman -Syu --needed --noconfirm git base-devel stow
 git clone https://aur.archlinux.org/yay.git /tmp/yay || true
 (cd /tmp/yay && makepkg -si --noconfirm)
 
+mkdir $HOME/bin
+
 stow -R alacritty
 stow -R autorandr
 stow -R compton
@@ -33,6 +35,7 @@ stow -R wal
 stow -R x11
 stow -R yay
 stow -R zsh
+stow -R bin
 
 # yay -S --needed --noconfirm - < packages.txt
 

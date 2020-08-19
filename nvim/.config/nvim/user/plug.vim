@@ -3,3 +3,5 @@
 " Plug '~/my-prototype-plugin'
 " ...
 
+Plug '~/src/misc/cugini/vim-vortex2'
+Plug '~/src/misc/cugini/vim-pyst'

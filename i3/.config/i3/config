@@ -21,7 +21,7 @@ bindsym $mod+Shift+q kill
 bindsym $mod+d exec appsmenu
 bindsym $mod+shift+v exec clipmenu
 
-focus_wrapping force
+focus_wrapping no
 
 # change focus
 bindsym $mod+h focus left
