@@ -28,7 +28,7 @@ bindsym $mod+h focus left
 bindsym $mod+j focus down
 bindsym $mod+k focus up
 bindsym $mod+l focus right
-bindsym $mod+Tab exec "i3-focus-last --switch"
+bindsym $mod+Tab workspace back_and_forth
 
 # move focused window
 bindsym $mod+Shift+h move left
@@ -142,7 +142,7 @@ default_border pixel 2
 smart_borders on
 
 # i3 scripts
-exec_always --no-startup-id bash -c "ps -ef | grep -E '[p]ython3 .*i3-focus-last' | tr -s ' ' | cut -d ' ' -f2 | xargs kill; i3-focus-last"
+# exec_always --no-startup-id bash -c "ps -ef | grep -E '[p]ython3 .*i3-focus-last' | tr -s ' ' | cut -d ' ' -f2 | xargs kill; i3-focus-last"
 exec_always --no-startup-id i3-rename-workspace
 
 bindsym $mod+Shift+z sticky toggle

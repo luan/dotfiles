@@ -44,7 +44,7 @@ modules-left = memory cpu spotify
 modules-center = i3
 modules-right =  battery dunst microphone volume xbacklight packages date time
 
-tray-position = none
+tray-position = left
 tray-padding = 2
 tray-maxsize = 24
 
