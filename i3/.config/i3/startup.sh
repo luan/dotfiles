@@ -32,7 +32,7 @@ main() {
 
   sleep 5
 
-  picom -b
+  picom -b --experimental-backends
 
   while pgrep -x picom >/dev/null; do
     sleep 1;
