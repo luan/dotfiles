@@ -124,3 +124,7 @@ for c in $(ls --color=none $XDG_CONFIG_HOME/zsh/*.zsh); do source $c; done
 eval $(keychain --eval --dir $HOME/.config/keychain --quiet --noask --agents gpg,ssh id_rsa)
 
 [ -s "/home/luan/.scm_breeze/scm_breeze.sh" ] && source "/home/luan/.scm_breeze/scm_breeze.sh"
+
+source <(kubectl completion zsh)
+alias k=kubectl
+complete -F __start_kubectl k

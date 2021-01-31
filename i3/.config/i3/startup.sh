@@ -11,12 +11,12 @@ dropbox-run() {
 }
 
 main() {
-  dropbox-run stop
-  while pgrep -x dropbox >/dev/null; do
-    sleep 1;
-  done
+  # dropbox-run stop
+  # while pgrep -x dropbox >/dev/null; do
+  #   sleep 1;
+  # done
 
-  killall -q polybar picom feh dunst xbanish xautolock
+  killall -q polybar picom feh dunst xbanish xautolock xcompmgr
   feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
 
   while pgrep -x polybar >/dev/null; do
@@ -27,12 +27,13 @@ main() {
 
   polybar -r top &
 
-  dropbox-run start
+  # dropbox-run start
   xbanish &
 
   sleep 5
 
-  picom -b --experimental-backends
+  # picom -b --experimental-backends
+  xcompmgr -c -l0 -t0 -r0 -o.00 &
 
   while pgrep -x picom >/dev/null; do
     sleep 1;

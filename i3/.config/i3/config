@@ -172,7 +172,8 @@ bindsym XF86AudioPause exec playerctl play-pause
 bindsym XF86AudioNext exec playerctl next
 bindsym XF86AudioPrev exec playerctl previous
 
-bindsym F6 exec playerctl play-pause
+# bindsym F6 exec playerctl play-pause
+
 
 # Make Authy a floating window
 for_window [title="^Authy$"] floating enable
