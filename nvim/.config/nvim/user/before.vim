@@ -4,3 +4,4 @@
 " ...
 
 " let g:autosave = 1
+let g:luan_experimental=1

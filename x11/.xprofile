@@ -9,5 +9,7 @@ export QT_STYLE_OVERRIDE=gtk+
 wal -R || wal -i ~/.wallpapers --backend colorz
 
 export PATH=$HOME/bin:$PATH
-export BROWSER=google-chrome-stable
+export BROWSER=firefox
 export TERMINAL=alacritty
+
+setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl

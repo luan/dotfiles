@@ -12,14 +12,20 @@
 
 " let g:ale_open_list = 1
 
+let g:tokyonight_italic_functions = v:true
+let g:tokyonight_sidebars = [ "quickfix", "__vista__", "terminal" ]
+
 if filereadable($XDG_RUNTIME_DIR . '/lighttheme')
   set background=light
   let g:lightline.colorscheme = 'solarized'
   colorscheme base16-solarized-light
 else
   set background=dark
+  " let g:tokyonight_style = "night"
   let g:lightline.colorscheme = 'material'
+  colorscheme tokyonight
 endif
+
 
 au BufNewFile,BufRead /*.rasi setf css
 
@@ -34,48 +40,9 @@ if !exists('g:luan_experimental')
   finish
 endif
 
-" telescope
-lua <<EOF
-require('telescope').setup{
-  defaults = {
-    vimgrep_arguments = {
-      'rg',
-      '--color=never',
-      '--no-heading',
-      '--with-filename',
-      '--line-number',
-      '--column',
-      '--smart-case'
-    },
-    prompt_position = "bottom",
-    prompt_prefix = ">",
-    selection_strategy = "reset",
-    sorting_strategy = "descending",
-    layout_strategy = "horizontal",
-    layout_defaults = {
-      -- TODO add builtin options.
-    },
-    file_ignore_patterns = {},
-    shorten_path = true,
-    winblend = 0,
-    width = 0.75,
-    preview_cutoff = 120,
-    results_height = 1,
-    results_width = 0.8,
-    border = {},
-    borderchars = { '─', '│', '─', '│', '╭', '╮', '╯', '╰'},
-    color_devicons = true,
-    use_less = true,
-    set_env = { ['COLORTERM'] = 'truecolor' }, -- default { }, currently unsupported for shells like cmd.exe / powershell.exe
-  }
-}
-require('telescope').load_extension('fzy_native')
-EOF
-
-" treesitter
 lua <<EOF
 require'nvim-treesitter.configs'.setup {
-  ensure_installed = "all",     -- one of "all", "language", or a list of languages
+  ensure_installed = "maintained",     -- one of "all", "language", or a list of languages
   highlight = {
     enable = true,              -- false will disable the whole extension
   },
@@ -127,6 +94,81 @@ require'nvim-treesitter.configs'.setup {
     persist_queries = false -- Whether the query persists across vim sessions
   },
 }
+
+require('bufferline').setup{}
+
+require('gitsigns').setup()
+
+require('lualine').setup{
+  options = { theme = 'tokyonight' },
+  extensions = { 'fzf' },
+  sections = {
+    lualine_a = {'mode'},
+    lualine_b = {
+      'branch',
+      {
+        'diagnostics',
+        sources = {'ale', 'coc'},
+      },
+    },
+    lualine_c = {'filename'},
+    lualine_x = {
+      'encoding',
+      'fileformat',
+      'filetype',
+    },
+    lualine_y = {'progress'},
+    lualine_z = {'location'}
+  },
+  inactive_sections = {
+    lualine_a = {},
+    lualine_b = {},
+    lualine_c = {'filename'},
+    lualine_x = {'location'},
+    lualine_y = {},
+    lualine_z = {},
+  },
+}
+
+local saga = require 'lspsaga'
+
+-- add your config value here
+-- default value
+-- use_saga_diagnostic_sign = true
+-- error_sign = '',
+-- warn_sign = '',
+-- hint_sign = '',
+-- infor_sign = '',
+-- dianostic_header_icon = '   ',
+-- code_action_icon = ' ',
+-- code_action_prompt = {
+--   enable = true,
+--   sign = true,
+--   sign_priority = 20,
+--   virtual_text = true,
+-- },
+-- finder_definition_icon = '  ',
+-- finder_reference_icon = '  ',
+-- max_preview_lines = 10, -- preview lines of lsp_finder and definition preview
+-- finder_action_keys = {
+--   open = 'o', vsplit = 's',split = 'i',quit = 'q',scroll_down = '<C-f>', scroll_up = '<C-b>' -- quit can be a table
+-- },
+-- code_action_keys = {
+--   quit = 'q',exec = '<CR>'
+-- },
+-- rename_action_keys = {
+--   quit = '<C-c>',exec = '<CR>'  -- quit can be a table
+-- },
+-- definition_preview_icon = '  '
+-- "single" "double" "round" "plus"
+-- border_style = "single"
+-- rename_prompt_prefix = '➤',
+-- if you don't use nvim-lspconfig you must pass your server name and
+-- the related filetypes into this table
+-- like server_filetype_map = {metals = {'sbt', 'scala'}}
+-- server_filetype_map = {}
+
+saga.init_lsp_saga()
 EOF
 
 autocmd FileType go setlocal foldmethod=expr foldexpr=nvim_treesitter#foldexpr()
@@ -134,3 +176,11 @@ autocmd FileType ruby setlocal foldmethod=expr foldexpr=nvim_treesitter#foldexpr
 set foldmethod=expr
 set foldexpr=nvim_treesitter#foldexpr()
 set report=2
+
+nnoremap <silent>[b :BufferLineCycleNext<CR>
+nnoremap <silent>]b :BufferLineCyclePrev<CR>
+
+let g:indent_blankline_use_treesitter = v:true
+
+set t_ZH=^[[3m
+set t_ZR=^[[23m

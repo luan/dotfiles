@@ -33,7 +33,7 @@ padding-right = 0
 module-margin-left = 1
 module-margin-right = 1
 
-font-0 = Iosevka Term:pixelsize=10;2
+font-0 = Droid Sans Mono:pixelsize=10;2
 font-1 = Font Awesome 5 Free:style=Solid:pixelsize=12;2
 font-2 = Font Awesome 5 Brands:style=Solid:pixelsize=12;2
 font-3 = TerminessTTF Nerd Font:style=Solid:pixelsize=12;2

@@ -16,7 +16,7 @@ main() {
   #   sleep 1;
   # done
 
-  killall -q polybar picom feh dunst xbanish xautolock xcompmgr
+  killall -q polybar picom feh dunst xbanish xcompmgr xautolock
   feh --no-xinerama --bg-scale "$(< "${HOME}/.cache/wal/wal")" &
 
   while pgrep -x polybar >/dev/null; do
@@ -41,7 +41,7 @@ main() {
 
   xautolock -detectsleep \
     -corners ---- \
-    -notify   4 -notifier "xset s activate" \
+    -notify   4 -notifier "sleep 1; xset s activate" \
     -time     5 -locker   "lock-session"
 }
 
