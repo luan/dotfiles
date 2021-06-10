@@ -95,9 +95,6 @@ require'nvim-treesitter.configs'.setup {
   },
 }
 
-require('bufferline').setup{}
-
-require('gitsigns').setup()
 
 require('lualine').setup{
   options = { theme = 'tokyonight' },
@@ -111,11 +108,17 @@ require('lualine').setup{
         sources = {'ale', 'coc'},
       },
     },
-    lualine_c = {'filename'},
+    lualine_c = {
+      {
+        'filename',
+        file_status = true,
+        path = 1,
+      },
+      'filetype',
+    },
     lualine_x = {
       'encoding',
       'fileformat',
-      'filetype',
     },
     lualine_y = {'progress'},
     lualine_z = {'location'}
@@ -130,7 +133,7 @@ require('lualine').setup{
   },
 }
 
-local saga = require 'lspsaga'
+-- local saga = require 'lspsaga'
 
 -- add your config value here
 -- default value
@@ -168,7 +171,7 @@ local saga = require 'lspsaga'
 -- like server_filetype_map = {metals = {'sbt', 'scala'}}
 -- server_filetype_map = {}
 
-saga.init_lsp_saga()
+-- saga.init_lsp_saga()
 EOF
 
 autocmd FileType go setlocal foldmethod=expr foldexpr=nvim_treesitter#foldexpr()

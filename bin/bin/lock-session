@@ -21,17 +21,18 @@ lock() {
   if [[ -z "$WAYLAND_DISPLAY" ]]; then
     i3lock \
       -t -i "$1" \
-      --timepos='x+110:h-70' \
-      --datepos='x+43:h-45' \
-      --clock --date-align 1 --datestr "$locktext" \
-      --insidecolor=$insidecolor --ringcolor=$ringcolor --line-uses-inside \
-      --keyhlcolor=$keyhlcolor --bshlcolor=$bshlcolor --separatorcolor=$separatorcolor \
-      --insidevercolor=$insidevercolor --insidewrongcolor=$insidewrongcolor \
-      --ringvercolor=$ringvercolor --ringwrongcolor=$ringwrongcolor --indpos='x+280:h-70' \
-      --radius=30 --ring-width=4 --veriftext='' --wrongtext='' \
-      --verifcolor="$verifcolor" --timecolor="$timecolor" --datecolor="$datecolor" \
+      --nofork \
+      --time-pos='x+110:h-70' \
+      --date-pos='x+43:h-45' \
+      --clock --date-align 1 --date-str "$locktext" \
+      --inside-color=$insidecolor --ring-color=$ringcolor --line-uses-inside \
+      --keyhl-color=$keyhlcolor --bshl-color=$bshlcolor --separator-color=$separatorcolor \
+      --insidever-color=$insidevercolor --insidewrong-color=$insidewrongcolor \
+      --ringver-color=$ringvercolor --ringwrong-color=$ringwrongcolor --ind-pos='x+280:h-70' \
+      --radius=30 --ring-width=4 --verif-text='' --wrong-text='' \
+      --verif-color="$verifcolor" --time-color="$timecolor" --date-color="$datecolor" \
       --time-font="$font" --date-font="$font" --layout-font="$font" --verif-font="$font" --wrong-font="$font" \
-      --noinputtext='' --force-clock --pass-media-keys
+      --noinput-text='' --force-clock --pass-media-keys
   else
     swaylock -F -s fill -i "$1" \
       --indicator-radius=65 --indicator-thickness=20 \

@@ -1,7 +1,6 @@
 " Add your own plugins
 " Plug 'scrooloose/nerdtree', { 'on':  'NERDTreeToggle' }
-" Plug '~/my-prototype-plugin'
-" ...
+" Plug '~/my-prototype-plugin' ...
 
 Plug '~/src/misc/cugini/vim-vortex2'
 Plug '~/src/misc/cugini/vim-pyst'
@@ -24,17 +23,14 @@ Plug 'nvim-lua/telescope.nvim'
 Plug 'nvim-telescope/telescope-fzy-native.nvim'
 
 Plug 'kyazdani42/nvim-web-devicons'
-Plug 'akinsho/nvim-bufferline.lua'
 
 " Plug 'kyazdani42/nvim-tree.lua'
 
 Plug 'lukas-reineke/indent-blankline.nvim', { 'branch': 'lua' }
-
-Plug 'lewis6991/gitsigns.nvim'
 
 Plug 'hoob3rt/lualine.nvim'
 
 Plug 'folke/tokyonight.nvim'
 
 Plug 'neovim/nvim-lspconfig'
-Plug 'glepnir/lspsaga.nvim'
+" Plug 'glepnir/lspsaga.nvim'
