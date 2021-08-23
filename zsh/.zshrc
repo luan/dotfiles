@@ -16,19 +16,28 @@ export GOPATH=$HOME/src/server/go
 export PATH=$GOPATH/bin:$PATH
 export PATH=/home/linuxbrew/.linuxbrew/bin:$PATH
 
-if ! type antibody 1> /dev/null 2>&1; then
-  curl -sL git.io/antibody | sh -s
+if [ ! -d "${HOME}/.zgen" ]; then
+  git clone https://github.com/tarjoilija/zgen.git "${HOME}/.zgen"
 fi
+source "${HOME}/.zgen/zgen.zsh"
 
 export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
-source <(antibody init)
+# if the init script doesn't exist
+if ! zgen saved; then
+  zgen load zdharma/fast-syntax-highlighting
+  zgen load zsh-users/zsh-autosuggestions
+  zgen load zsh-users/zsh-history-substring-search
+  zgen load zsh-users/zsh-completions
+  zgen load unixorn/warhol.plugin.zsh
 
-antibody bundle zdharma/fast-syntax-highlighting
-antibody bundle zsh-users/zsh-autosuggestions
-antibody bundle zsh-users/zsh-history-substring-search
-antibody bundle zsh-users/zsh-completions
-antibody bundle unixorn/warhol.plugin.zsh
+  # Prompt
+  zgen load mafredri/zsh-async
+  zgen load sindresorhus/pure . main
+
+  # generate the init script from plugins above
+  zgen save
+fi
 
 # Enable autocompletions
 autoload -Uz compinit
@@ -61,10 +70,6 @@ setopt interactive_comments # allow comments in interactive shells
 zstyle ':completion:*' menu select # select completions with arrow keys
 zstyle ':completion:*' group-name '' # group results by category
 zstyle ':completion:::::' completer _expand _complete _ignored _approximate # enable approximate matches for completion
-
-# Prompt
-antibody bundle mafredri/zsh-async
-antibody bundle sindresorhus/pure
 
 # Dir stack
 DIRSTACKSIZE=20
