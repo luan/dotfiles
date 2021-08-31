@@ -155,10 +155,10 @@ ramp-coreload-7-foreground = #a54242
 type = internal/memory
 interval = 2
 format = <label> <bar-used>
-format-prefix = 
+format-prefix = " "
 format-prefix-foreground = ${colors.foreground}
 
-label = %gb_used:8%/%gb_total%
+label = %gb_used% (%gb_swap_used%)
 
 ; Only applies if <bar-used> is used
 bar-used-indicator =

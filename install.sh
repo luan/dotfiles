@@ -36,6 +36,11 @@ stow -R x11
 stow -R yay
 stow -R zsh
 stow -R bin
+stow -R electron
+stow -R sway
+stow -R waybar
+stow -R wofi
+stow -R mako
 
 # yay -S --needed --noconfirm - < packages.txt
 

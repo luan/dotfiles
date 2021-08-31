@@ -133,3 +133,5 @@ eval $(keychain --eval --dir $HOME/.config/keychain --quiet --noask --agents gpg
 source <(kubectl completion zsh)
 alias k=kubectl
 complete -F __start_kubectl k
+
+export GO111MODULE=auto

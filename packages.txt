@@ -33,7 +33,7 @@ delve
 diff-so-fancy
 diffutils
 direnv
-discord
+discord_arch_electron
 docker
 dos2unix
 dunst-git
@@ -58,6 +58,7 @@ go
 google-chrome
 grc
 grep
+grim
 grub
 gtk-chtheme
 gtk3-mushrooms
@@ -90,6 +91,7 @@ lsb-release
 lutris
 lxappearance-gtk3
 make
+mako
 ncdu
 neofetch
 neovim-git
@@ -118,6 +120,7 @@ parsec-bin
 parted
 pavucontrol
 pinentry
+pipewire
 playerctl
 polybar
 ponymix
@@ -286,6 +289,7 @@ shadow
 shellcheck
 signal-desktop-noto
 slack-desktop
+slurp
 sound-theme-freedesktop
 spotify
 sqlite
@@ -296,6 +300,8 @@ steam-native-runtime
 stow
 strace
 sudo
+swappy
+sway
 sxiv
 syntax-highlighting
 tar
@@ -355,6 +361,7 @@ xcompmgr
 xdg-dbus-proxy
 xdg-desktop-portal
 xdg-desktop-portal-gtk
+xdg-desktop-portal-wlr
 xdg-user-dirs
 xdg-user-dirs-gtk
 xdg-utils
