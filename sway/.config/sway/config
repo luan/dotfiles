@@ -16,7 +16,6 @@
     # Note: pass the final command to swaymsg so that the resulting window can be opened
     # on the original workspace that the command was run on.
     set $menu wofi -p Run --show drun,run | xargs swaymsg exec --
-    # set $menu ~/bin/appsmenu
 # }
 
 # Output configuration {
@@ -306,7 +305,7 @@ for_window [instance="origin.exe"] floating enable
 bindsym $mod+period exec makoctl invoke
 bindsym Alt+space exec makoctl dismiss
 bindsym Alt+Shift+space exec makoctl dismiss --all
-bindsym $mod+Delete exec powermenu
+bindsym $mod+Delete exec ~/.config/sway/powermenu.sh
 
 exec_always import-gsettings \
     gtk-theme:gtk-theme-name \

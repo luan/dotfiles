@@ -3,6 +3,7 @@ window {
   margin: 5px;
   /* border: 2px solid --wofi-color0; */
   background-color: --wofi-color0;
+  font-family: "Roboto Mono", "Iosevka Term", monospace;
   color: --wofi-color1;
   border-radius: 5px;
 }
