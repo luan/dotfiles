@@ -361,7 +361,6 @@ xclip
 xcompmgr
 xdg-dbus-proxy
 xdg-desktop-portal
-xdg-desktop-portal-gtk
 xdg-desktop-portal-wlr
 xdg-user-dirs
 xdg-user-dirs-gtk

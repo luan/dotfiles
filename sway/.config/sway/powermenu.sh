@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# rofi_command="rofi -theme themes/powermenu.rasi"
+rofi_command="wofi -p Power"
+
+### Options ###
+power_off=" power off"
+reboot=" reboot"
+lock=" lock"
+suspend=" suspend"
+log_out=" logout"
+# Variable passed to rofi
+options="$power_off\n$reboot\n$lock\n$suspend\n$log_out"
+
+chosen="$(echo -e "$options" | $rofi_command --dmenu --width 80 --height 200)"
+case $chosen in
+    $power_off)
+        systemctl poweroff
+        ;;
+    $reboot)
+        systemctl reboot
+        ;;
+    $lock)
+        playerctl pause
+        lock-session
+        ;;
+    $suspend)
+        playerctl pause
+        amixer set Master mute
+        lock-session
+        systemctl suspend
+        ;;
+    $log_out)
+        i3-msg exit
+        ;;
+esac
+
