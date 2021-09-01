@@ -62,7 +62,6 @@ grep
 grim
 grub
 gtk-chtheme
-gtk3-mushrooms
 gzip
 helm
 hicolor-icon-theme
@@ -303,6 +302,7 @@ strace
 sudo
 swappy
 sway
+swaylock
 sxiv
 syntax-highlighting
 tar
