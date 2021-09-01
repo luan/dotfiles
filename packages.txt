@@ -18,6 +18,7 @@ caffeine-ng
 cantarell-fonts
 cheese
 clang
+clipman
 cmake
 code
 colorz
