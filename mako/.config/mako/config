@@ -28,3 +28,6 @@ text-color=#27261D
 background-color=#27261DAA
 text-color=#C9C8C6
 default-timeout=3000
+
+[mode=do-not-disturb]
+invisible=1

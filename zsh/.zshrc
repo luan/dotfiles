@@ -98,7 +98,9 @@ alias grep='grep --color'
 alias be='bundle exec'
 alias vim=nvim
 
-export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib
+if which rustc > /dev/null 2>&1; then
+  export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib
+fi
 
 # No duplicates in $PATH
 typeset -U path
@@ -107,7 +109,11 @@ typeset -U path
 eval "$(fasd --init auto)"
 eval "$(direnv hook zsh)"
 source $HOME/.config/zsh/*.zsh
-eval "$(rbenv init -)"
+
+if which rbenv > /dev/null 2>&1; then
+  eval "$(rbenv init -)"
+fi
+
 [[ -s "/etc/grc.zsh" ]] && source /etc/grc.zsh
 
 export NVM_DIR="$HOME/.nvm"
@@ -126,12 +132,17 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 
 for c in $(ls --color=none $XDG_CONFIG_HOME/zsh/*.zsh); do source $c; done
 
-eval $(keychain --eval --dir $HOME/.config/keychain --quiet --noask --agents gpg,ssh id_rsa)
+if which keychain > /dev/null 2>&1; then
+  eval $(keychain --eval --dir $HOME/.config/keychain --quiet --noask --agents gpg,ssh id_rsa)
+fi
 
 [ -s "/home/luan/.scm_breeze/scm_breeze.sh" ] && source "/home/luan/.scm_breeze/scm_breeze.sh"
 
-source <(kubectl completion zsh)
-alias k=kubectl
-complete -F __start_kubectl k
+if which kubectl > /dev/null 2>&1; then
+  source <(kubectl completion zsh)
+  alias k=kubectl
+  complete -F __start_kubectl k
+fi
 
 export GO111MODULE=auto
+source $HOME/.*.env

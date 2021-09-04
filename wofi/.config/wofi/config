@@ -1,5 +1,5 @@
-key_down=Control_L-n
-key_up=Control_L-p
+key_down=Down,Control_L-n
+key_up=Up,Control_L-p
 allow_images=true
 allow_markup=true
 hide_scroll=true

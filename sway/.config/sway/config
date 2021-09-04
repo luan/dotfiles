@@ -297,6 +297,9 @@ title_align center
 assign [class="zoom"] number 4
 for_window [window_role="About"] floating enable
 for_window [class="zoom" instance="^$"] floating enable
+for_window [title="zoom"] kill
+for_window [title="Firefox — Sharing Indicator"] floating enable
+for_window [title="Firefox — Sharing Indicator"] kill
 
 # Make Authy a floating window
 for_window [title="^Authy$"] floating enable
@@ -304,6 +307,7 @@ for_window [instance="origin.exe"] floating enable
 
 bindsym $mod+period exec makoctl invoke
 bindsym Alt+space exec makoctl dismiss
+bindsym Alt+grave exec makoctl restore
 bindsym Alt+Shift+space exec makoctl dismiss --all
 bindsym $mod+Delete exec ~/.config/sway/powermenu.sh
 
