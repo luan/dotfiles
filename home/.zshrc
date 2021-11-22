@@ -14,7 +14,6 @@ export PATH=$HOME/bin:$PATH
 export PATH=/usr/local/go/bin:$PATH
 export GOPATH=$HOME/src/server/go
 export PATH=$GOPATH/bin:$PATH
-export PATH=/home/linuxbrew/.linuxbrew/bin:$PATH
 
 if [ ! -d "${HOME}/.zgen" ]; then
   git clone https://github.com/tarjoilija/zgen.git "${HOME}/.zgen"

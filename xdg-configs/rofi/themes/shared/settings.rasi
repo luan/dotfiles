@@ -9,6 +9,6 @@ element-icon {
 }
 
 window {
-  border-radius: 10px;
-  width: 900px;
+  border-radius: 0.5ch;
+  width: 80ch;
 }

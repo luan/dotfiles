@@ -33,7 +33,7 @@ entry {
 
 #textbox-prompt-colon {
   expand: false;
-  str: "  : :  ";
+  str: "::";
   padding: @apps-textbox-prompt-colon-padding;
 }
 

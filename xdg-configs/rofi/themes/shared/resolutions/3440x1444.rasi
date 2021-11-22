@@ -1,7 +1,7 @@
 * {
   /* General */
-  text-font:                            "Comfortaa 13";
-  text-font-mono:                       "RobotoMono Nerd Font Regular 13";
+  text-font:                            "Hurmit Nerd Font Mono 14";
+  text-font-mono:                       "Hurmit Nerd Font Mono 14";
   icon-font:                            "Hurmit Nerd Font Mono 60";
   icon-font-small:                      "Hurmit Nerd Font Mono 24";
   inputbar-margin:                      -2px 0px;
