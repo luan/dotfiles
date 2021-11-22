@@ -1,0 +1,17 @@
+configuration {
+  font: "Google Sans 12";
+  show-match: true;
+  /* theme: "themes/appsmenu"; */
+
+  show-icons:         true;
+  icon-theme:         "Numix-Circle";
+  cycle:              true;
+  hide-scrollbar:     true;
+  disable-history:    false;
+  modi:               "drun";
+  display-drun:       "";
+  display-combi:      "";
+  display-clipboard:  "";
+}
+
+/* vim:ft=css

@@ -1,0 +1,30 @@
+version: 2
+root-markers:
+  - .git/
+lint-debounce: 1s
+
+tools:
+  yaml-yamllint: &yaml-yamllint
+    lint-command: 'yamllint -f parsable -'
+    lint-stdin: true
+
+  sh-shellcheck: &sh-shellcheck
+    lint-command: 'shellcheck -f gcc -x'
+    lint-source: 'shellcheck'
+    lint-formats:
+      - '%f:%l:%c: %trror: %m'
+      - '%f:%l:%c: %tarning: %m'
+      - '%f:%l:%c: %tote: %m'
+
+  sh-shfmt: &sh-shfmt
+    format-command: 'shfmt -ci -s -bn'
+    format-stdin: true
+
+languages:
+  yaml:
+    - <<: *yaml-yamllint
+
+  sh:
+    - <<: *sh-shellcheck
+    - <<: *sh-shfmt
+

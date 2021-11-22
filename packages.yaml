@@ -1,0 +1,128 @@
+gui_applications:
+  official:
+    - alacritty
+    - arandr
+    - firefox
+    - flameshot
+    - steam
+    - steam-native-runtime
+  chaotic:
+    - dropbox
+    - ferdi
+    - google-chrome
+    - slack-desktop
+    - zoom
+  aur:
+    - dropbox-cli
+    - parsec-bin
+
+ui_toolkit_themeing:
+  official:
+    - breeze
+    - breeze-icons
+    - deepin-gtk-theme
+    - deepin-qt-dbus-factory
+    - deepin-qt5integration
+    - gtk-chtheme
+  chaotic:
+    - numix-circle-icon-theme-git
+    - numix-icon-theme-git
+  aur:
+    - numix-gtk-theme-git
+
+i3_stack:
+  official:
+    - dunst
+    - feh
+    - i3-gaps
+    - i3lock
+    - python-colorama
+    - python-i3ipc
+    - python-pywal
+    - rofi
+    - shfmt
+    - udiskie
+    - udisks2
+    - xautolock
+    - xclip
+    - xsel
+    - xcompmgr
+    - yamllint
+  chaotic:
+    - polybar
+    - xbanish
+  aur:
+    - colorz
+    - python-fontawesome
+    - rofi-greenclip
+
+fonts:
+  official:
+    - fontconfig
+    - noto-fonts
+    - noto-fonts-cjk
+    - noto-fonts-emoji
+    - terminus-font
+    - ttf-font-awesome
+    - ttf-nerd-fonts-symbols
+    - ttf-ubuntu-font-family
+    - ttf-iosevka-nerd
+  aur:
+    - nerd-fonts-terminus
+    - ttf-comfortaa
+    - ttf-google-sans
+    - ttf-twemoji-color
+
+command_line_tools:
+  official:
+    - aria2
+    - bat
+    - dos2unix
+    - fasd
+    - fd
+    - fzf
+    - grc
+    - htop
+    - jq
+    - ncdu
+    - ripgrep
+    - rsync
+    - stow
+    - wget
+  aur:
+    - direnv
+
+programming:
+  official:
+    - delve
+    - diff-so-fancy
+    - diffutils
+    - go
+    - neovim
+    - npm
+    - python-pygments
+    - python-pynvim
+    - ruby
+    - rubygems
+    - rustup
+    - shellcheck
+    - tree-sitter
+    - vim
+    - yarn
+  aur:
+    - rbenv
+    - ruby-build
+    - scm_breeze-git
+
+other:
+  official:
+    - autorandr
+    - reflector
+  chaotic:
+    - paru
+
+terminal:
+  official:
+    - tmux
+    - zsh
+    - zsh-syntax-highlighting

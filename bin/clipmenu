@@ -1,0 +1,7 @@
+#!/bin/sh
+
+rofi -dpi "$DPI" -no-lazy-grab -modi ':greenclip print' \
+  -show  \
+  -run-command '{cmd}' \
+  -columns 1\
+  -theme themes/appsmenu.rasi

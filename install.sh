@@ -4,75 +4,142 @@ set -e
 
 dotfiles_dir="$(cd "$(dirname "$0")" && pwd)"
 
+is_exec() {
+  if ! which "$1" >/dev/null 2>&1; then
+    return 1
+  fi
+  return 0
+}
+
+mgr() {
+  local mgr='sudo pacman'
+  is_exec paru && mgr=paru
+  $mgr "$@"
+}
+
+install() {
+  mgr -S --needed --noconfirm "$@"
+}
+
+is_installed() {
+  mgr -Qi "$package" >/dev/null 2>&1
+}
+
+converge() {
+  packages=$(yq "(.[].$1 // [])[]" packages.yaml -r)
+  local not_installed=()
+  for package in $packages; do
+     is_installed "$package" && continue
+     not_installed=("${not_installed[@]}" "$package")
+  done
+  [ "${#not_installed[@]}" -eq 0 ] && return
+  install "${not_installed[@]}"
+}
+
+ensure_rust() {
+  is_exec rust && return
+  ! is_installed && install rustup
+  rustup update
+  rustup default nightly
+}
+
+ensure_yq() {
+  is_exec yq && return
+  install yq
+}
+
 clone() {
+  local src="$1"
+  local dst="$2"
+
   set +e
-  git clone "https://github.com/$1" "$HOME/$2"
+  git clone "$src" "$dst" 2>/dev/null
   set -e
 }
 
-sudo pacman -Syu --needed --noconfirm git base-devel stow
+setup_nvim_config() {
+  clone \
+    "https://github.com/luan/nvim" \
+    "$HOME/.config/nvim"
+  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
+  nvim -c 'UpdateRemotePlugins' -c 'quitall'
+  nvim --headless -c 'TSInstallSync all' -c 'quitall'
+  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
+}
 
-git clone https://aur.archlinux.org/yay.git /tmp/yay || true
-(cd /tmp/yay && makepkg -si --noconfirm)
+setup_tmux_config() {
+  clone \
+    "https://github.com/luan/tmuxfiles" \
+    "$HOME/.config/tmux"
 
-mkdir $HOME/bin
+  (cd "$HOME/.config/tmux" && ./install)
+}
 
-stow -R alacritty
-stow -R autorandr
-stow -R compton
-stow -R dunst
-stow -R fontconfig
-stow -R gnupg
-stow -R gtk
-stow -R home
-stow -R i3
-stow -R polybar
-stow -R rofi
-stow -R ssh
-stow -R sxiv
-stow -R systemd
-stow -R wal
-stow -R x11
-stow -R yay
-stow -R zsh
-stow -R bin
-stow -R electron
-stow -R sway
-stow -R waybar
-stow -R wofi
-stow -R mako
-
-# yay -S --needed --noconfirm - < packages.txt
-
-mkdir -p ~/.config
-
-clone luan/nvim  .config/nvim  || true
-stow -R nvim
-
-clone luan/tmuxfiles .config/tmux || true
-
-(cd $HOME/.config/tmux && ./install)
-
-mkdir -p "$HOME/workspace"
-export GOPATH="$HOME/workspace"
-
-if ! grep --quiet "path=$dotfiles_dir/gitconfig" "$HOME/.gitconfig"; then
-cat << EOF >> "$HOME/.gitconfig"
+setup_gitconfig() {
+  if ! grep --quiet "path=$dotfiles_dir/gitconfig" "$HOME/.gitconfig"; then
+  cat << EOF >> "$HOME/.gitconfig"
 
 [include]
   path=$dotfiles_dir/gitconfig
 EOF
-else
-  echo "Skipping gitconfig"
-fi
+  else
+    echo "Skipping gitconfig"
+  fi
+}
 
-if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
-  sudo chsh -s "$(which zsh)" "$LOGNAME"
-fi
+change_shell() {
+  if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
+    sudo chsh -s "$(which zsh)" "$LOGNAME"
+  fi
+}
 
-rustup default stable
+chaotic_aur() {
+  sudo pacman-key --recv-key FBA220DFC880C036 --keyserver keyserver.ubuntu.com
+  sudo pacman-key --lsign-key FBA220DFC880C036
+  sudo pacman --needed --noconfirm -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+}
 
-sudo systemctl enable --now udisks2.service
-systemctl --user enable --now wal.timer
+setup_pacman() {
+  chaotic_aur
+  sudo rm -f /etc/pacman.conf
+  sudo ln -s "$dotfiles_dir/etc/pacman.conf" "/etc/pacman.conf"
+}
 
+setup_bin() {
+  mkdir -p "$HOME/bin"
+  stow -R bin -t "$HOME/bin"
+}
+
+enable_services() {
+  sudo systemctl enable --now autorandr.service
+  sudo systemctl enable --now udisks2.service
+}
+
+main() {
+  (
+  cd "$dotfiles_dir"
+
+  setup_pacman
+
+  ensure_yq
+  converge official
+  converge chaotic
+
+  ensure_rust
+  converge aur
+
+  change_shell
+  setup_nvim_config
+  setup_tmux_config
+  setup_gitconfig
+  stow -R xdg-configs -t "$HOME/.config"
+  setup_bin
+  stow -R home -t "$HOME"
+  stow -R x11  -t "$HOME"
+
+  mgr -Syu --noconfirm
+  )
+}
+
+main
 

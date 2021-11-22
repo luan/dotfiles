@@ -1,0 +1,9 @@
+#!/bin/sh
+
+rofi -dpi "$DPI" \
+  -no-lazy-grab \
+  -combi-modi window,drun,run \
+  -show combi \
+  -modi combi \
+  -theme themes/appsmenu.rasi
+

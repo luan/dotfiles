@@ -1,0 +1,5 @@
+icons = "Arc"
+
+[modes.pass]
+source = "sh -c \"cd $HOME/.password-store && fd -t f . | sed s/\\.gpg//\""
+target = "sh -c \"pass -c %\""
