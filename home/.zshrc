@@ -112,7 +112,7 @@ fi
 [ -s "/usr/share/scm_breeze/scm_breeze.sh" ] && source "/usr/share/scm_breeze/scm_breeze.sh"
 
 source_glob() {
-  files=($1*$2(N)); (($#files))
+  files=($1*$2(N)); (($#files)) && source $files
 }
 
 source_glob "$XDG_CONFIG_HOME/zsh/" ".zsh"

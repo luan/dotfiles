@@ -103,6 +103,7 @@ setup_pacman() {
   chaotic_aur
   sudo rm -f /etc/pacman.conf
   sudo ln -s "$dotfiles_dir/etc/pacman.conf" "/etc/pacman.conf"
+  sudo pacman -Sy
 }
 
 setup_bin() {

@@ -19,4 +19,4 @@ ssh/.ssh/*_ecdsa*
 ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
 ssh/.ssh/known_hosts
-home/bin/__pycache__/
+bin/__pycache__/
