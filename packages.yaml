@@ -47,6 +47,7 @@ i3_stack:
     - xclip
     - xsel
     - xcompmgr
+    - xorg-xinput
     - yamllint
   chaotic:
     - polybar
