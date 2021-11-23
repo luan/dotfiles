@@ -391,14 +391,13 @@ interval = 3600
 format-padding = 0
 
 [module/dunst]
-type = custom/ipc
-
-hook-0 = pkill dunst -USR2 ; echo %{F$(xgetres foreground)}%{F-}
-hook-1 = pkill dunst -USR1 ; echo %{F$(xgetres color2)}%{F-}
-initial = 1
-
-click-left  = polybar-msg -p %pid% hook dunst 1
-click-right = polybar-msg -p %pid% hook dunst 2
+type = custom/script
+exec = sh -c '[ "$(dunstctl is-paused)" == "false" ] && echo %{F$(xgetres foreground)}%{F-} || echo %{F$(xgetres color2)}%{F-}'
+tail = true
+interval = 1
+format-padding = 0
+click-left  = dunstctl set-paused toggle
+click-right = dunstctl set-paused true
 
 ; vim:ft=dosini
 

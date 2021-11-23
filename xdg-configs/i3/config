@@ -2,6 +2,7 @@
 exec_always --no-startup-id "~/.config/i3/startup.sh"
 
 set $mod Mod4
+set $alt Mod1
 set $term alacritty
 
 # Font for window titles. Will also be used by the bar unless a different font
@@ -228,4 +229,13 @@ client.background       $color7
 title_align center
 
 assign [class="zoom"] workspace number 4
+for_window [title="^zoom$"] floating enable
 for_window [window_role="About"] floating enable
+
+# dunst
+bindsym $alt+space exec dunstctl close
+bindsym $alt+shift+space exec dunstctl close-all
+bindsym $alt+period exec dunstctl action
+bindsym $alt+shift+period exec dunstctl context
+bindsym $alt+grave exec dunstctl history-pop
+
