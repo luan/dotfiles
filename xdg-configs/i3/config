@@ -233,9 +233,9 @@ for_window [title="^zoom$"] floating enable
 for_window [window_role="About"] floating enable
 
 # dunst
-bindsym $alt+space exec dunstctl close
-bindsym $alt+shift+space exec dunstctl close-all
-bindsym $alt+period exec dunstctl action
-bindsym $alt+shift+period exec dunstctl context
-bindsym $alt+grave exec dunstctl history-pop
+bindsym $mod+comma exec dunstctl close
+bindsym $mod+shift+comma exec dunstctl close-all
+bindsym $mod+period exec dunstctl action
+bindsym $mod+shift+period exec dunstctl context
+bindsym $mod+grave exec dunstctl history-pop
 
