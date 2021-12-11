@@ -197,7 +197,7 @@ exec configure-touchpad
 
 exec --no-startup-id greenclip daemon
 exec --no-startup-id udiskie
-exec --no-startup-id /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1
+exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec --no-startup-id setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl
 
 set_from_resource $color0 color0

@@ -37,6 +37,7 @@ i3_stack:
     - i3-gaps
     - i3lock
     - python-colorama
+    - polkit-gnome
     - python-i3ipc
     - python-pywal
     - rofi
@@ -45,9 +46,9 @@ i3_stack:
     - udisks2
     - xautolock
     - xclip
-    - xsel
     - xcompmgr
     - xorg-xinput
+    - xsel
     - yamllint
   chaotic:
     - polybar
