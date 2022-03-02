@@ -2,6 +2,7 @@ gui_applications:
   official:
     - alacritty
     - arandr
+    - discord
     - firefox
     - flameshot
     - steam
