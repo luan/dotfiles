@@ -42,6 +42,8 @@ restart_daemons() {
     -corners ---- \
     -notify   4 -notifier "sleep 1; xset s activate" \
     -time     5 -locker   "lock-session"
+
+  setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl
 }
 
 main() {
