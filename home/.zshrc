@@ -12,7 +12,7 @@ export PATH=/usr/local/bin:$PATH
 export PATH=$HOME/bin:$PATH
 
 export PATH=/usr/local/go/bin:$PATH
-export GOPATH=$HOME/src/server/go
+export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
 
 if [ ! -d "${HOME}/.zgen" ]; then
@@ -117,3 +117,5 @@ source_glob() {
 
 source_glob "$XDG_CONFIG_HOME/zsh/" ".zsh"
 source_glob "$HOME/." ".env"
+
+[ -s "/Users/luan/.scm_breeze/scm_breeze.sh" ] && source "/Users/luan/.scm_breeze/scm_breeze.sh"
