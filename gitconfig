@@ -1,54 +1,54 @@
 [user]
-  email = cfcluan@gmail.com
-  name = Luan Santos
+	email = cfcluan@gmail.com
+	name = Luan Santos
 	signingkey = 0xCD0E63A032001A8A
 [color]
-  ui = true
+	ui = true
 [color "branch"]
-  current = yellow reverse
-  local = yellow
-  remote = green
+	current = yellow reverse
+	local = yellow
+	remote = green
 [color "diff"]
-  meta = yellow bold
-  frag = magenta bold
-  old = red bold
-  new = green bold
+	meta = yellow bold
+	frag = magenta bold
+	old = red bold
+	new = green bold
 [alias]
-  ci = commit
-  commit = commit
-  co = checkout
-  cp = cherry-pick -x
-  st = status
+	ci = commit
+	commit = commit
+	co = checkout
+	cp = cherry-pick -x
+	st = status
 
-  l = log --graph --abbrev-commit --date=relative --decorate --pretty=format:\"%C(yellow)%h%C(bold yellow)%d%Creset %C(blue)%s %C(green)(%ad)%Creset %C(magenta) [%an]%Creset \"
-  lg = log --graph --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'
-  changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
+	l = log --graph --abbrev-commit --date=relative --decorate --pretty=format:\"%C(yellow)%h%C(bold yellow)%d%Creset %C(blue)%s %C(green)(%ad)%Creset %C(magenta) [%an]%Creset \"
+	lg = log --graph --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'
+	changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
 [merge]
-  summary = true
-  verbosity = 1
+	summary = true
+	verbosity = 1
 [apply]
-  whitespace = nowarn
+	whitespace = nowarn
 [branch]
-  autosetupmerge = true
+	autosetupmerge = true
 [push]
-  default = tracking
-  recurseSubmodules=check
+	default = tracking
+	recurseSubmodules=check
 [core]
-  autocrlf = false
-  editor = vim
-  excludesfile = /Users/luan/.gitignore_global
-  pager = diff-so-fancy | less --tabs=4 -RFX
+	autocrlf = false
+	editor = vim
+	excludesfile = /Users/luan/.gitignore_global
+	pager = diff-so-fancy | less --tabs=4 -RFX
 [advice]
-  statusHints = false
+	statusHints = false
 [diff]
-  # Git diff will use (i)ndex, (w)ork tree, (c)ommit and (o)bject
-  # instead of a/b/c/d as prefixes for patches
-  # mnemonicprefix = true
+	# Git diff will use (i)ndex, (w)ork tree, (c)ommit and (o)bject
+	# instead of a/b/c/d as prefixes for patches
+	# mnemonicprefix = true
 [rerere]
-  enabled = true
+	enabled = true
 [url "git@github.com:"]
-  pushInsteadOf = "https://github.com/"
+	pushInsteadOf = "https://github.com/"
 [submodule]
-  fetchJobs = 16
+	fetchJobs = 16
 [hub]
-  protocol = https
+	protocol = https
