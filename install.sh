@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 
-set -e
-
-dotfiles_dir="$(cd "$(dirname "$0")" && pwd)"
-
-is_exec() {
-  if ! which "$1" >/dev/null 2>&1; then
-    return 1
-  fi
-  return 0
+require() {
+  dotfiles_dir="$(cd "$(dirname "$0")" && pwd)"
+  source "${dotfiles_dir}/lib/$@"
 }
+
+require 'common.sh'
 
 mgr() {
   local mgr='sudo pacman'
@@ -48,49 +44,12 @@ ensure_yq() {
   install yq
 }
 
-clone() {
-  local src="$1"
-  local dst="$2"
-
-  set +e
-  git clone "$src" "$dst" 2>/dev/null
-  set -e
-}
-
-setup_nvim_config() {
-  clone \
-    "https://github.com/luan/nvim" \
-    "$HOME/.config/nvim"
-  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
-  nvim -c 'UpdateRemotePlugins' -c 'quitall'
-  nvim --headless -c 'TSInstallSync all' -c 'quitall'
-  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
-}
-
 setup_tmux_config() {
   clone \
     "https://github.com/luan/tmuxfiles" \
     "$HOME/.config/tmux"
 
   (cd "$HOME/.config/tmux" && ./install)
-}
-
-setup_gitconfig() {
-  if ! grep --quiet "path=$dotfiles_dir/gitconfig" "$HOME/.gitconfig"; then
-  cat << EOF >> "$HOME/.gitconfig"
-
-[include]
-  path=$dotfiles_dir/gitconfig
-EOF
-  else
-    echo "Skipping gitconfig"
-  fi
-}
-
-change_shell() {
-  if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
-    sudo chsh -s "$(which zsh)" "$LOGNAME"
-  fi
 }
 
 chaotic_aur() {
@@ -104,11 +63,6 @@ setup_pacman() {
   sudo rm -f /etc/pacman.conf
   sudo ln -s "$dotfiles_dir/etc/pacman.conf" "/etc/pacman.conf"
   sudo pacman -Sy
-}
-
-setup_bin() {
-  mkdir -p "$HOME/bin"
-  stow -R bin -t "$HOME/bin"
 }
 
 enable_services() {
@@ -143,4 +97,3 @@ main() {
 }
 
 main
-
