@@ -1,3 +1,5 @@
+[include]
+    path = ~/dotfiles/themes.gitconfig
 [user]
 	email = cfcluan@gmail.com
 	name = Luan Santos
@@ -26,6 +28,7 @@
 [merge]
 	summary = true
 	verbosity = 1
+    conflictstyle = diff3
 [apply]
 	whitespace = nowarn
 [branch]
@@ -36,14 +39,22 @@
 [core]
 	autocrlf = false
 	editor = vim
-	excludesfile = /Users/luan/.gitignore_global
-	pager = diff-so-fancy | less --tabs=4 -RFX
+	excludesfile = ~/luan/.gitignore_global
+    pager = delta
+[interactive]
+    diffFilter = delta --color-only
+[add.interactive]
+    useBuiltin = false # required for git 2.37.0
+[delta]
+	features = chameleon
+	syntax-theme = TwoDark
+    navigate = true    # use n and N to move between diff sections
+    light = false      # set to true if you're in a terminal w/ a light background color (e.g. the default macOS terminal)
+	side-by-side = true
 [advice]
 	statusHints = false
 [diff]
-	# Git diff will use (i)ndex, (w)ork tree, (c)ommit and (o)bject
-	# instead of a/b/c/d as prefixes for patches
-	# mnemonicprefix = true
+	colorMoved = default
 [rerere]
 	enabled = true
 [url "git@github.com:"]
