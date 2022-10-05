@@ -15,6 +15,8 @@ export PATH=/usr/local/go/bin:$PATH
 export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
 
+export BAT_THEME="TwoDark"
+
 if [ ! -d "${HOME}/.zgen" ]; then
   git clone https://github.com/tarjoilija/zgen.git "${HOME}/.zgen"
 fi
