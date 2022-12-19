@@ -6,14 +6,16 @@ if [[ "$(uname)" != "Darwin" ]]; then
 fi
 
 # Turbo key repeat
-# Set a blazingly fast keyboard repeat rate.
 defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 
 # Anything lower than 15 seems too fast.
-defaults write -g InitialKeyRepeat -int 15
+defaults write -g InitialKeyRepeat -int 150
 
 # You can go as low as 1, but that's too darn fast for me.
-defaults write -g KeyRepeat -int 2
+defaults write -g KeyRepeat -int 40
+
+# Show macOS app switcher across all monitors
+defaults write com.apple.Dock appswitcher-all-displays -bool true
 
 # Expand save panel by default
 defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
@@ -43,8 +45,6 @@ defaults write NSGlobalDomain AppleFontSmoothing -int 2
 # Disable press-and-hold for keys in favor of key repeat
 defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 
-# Set a blazingly fast keyboard repeat rate
-defaults write NSGlobalDomain KeyRepeat -int 0
 
 # Disable auto-correct
 defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
