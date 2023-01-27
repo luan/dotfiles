@@ -4,16 +4,14 @@ export LANG=en_US.UTF-8
 export EDITOR='nvim'
 export GIT_EDITOR='nvim'
 
-export GIT_DUET_GLOBAL=1
-export GIT_DUET_ROTATE_AUTHOR=1
-export GIT_DUET_CO_AUTHORED_BY=1
-
 export PATH=/usr/local/bin:$PATH
 export PATH=$HOME/bin:$PATH
 
 export PATH=/usr/local/go/bin:$PATH
 export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
+export PATH=$HOME/.local/bin:$PATH
+export PATH=$HOME/.emacs.d/bin:$PATH
 
 export BAT_THEME="TwoDark"
 
@@ -31,10 +29,6 @@ if ! zgen saved; then
   zgen load zsh-users/zsh-history-substring-search
   zgen load zsh-users/zsh-completions
   zgen load unixorn/warhol.plugin.zsh
-
-  # Prompt
-  zgen load mafredri/zsh-async
-  zgen load sindresorhus/pure . main
 
   # generate the init script from plugins above
   zgen save
@@ -105,6 +99,7 @@ typeset -U path
 # Load utilities
 eval "$(fasd --init auto)"
 eval "$(direnv hook zsh)"
+eval "$(gh completion --shell zsh)"
 
 if which rbenv > /dev/null 2>&1; then
   eval "$(rbenv init -)"
@@ -112,6 +107,7 @@ fi
 
 [[ -s "/etc/grc.zsh" ]] && source /etc/grc.zsh
 [ -s "/usr/share/scm_breeze/scm_breeze.sh" ] && source "/usr/share/scm_breeze/scm_breeze.sh"
+[ -s "/Users/luan/.scm_breeze/scm_breeze.sh" ] && source "/Users/luan/.scm_breeze/scm_breeze.sh"
 
 source_glob() {
   files=($1*$2(N)); (($#files)) && source $files
@@ -120,4 +116,4 @@ source_glob() {
 source_glob "$XDG_CONFIG_HOME/zsh/" ".zsh"
 source_glob "$HOME/." ".env"
 
-[ -s "/Users/luan/.scm_breeze/scm_breeze.sh" ] && source "/Users/luan/.scm_breeze/scm_breeze.sh"
+eval "$(starship init zsh) "
