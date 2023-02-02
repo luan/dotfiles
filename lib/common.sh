@@ -45,7 +45,7 @@ EOF
 
 change_shell() {
   if [[ "$(getent passwd "$LOGNAME" | cut -d: -f7)" != "$(which zsh)" ]]; then
-    sudo chsh -s "$(which zsh)" "$LOGNAME"
+    sudo chsh -s "$(which zsh)" "$LOGNAME" || true
   fi
 }
 
