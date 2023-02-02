@@ -22,10 +22,13 @@ setup_nvim_config() {
   clone \
     "https://github.com/luan/nvim" \
     "$HOME/.config/nvim"
-  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
-  nvim -c 'UpdateRemotePlugins' -c 'quitall'
-  nvim --headless -c 'TSInstallSync all' -c 'quitall'
-  nvim -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
+}
+
+setup_tmux_config() {
+  clone \
+    "https://github.com/luan/tmuxfiles" \
+    "$HOME/.config/tmux"
+  (cd "$HOME/.config/tmux" && ./install)
 }
 
 setup_gitconfig() {

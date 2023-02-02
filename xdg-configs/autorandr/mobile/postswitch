@@ -1,6 +1,0 @@
-#!/bin/bash
-
-xrdb -merge -I"$HOME" "$HOME/.Xresources-mobile"
-DPI="$(xrdb -query | grep 'Xft.dpi:' | awk '{ print $2 }')"
-xrandr --dpi "$DPI"
-pkill -9 dunst

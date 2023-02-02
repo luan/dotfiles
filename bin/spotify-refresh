@@ -1,8 +1,0 @@
-#!/bin/bash
-
-PID="$1"
-shift
-"$@"
-sleep 0.2
-
-kill -USR1 "$PID"
