@@ -31,6 +31,15 @@ setup_tmux_config() {
   (cd "$HOME/.config/tmux" && ./install)
 }
 
+setup_zshrc() {
+  if ! grep --quiet "path=$dotfiles_dir/zsh/zshrc" "$HOME/.zshrc"; then
+  cat << EOF >> "$HOME/.zshrc"
+source "$dotfiles_dir/zsh/zshrc"
+EOF
+  fi
+}
+
+
 setup_gitconfig() {
   if ! grep --quiet "path=$dotfiles_dir/gitconfig" "$HOME/.gitconfig"; then
   cat << EOF >> "$HOME/.gitconfig"
