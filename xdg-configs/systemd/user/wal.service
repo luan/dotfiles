@@ -1,7 +1,0 @@
-[Unit]
-Description=Change wallpaper and theme randomly
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -lc 'wal -i ~/.wallpapers -s'
-Environment="DISPLAY=:0"
