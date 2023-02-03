@@ -28,7 +28,7 @@ setup_tmux_config() {
   clone \
     "https://github.com/luan/tmuxfiles" \
     "$HOME/.config/tmux"
-  (cd "$HOME/.config/tmux" && ./install)
+  (cd "$HOME/.config/tmux" && ./install || true)
 }
 
 setup_zshrc() {

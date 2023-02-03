@@ -13,18 +13,18 @@ main() {
   (
   cd "$dotfiles_dir"
 
-  if is_macos; then
-    dotheader "Setting up stuff on @umacOS"
-    brew_install_all "$(cat "${dotfiles_dir}/mac-packages.txt")"
-    dotsay "@redBut this isn't a @bMac!@reset Exiting... "
-    mac_tweaks
-    exit 1
-  fi
+  # if is_macos; then
+  #   dotheader "Setting up stuff on @umacOS"
+  #   brew_install_all "$(cat "${dotfiles_dir}/mac-packages.txt")"
+  #   dotsay "@redBut this isn't a @bMac!@reset Exiting... "
+  #   mac_tweaks
+  # fi
 
   change_shell
   setup_nvim_config
   setup_tmux_config
   setup_gitconfig
+  setup_zshrc
   stow -R xdg-configs -t "$HOME/.config"
   stow -R home -t "$HOME"
   setup_bin

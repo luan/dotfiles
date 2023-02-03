@@ -38,8 +38,6 @@ tree-sitter
 watchman
 wget
 zsh
-firefox
-firefox-developer-edition
 font-hack-nerd-font
 font-iosevka
 hammerspoon
