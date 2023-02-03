@@ -21,22 +21,12 @@
 -- Note that you have to install the tool with Mason manually
 local null_ls = require("null-ls")
 lvim.nullls.sources = {
-   null_ls.builtins.formatting.stylua,
-   null_ls.builtins.formatting.goimports,
-   null_ls.builtins.formatting.google_java_format,
-   null_ls.builtins.formatting.sqlfluff.with({
-      extra_args = { "--dialect", "postgres" },
-   }),
-   null_ls.builtins.diagnostics.eslint_d.with({
-      cwd = function(params)
-         return require("lspconfig/util").root_pattern(".eslintrc.js")(params.bufname)
-      end,
-   }),
-   null_ls.builtins.formatting.eslint_d.with({
-      cwd = function(params)
-         return require("lspconfig/util").root_pattern(".eslintrc.js")(params.bufname)
-      end,
-   }),
+	null_ls.builtins.formatting.stylua,
+	null_ls.builtins.formatting.goimports,
+	null_ls.builtins.formatting.google_java_format,
+	null_ls.builtins.formatting.sqlfluff.with({
+		extra_args = { "--dialect", "postgres" },
+	}),
 }
 
 -- --  Autocommands (`:help autocmd`) <https://neovim.io/doc/user/autocmd.html>
