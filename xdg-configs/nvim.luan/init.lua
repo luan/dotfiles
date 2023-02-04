@@ -14,12 +14,14 @@
 --     },
 -- }
 
+lvim.codeium.enabled = true
+-- lvim.copilot.enabled = true
+
 -- --  Additional LSP setup
 -- require("lvim.lsp").setup("emmet_ls", { filetuypes = { "handlebars" } })
 
 -- ␀ null-ls sources <https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/CONFIG.md>
 -- Note that you have to install the tool with Mason manually
-local null_ls = require("null-ls")
 lvim.nullls.sources = {
 	null_ls.builtins.formatting.stylua,
 	null_ls.builtins.formatting.goimports,
