@@ -98,8 +98,12 @@ typeset -U path
 
 # Load utilities
 eval "$(fasd --init auto)"
-eval "$(direnv hook zsh)"
-eval "$(gh completion --shell zsh)"
+if which direnv > /dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi
+if which gh > /dev/null 2>&1; then
+  eval "$(gh completion --shell zsh)"
+fi
 
 if which rbenv > /dev/null 2>&1; then
   eval "$(rbenv init -)"
