@@ -1,8 +1,8 @@
 # Environment
 export LANG=en_US.UTF-8
 
-export EDITOR='nvim'
-export GIT_EDITOR='nvim'
+export EDITOR='hx'
+export GIT_EDITOR='hx'
 
 export PATH=/usr/local/bin:$PATH
 export PATH=$HOME/bin:$PATH
@@ -119,5 +119,6 @@ source_glob() {
 
 source_glob "$XDG_CONFIG_HOME/zsh/" ".zsh"
 source_glob "$HOME/." ".env"
+eval "$(zoxide init zsh)"
 
 eval "$(starship init zsh) "

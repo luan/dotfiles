@@ -14,22 +14,29 @@
 --     },
 -- }
 
-lvim.codeium.enabled = true
--- lvim.copilot.enabled = true
+-- vim.g.sonokai_style = "maia"
+-- require("lualine").setup({ options = { theme = "sonokai" } })
+-- lvim.colorscheme = "sonokai"
+
+-- lvim.codeium.enabled = true
+lvim.copilot.enabled = true
 
 -- --  Additional LSP setup
 -- require("lvim.lsp").setup("emmet_ls", { filetuypes = { "handlebars" } })
 
 -- ␀ null-ls sources <https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/CONFIG.md>
 -- Note that you have to install the tool with Mason manually
-lvim.nullls.sources = {
-	null_ls.builtins.formatting.stylua,
-	null_ls.builtins.formatting.goimports,
-	null_ls.builtins.formatting.google_java_format,
-	null_ls.builtins.formatting.sqlfluff.with({
-		extra_args = { "--dialect", "postgres" },
-	}),
-}
+lvim.nullls.sources = function()
+	return {
+		require("null-ls").builtins.formatting.prettierd,
+		require("null-ls").builtins.formatting.stylua,
+		require("null-ls").builtins.formatting.goimports,
+		require("null-ls").builtins.formatting.google_java_format,
+		require("null-ls").builtins.formatting.sqlfluff.with({
+			extra_args = { "--dialect", "postgres" },
+		}),
+	}
+end
 
 -- --  Autocommands (`:help autocmd`) <https://neovim.io/doc/user/autocmd.html>
 -- vim.api.nvim_create_autocmd("FileType", {
