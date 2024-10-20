@@ -54,5 +54,11 @@
       "model": "claude-3-5-sonnet-20240620"
     },
     "version": "2"
+  },
+  "languages": {
+    "Nix": {
+      "tab_size": 2,
+      "formatter": "language_server"
+    }
   }
 }

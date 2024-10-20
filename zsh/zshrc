@@ -111,7 +111,6 @@ fi
 [[ -s "/etc/grc.zsh" ]] && source /etc/grc.zsh
 [ -s "/usr/share/scm_breeze/scm_breeze.sh" ] && source "/usr/share/scm_breeze/scm_breeze.sh"
 [ -s "/Users/luan/.scm_breeze/scm_breeze.sh" ] && source "/Users/luan/.scm_breeze/scm_breeze.sh"
-[ -s "/opt/homebrew/etc/profile.d/z.sh" ] && source "/opt/homebrew/etc/profile.d/z.sh"
 
 source_glob() {
   files=($1*$2(N)); (($#files)) && source $files
