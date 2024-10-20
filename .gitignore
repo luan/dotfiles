@@ -20,3 +20,8 @@ ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
 ssh/.ssh/known_hosts
 bin/__pycache__/
+
+.tmp*
+**/zed/prompts
+**/zed/conversations
+**/zed/embeddings
