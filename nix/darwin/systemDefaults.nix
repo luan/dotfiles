@@ -28,7 +28,7 @@
   system.defaults.finder.FXEnableExtensionChangeWarning = false;
   system.defaults.finder.QuitMenuItem = true;
   system.defaults.finder.ShowStatusBar = true;
-  system.defaults.finder._FXShowPosixPathInTitle = true;
+  system.defaults.finder._FXShowPosixPathInTitle = false;
   system.defaults.NSGlobalDomain.AppleShowAllExtensions = true;
 
   # Trackpad
@@ -41,4 +41,5 @@
   system.defaults.NSGlobalDomain.NSWindowResizeTime = 1.0e-3;
   system.defaults.NSGlobalDomain.NSScrollAnimationEnabled = false;
   system.defaults.NSGlobalDomain.AppleShowScrollBars = "WhenScrolling";
+  system.defaults.NSGlobalDomain.NSWindowShouldDragOnGesture = true;
 }

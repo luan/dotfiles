@@ -36,6 +36,7 @@
     ripgrep
     rsync
     rustup
+    shellcheck
     stow
     stylua
     tmux
@@ -61,6 +62,7 @@
     slack
     spotify
     vscode
+    zoom-us
   ];
 
   fonts.packages = with pkgs; [
@@ -91,7 +93,9 @@
     casks = [
       "1password-cli"
       "1password@nightly"
+      "betterdisplay"
       "chatgpt"
+      "cursor"
       "github"
       "home-assistant"
       "setapp"
@@ -101,6 +105,10 @@
       "warp"
       "whatsapp"
       "zed@preview"
+
+      "font-zed-mono"
+      "font-zed-sans"
+      "font-zed-mono-nerd-font"
     ];
   };
 
