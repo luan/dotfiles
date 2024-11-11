@@ -18,7 +18,7 @@
 # 
 # Changing this configuration at runtime will only affect new terminals, i.e.
 # new windows, tabs, etc.
-font-family = "Luansevka"
+font-family = "ZedMono Nerd Font"
 
 font-family-bold = 
 font-family-italic = 
@@ -105,7 +105,7 @@ font-variation-bold-italic =
 # 
 # Changing this configuration at runtime will only affect new terminals,
 # i.e. new windows, tabs, etc.
-font-codepoint-map = U+E5FA-U+E62B,U+E700-U+E7C5,U+F000-U+F2E0,U+E200-U+E2A9,U+F500-U+FD46,U+E300-U+E3EB,U+F400-U+F4A8,U+2665,U+26A1,U+F27C,U+E0A3,U+E0B4-U+E0C8,U+E0CC-U+E0D2,U+E0D4,U+23FB-U+23FE,U+2b58,U+F300-U+F313=Luansevka Nerd Font Mono Extended
+# font-codepoint-map = U+E5FA-U+E62B,U+E700-U+E7C5,U+F000-U+F2E0,U+E200-U+E2A9,U+F500-U+FD46,U+E300-U+E3EB,U+F400-U+F4A8,U+2665,U+26A1,U+F27C,U+E0A3,U+E0B4-U+E0C8,U+E0CC-U+E0D2,U+E0D4,U+23FB-U+23FE,U+2b58,U+F300-U+F313=Luansevka Nerd Font Mono Extended
 # Draw fonts with a thicker stroke, if supported. This is only supported
 # currently on MacOS.
 font-thicken = false
@@ -190,12 +190,13 @@ grapheme-width-method = unicode
 # A future update will allow custom themes to be installed in certain
 # directories.
 theme = tokyonight
+# theme = catppuccin-mocha
 
 # Background color for the window.
-background = #282c34
+# background = #282c34
 
 # Foreground color for the window.
-foreground = #ffffff
+# foreground = #ffffff
 
 # The foreground and background color for selection. If this is not set, then
 # the selection color is just the inverted window background and foreground
@@ -820,56 +821,26 @@ working-directory =
 #   * `keybind=clear` will clear all set keybindings. Warning: this
 #     removes ALL keybindings up to this point, including the default
 #     keybindings.
-keybind = super+page_up=scroll_page_up
-keybind = super+shift+up=jump_to_prompt:-1
-keybind = super+physical:four=goto_tab:4
+macos-option-as-alt = left
+keybind = clear
+
+keybind = super+n=new_window
+keybind = super+shift+w=close_window
+keybind = super+w=close_surface
+keybind = super+q=quit
+
 keybind = super+comma=open_config
 keybind = super+shift+comma=reload_config
+
 keybind = super+minus=decrease_font_size:1
-keybind = super+a=select_all
-keybind = super+shift+down=jump_to_prompt:1
-keybind = super+w=close_surface
-keybind = super+shift+w=close_window
-keybind = super+shift+left_bracket=previous_tab
-keybind = super+shift+enter=toggle_split_zoom
-keybind = super+alt+down=goto_split:bottom
-keybind = alt+shift+equal=equalize_splits
-keybind = super+physical:eight=goto_tab:8
-keybind = super+alt+right=goto_split:right
-keybind = super+ctrl+right=resize_split:right,10
-keybind = super+n=new_window
-keybind = super+enter=toggle_fullscreen
-keybind = super+alt+i=inspector:toggle
-keybind = super+ctrl+f=toggle_fullscreen
-keybind = super+alt+left=goto_split:left
-keybind = super+page_down=scroll_page_down
-keybind = super+alt+shift+w=close_all_windows
-keybind = super+alt+up=goto_split:top
-keybind = super+t=new_tab
-keybind = super+c=copy_to_clipboard
-keybind = super+shift+right_bracket=next_tab
-keybind = super+physical:one=goto_tab:1
-keybind = super+physical:nine=goto_tab:9
-keybind = super+left_bracket=goto_split:previous
 keybind = super+equal=increase_font_size:1
-keybind = super+physical:three=goto_tab:3
-keybind = super+end=scroll_to_bottom
-keybind = super+right_bracket=goto_split:next
-keybind = super+d=new_split:right
-# keybind = super+shift+j=write_scrollback_file
-keybind = super+q=quit
 keybind = super+plus=increase_font_size:1
 keybind = super+zero=reset_font_size
-keybind = super+physical:five=goto_tab:5
-keybind = super+home=scroll_to_top
-keybind = super+physical:seven=goto_tab:7
-keybind = super+shift+d=new_split:down
-keybind = super+ctrl+down=resize_split:down,10
-keybind = super+ctrl+left=resize_split:left,10
+
 keybind = super+k=clear_screen
-keybind = super+ctrl+up=resize_split:up,10
-keybind = super+physical:two=goto_tab:2
-keybind = super+physical:six=goto_tab:6
+keybind = super+alt+i=inspector:toggle
+
+keybind = super+c=copy_to_clipboard
 keybind = super+v=paste_from_clipboard
 
 # Window padding. This applies padding between the terminal cells and the
@@ -1225,177 +1196,3 @@ custom-shader =
 # not animate.
 # 
 # This can also be set to `always`, which will always run the animation
-# loop regardless of whether the terminal is focused or not. The animation
-# loop will still only run when custom shaders are used. Note that this
-# will use more CPU per terminal surface and can become quite expensive
-# depending on the shader and your terminal usage.
-# 
-# This value can be changed at runtime and will affect all currently
-# open terminals.
-custom-shader-animation = true
-
-# If anything other than false, fullscreen mode on macOS will not use the
-# native fullscreen, but make the window fullscreen without animations and
-# using a new space. It's faster than the native fullscreen mode since it
-# doesn't use animations.
-# 
-# Warning: tabs do not work with a non-native fullscreen window. This
-# can be fixed but is looking for contributors to help. See issue #392.
-# 
-# Allowable values are:
-# 
-#   * `visible-menu` - Use non-native macOS fullscreen, keep the menu bar visible
-#   * `true` - Use non-native macOS fullscreen, hide the menu bar
-#   * `false` - Use native macOS fullscreeen
-# 
-macos-non-native-fullscreen = false
-
-# The style of the macOS titlebar. Available values are: "native",
-# "transparent", and "tabs".
-# 
-# The "native" style uses the native macOS titlebar with zero customization.
-# The titlebar will match your window theme (see `window-theme`).
-# 
-# The "transparent" style is the same as "native" but the titlebar will
-# be transparent and allow your window background color to come through.
-# This makes a more seamless window appearance but looks a little less
-# typical for a macOS application and may not work well with all themes.
-# 
-# The "tabs" style is a completely custom titlebar that integrates the
-# tab bar into the titlebar. This titlebar always matches the background
-# color of the terminal. There are some limitations to this style:
-# On macOS 13 and below, saved window state will not restore tabs correctly.
-# macOS 14 does not have this issue and any other macOS version has not
-# been tested.
-# 
-# The default value is "transparent". This is an opinionated choice
-# but its one I think is the most aesthetically pleasing and works in
-# most cases.
-# 
-# Changing this option at runtime only applies to new windows.
-macos-titlebar-style = transparent
-
-# If `true`, the *Option* key will be treated as *Alt*. This makes terminal
-# sequences expecting *Alt* to work properly, but will break Unicode input
-# sequences on macOS if you use them via the *Alt* key. You may set this to
-# `false` to restore the macOS *Alt* key unicode sequences but this will break
-# terminal sequences expecting *Alt* to work.
-# 
-# Note that if an *Option*-sequence doesn't produce a printable character, it
-# will be treated as *Alt* regardless of this setting. (i.e. `alt+ctrl+a`).
-# 
-# This does not work with GLFW builds.
-macos-option-as-alt = true
-
-# Whether to enable the macOS window shadow. The default value is true.
-# With some window managers and window transparency settings, you may
-# find false more visually appealing.
-macos-window-shadow = true
-
-# Put every surface (tab, split, window) into a dedicated Linux cgroup.
-# 
-# This makes it so that resource management can be done on a per-surface
-# granularity. For example, if a shell program is using too much memory,
-# only that shell will be killed by the oom monitor instead of the entire
-# Ghostty process. Similarly, if a shell program is using too much CPU,
-# only that surface will be CPU-throttled.
-# 
-# This will cause startup times to be slower (a hundred milliseconds or so),
-# so the default value is "single-instance." In single-instance mode, only
-# one instance of Ghostty is running (see gtk-single-instance) so the startup
-# time is a one-time cost. Additionally, single instance Ghostty is much
-# more likely to have many windows, tabs, etc. so cgroup isolation is a
-# big benefit.
-# 
-# This feature requires systemd. If systemd is unavailable, cgroup
-# initialization will fail. By default, this will not prevent Ghostty
-# from working (see linux-cgroup-hard-fail).
-# 
-# Valid values are:
-# 
-#   * `never` - Never use cgroups.
-#   * `always` - Always use cgroups.
-#   * `single-instance` - Enable cgroups only for Ghostty instances launched
-#     as single-instance applications (see gtk-single-instance).
-# 
-linux-cgroup = single-instance
-
-# Memory limit for any individual terminal process (tab, split, window,
-# etc.) in bytes. If this is unset then no memory limit will be set.
-# 
-# Note that this sets the "memory.high" configuration for the memory
-# controller, which is a soft limit. You should configure something like
-# systemd-oom to handle killing processes that have too much memory
-# pressure.
-linux-cgroup-memory-limit = 
-
-# If this is false, then any cgroup initialization (for linux-cgroup)
-# will be allowed to fail and the failure is ignored. This is useful if
-# you view cgroup isolation as a "nice to have" and not a critical resource
-# management feature, because Ghostty startup will not fail if cgroup APIs
-# fail.
-# 
-# If this is true, then any cgroup initialization failure will cause
-# Ghostty to exit or new surfaces to not be created.
-# 
-# Note: this currently only affects cgroup initialization. Subprocesses
-# must always be able to move themselves into an isolated cgroup.
-linux-cgroup-hard-fail = false
-
-# If true, the Ghostty GTK application will run in single-instance mode:
-# each new `ghostty` process launched will result in a new window if there
-# is already a running process.
-# 
-# If false, each new ghostty process will launch a separate application.
-# 
-# The default value is `desktop` which will default to `true` if Ghostty
-# detects it was launched from the `.desktop` file such as an app launcher.
-# If Ghostty is launched from the command line, it will default to `false`.
-# 
-# Note that debug builds of Ghostty have a separate single-instance ID
-# so you can test single instance without conflicting with release builds.
-gtk-single-instance = desktop
-
-# Determines the side of the screen that the GTK tab bar will stick to.
-# Top, bottom, left, and right are supported. The default is top.
-gtk-tabs-location = top
-
-# If `true` (default), then the Ghostty GTK tabs will be "wide." Wide tabs
-# are the new typical Gnome style where tabs fill their available space.
-# If you set this to `false` then tabs will only take up space they need,
-# which is the old style.
-gtk-wide-tabs = true
-
-# If `true` (default), Ghostty will enable libadwaita theme support. This
-# will make `window-theme` work properly and will also allow Ghostty to
-# properly respond to system theme changes, light/dark mode changing, etc.
-# This requires a GTK4 desktop with a GTK4 theme.
-# 
-# If you are running GTK3 or have a GTK3 theme, you may have to set this
-# to false to get your theme picked up properly. Having this set to true
-# with GTK3 should not cause any problems, but it may not work exactly as
-# expected.
-# 
-# This configuration only has an effect if Ghostty was built with
-# libadwaita support.
-gtk-adwaita = true
-
-# If `true` (default), applications running in the terminal can show desktop
-# notifications using certain escape sequences such as OSC 9 or OSC 777.
-desktop-notifications = true
-
-# If `true`, the bold text will use the bright color palette.
-bold-is-bright = false
-
-# This will be used to set the `TERM` environment variable.
-# HACK: We set this with an `xterm` prefix because vim uses that to enable key
-# protocols (specifically this will enable `modifyOtherKeys`), among other
-# features. An option exists in vim to modify this: `:set
-# keyprotocol=ghostty:kitty`, however a bug in the implementation prevents it
-# from working properly. https://github.com/vim/vim/pull/13211 fixes this.
-term = xterm-ghostty
-
-# String to send when we receive `ENQ` (`0x05`) from the command that we are
-# running. Defaults to an empty string if not set.
-enquiry-response = 
-
