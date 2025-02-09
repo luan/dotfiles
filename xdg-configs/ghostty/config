@@ -1082,12 +1082,12 @@ config-file =
 
 # Confirms that a surface should be closed before closing it. This defaults to
 # true. If set to false, surfaces will close without any confirmation.
-confirm-close-surface = true
+confirm-close-surface = false
 
 # Whether or not to quit after the last window is closed. This defaults to
 # false. Currently only supported on macOS. On Linux, the process always exits
 # after the last window is closed.
-quit-after-last-window-closed = false
+quit-after-last-window-closed = true
 
 # Whether to enable shell integration auto-injection or not. Shell integration
 # greatly enhances the terminal experience by enabling a number of features:

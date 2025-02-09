@@ -16,6 +16,7 @@
     delta
     deno
     direnv
+    docker
     fd
     ffmpeg
     fzf
@@ -23,24 +24,31 @@
     git
     git-lfs
     go
+    google-chrome
     grc
     helix
     hexedit
     highlight
     htop
+    imagemagick
     jq
     mkalias
     neovim
     nixd
     nixfmt-rfc-style
+    ollama
+    python3
     ripgrep
     rsync
     rustup
     shellcheck
+    sqlite
     stow
     stylua
+    tableplus
     tmux
     tree-sitter
+    turso-cli
     vale
     vcpkg
     vim
@@ -55,7 +63,6 @@
     discord
     iterm2
     keka
-    kitty
     obsidian
     raycast
     signal-desktop
@@ -96,14 +103,16 @@
       "betterdisplay"
       "chatgpt"
       "cursor"
+      "ghostty"
       "github"
       "home-assistant"
+      "legcord"
       "setapp"
       "steam"
       "ticktick"
       "tuple"
-      "warp"
       "whatsapp"
+      "zen-browser"
       "zed@preview"
 
       "font-zed-mono"
