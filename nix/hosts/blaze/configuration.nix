@@ -4,7 +4,6 @@
     stripe-cli
     sshfs
     utm
-    xquartz
   ];
 
   homebrew.casks = [
