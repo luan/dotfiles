@@ -73,9 +73,17 @@
   ];
 
   fonts.packages = with pkgs; [
-    nerdfonts
-    monaspace
     font-awesome
+    monaspace
+    nerd-fonts._0xproto
+    nerd-fonts.hack
+    nerd-fonts.iosevka
+    nerd-fonts.iosevka-term
+    nerd-fonts.iosevka-term-slab
+    nerd-fonts.monaspace
+    nerd-fonts.monofur
+    nerd-fonts.victor-mono
+    nerd-fonts.zed-mono
   ];
 
   homebrew = {
@@ -112,6 +120,7 @@
       "ticktick"
       "tuple"
       "whatsapp"
+      "xquartz"
       "zen-browser"
       "zed@preview"
 
