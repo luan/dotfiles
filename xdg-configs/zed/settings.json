@@ -7,42 +7,42 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
-  "icon_theme": "Catppuccin Mocha",
   "features": {
-    "inline_completion_provider": "zed"
+    // "inline_completion_provider": "supermaven"
   },
+  "wrap_guides": [180],
   "tabs": {
     "file_icons": true,
     "git_status": true
   },
   "auto_signature_help": true,
-  "chat_panel": { "button": "never" },
-  "notification_panel": { "button": false },
+  "chat_panel": {
+    "button": false
+  },
   "show_inline_completions": true,
   "tab_bar": {
     "show_nav_history_buttons": false
   },
   "show_whitespaces": "selection",
-  "theme": "Nightfox",
-  "buffer_font_size": 13.0,
-  "ui_font_size": 15,
+  "theme": "Zedokai (Filter Octagon)",
+  "buffer_font_size": 14,
+  "ui_font_family": "Zed Sans",
+  "ui_font_weight": 300,
+  "buffer_font_family": "Zed Mono",
+  "buffer_font_weight": 300,
+  "languages": {
+    "Swift": {
+      "formatter": {
+        "external": {
+          "command": "bin/swiftformat"
+        }
+      }
+    }
+  },
   "git": {
     "inline_blame": {
       "enabled": false
     }
-  },
-  "terminal": {
-    "font_family": "ZedMono Nerd Font Mono",
-    "option_as_meta": true
-  },
-  "vim_mode": true,
-  "assistant": {
-    "enable_experimental_live_diffs": true,
-    "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-3-5-sonnet-latest"
-    },
-    "version": "2"
   },
   "lsp": {
     "rust-analyzer": {
@@ -54,14 +54,31 @@
           "features": "all"
         }
       }
+    },
+    "sourcekit-lsp": {
+      "initialization_options": {
+        "completion": {
+          "completeFunctionCalls": true
+        }
+      }
     }
+  },
+  "terminal": {
+    "font_family": "Iosevka Nerd Font",
+    "option_as_meta": true
+  },
+  "format_on_save": "on",
+  "vim_mode": true,
+  "assistant": {
+    "enable_experimental_live_diffs": true,
+    "default_model": {
+      "provider": "copilot_chat",
+      "model": "claude-3-5-sonnet"
+    },
+    "version": "2"
   },
   "languages": {
     "Nix": {
-      "tab_size": 2,
-      "formatter": "language_server"
-    },
-    "Lua": {
       "tab_size": 2,
       "formatter": "language_server"
     }

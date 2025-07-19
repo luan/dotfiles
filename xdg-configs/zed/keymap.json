@@ -5,6 +5,7 @@
       "alt--": "editor::SelectSmallerSyntaxNode",
       "ctrl-c": "editor::ToggleComments",
       "cmd-e": "project_panel::ToggleFocus",
+      "cmd-shift-c": "editor::CopyRelativePath",
       "cmd-shift-e": [
         "buffer_search::Deploy",
         {

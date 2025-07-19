@@ -62,7 +62,7 @@ useBuiltin = false # required for git 2.37.0
 syntax-theme = TwoDark
 navigate = true    # use n and N to move between diff sections
 light = false      # set to true if you're in a terminal w/ a light background color (e.g. the default macOS terminal)
-side-by-side = true
+side-by-side = false
 
 [advice]
 statusHints = false
@@ -72,9 +72,6 @@ colorMoved = default
 
 [rerere]
 enabled = true
-
-[url "git@github.com:"]
-pushInsteadOf = "https://github.com/"
 
 [submodule]
 fetchJobs = 16
