@@ -1,11 +1,40 @@
 [
   {
+    "context": "Editor && edit_prediction",
+    "bindings": {
+      "alt-;": "editor::AcceptEditPrediction",
+      "tab": null
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "alt-x": ["task::Spawn", { "task_name": "open_in_xcode" }]
+    }
+  },
+  // emacs bindings
+  {
+    "bindings": {
+      "alt-d": "editor::DeleteToNextWordEnd",
+      "alt-b": "editor::MoveToPreviousWordStart",
+      "alt-f": "editor::MoveToNextWordEnd",
+      "alt-shift-f": "project_panel::NewSearchInDirectory",
+      "alt-h": "editor::DeleteToPreviousWordStart",
+      "alt-m": "agent::ToggleModelSelector",
+      "alt-q": "editor::Rewrap",
+      "alt-t": "task::Spawn",
+      "alt-shift-t": "task::Rerun",
+      "alt-v": ["editor::MovePageUp", { "center_cursor": true }],
+      "alt-z": "editor::ToggleSoftWrap"
+    }
+  },
+  {
     "bindings": {
       "alt-=": "editor::SelectLargerSyntaxNode",
       "alt--": "editor::SelectSmallerSyntaxNode",
       "ctrl-c": "editor::ToggleComments",
       "cmd-e": "project_panel::ToggleFocus",
-      "cmd-shift-c": "editor::CopyRelativePath",
+      "cmd-shift-c": "workspace::CopyRelativePath",
       "cmd-shift-e": [
         "buffer_search::Deploy",
         {
@@ -24,11 +53,11 @@
       "g g": "editor::MoveToBeginning",
       "g e": "editor::MoveToEnd",
       "g x": "pane::CloseActiveItem",
-      "[ d": "editor::GoToPrevDiagnostic",
+      "[ d": "editor::GoToPreviousDiagnostic",
       "] d": "editor::GoToDiagnostic",
       "ctrl-alt-n": "editor::GoToDiagnostic",
-      "ctrl-alt-p": "editor::GoToPrevDiagnostic",
-      "shift-h": "pane::ActivatePrevItem",
+      "ctrl-alt-p": "editor::GoToPreviousDiagnostic",
+      "shift-h": "pane::ActivatePreviousItem",
       "shift-l": "pane::ActivateNextItem",
       "shift-r": "editor::Rename",
       "shift-k": "editor::Hover",
@@ -41,16 +70,23 @@
       "alt-k": "editor::MoveLineUp",
       "x": "editor::SelectLine"
     },
-    "context": "Editor && (vim_mode == normal || vim_mode == visual) && !VimWaiting && !menu"
+    "context": "Editor && (vim_mode == normal || vim_mode == helix_normal || vim_mode == visual) && !VimWaiting && !menu"
   },
   {
     "bindings": {
-      "alt-l": "editor::ShowInlineCompletion"
+      "alt-;": "editor::ShowEditPrediction"
     },
-    "context": "Editor && (vim_mode == insert) && !VimWaiting && !menu"
+    "context": "Editor && (vim_mode == insert) && !VimWaiting && !menu && !edit_prediction"
   },
   {
     "bindings": {},
+    "context": "Editor && vim_mode == visual && !VimWaiting && !menu"
+  },
+  {
+    "bindings": {
+      ">": "editor::Indent",
+      "<": "editor::Outdent"
+    },
     "context": "Editor && vim_mode == visual && !VimWaiting && !menu"
   },
   {
@@ -71,13 +107,13 @@
       "y": "project_panel::Copy",
       "x": "project_panel::Cut",
       "p": "project_panel::Paste",
-      ",": "project_panel::CopyPath",
-      ".": "project_panel::CopyRelativePath",
+      ",": "workspace::CopyPath",
+      ".": "workspace::CopyRelativePath",
       "r": "project_panel::Rename",
       "d": "project_panel::Delete",
       "?": "project_panel::NewSearchInDirectory",
       "j": "menu::SelectNext",
-      "k": "menu::SelectPrev"
+      "k": "menu::SelectPrevious"
     }
   }
 ]
