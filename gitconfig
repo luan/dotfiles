@@ -74,6 +74,7 @@ colorMoved = default
 
 [rerere]
 enabled = true
+autoupdate = true
 
 [submodule]
 fetchJobs = 16

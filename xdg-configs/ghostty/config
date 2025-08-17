@@ -1,7 +1,9 @@
 theme = tokyonight
 
-font-family = "Zed Mono"
-font-family = "ZedMono Nerd Font"
+desktop-notifications = true
+
+font-family = "Luansevka"
+font-family = "Iosevka Nerd Font"
 font-style = "Light"
 font-size = 13
 font-thicken = true
@@ -42,17 +44,17 @@ keybind = cmd+right=text:\x05
 keybind = cmd+left=text:\x01
 keybind = cmd+backspace=text:\x15
 
-keybidng = alt+right=esc:f
-keybidng = alt+left=esc:b
+keybind = alt+right=esc:f
+keybind = alt+left=esc:b
 
-keybinding = shift+up=adjust_selection:up
-keybinding = shift+down=adjust_selection:down
-keybinding = shift+left=adjust_selection:left
-keybinding = shift+right=adjust_selection:right
-keybinding = shift+page_up=adjust_selection:page_up
-keybinding = shift+page_down=adjust_selection:page_down
-keybinding = shift+home=adjust_selection:home
-keybinding = shift+end=adjust_selection:end
+keybind = shift+up=adjust_selection:up
+keybind = shift+down=adjust_selection:down
+keybind = shift+left=adjust_selection:left
+keybind = shift+right=adjust_selection:right
+keybind = shift+page_up=adjust_selection:page_up
+keybind = shift+page_down=adjust_selection:page_down
+keybind = shift+home=adjust_selection:home
+keybind = shift+end=adjust_selection:end
 # }}} final bindngs
 
 # {{{ tmux emulation
