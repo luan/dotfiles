@@ -2,13 +2,17 @@ theme = tokyonight
 
 desktop-notifications = true
 
-font-family = "Luansevka"
-font-family = "Iosevka Nerd Font"
+font-family = "IosevkaTerm Nerd Font"
 font-style = "Light"
+font-style-italic = "Light Italic"
+font-style-bold = "SemiBold"
+font-style-bold-italic = "SemiBold Italic"
 font-size = 13
-font-thicken = true
 
-adjust-cell-height = 30%
+adjust-cell-height = 40%
+adjust-font-baseline = 3
+adjust-underline-position = 25%
+adjust-underline-thickness = 1
 
 mouse-hide-while-typing = true
 
@@ -133,3 +137,4 @@ macos-titlebar-style = tabs
 
 copy-on-select = false
 keybind = shift+enter=text:\n
+#vim:ft=toml
