@@ -17,7 +17,7 @@ adjust-underline-thickness = 1
 mouse-hide-while-typing = true
 
 background-opacity = 1
-unfocused-split-opacity = 0.8
+unfocused-split-opacity = 0.85
 scrollback-limit = 10000000
 macos-option-as-alt = left
 
@@ -137,4 +137,4 @@ macos-titlebar-style = tabs
 
 copy-on-select = false
 keybind = shift+enter=text:\n
-#vim:ft=toml
+# vi: ft=toml

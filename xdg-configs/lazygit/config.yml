@@ -1,6 +1,5 @@
 gui:
   nerdFontsVersion: "3"
-  border: bold
   filterMode: fuzzy
   sidePanelWidth: 0.35
   timeFormat: "2006-01-02"
