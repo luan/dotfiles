@@ -7,11 +7,11 @@ set --export GIT_EDITOR vim
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # path
-set --export PATH /usr/local/bin $PATH
-set --export PATH /usr/local/go/bin $PATH
-set --export PATH $HOME/bin $PATH
-set --export PATH $HOME/.local/bin $PATH
-set --export PATH $HOME/.emacs.d/bin $PATH
+fish_add_path /usr/local/bin
+fish_add_path /usr/local/go/bin
+fish_add_path $HOME/bin
+fish_add_path $HOME/.local/bin
+fish_add_path $HOME/.emacs.d/bin
 
 set --export XDG_CONFIG_HOME $HOME/.config
 
@@ -34,15 +34,3 @@ if status is-interactive
     zoxide init fish | source
     starship init fish | source
 end
-
-# Added by OrbStack: command-line tools and integration
-# This won't be added again if you remove it.
-source ~/.orbstack/shell/init2.fish 2>/dev/null || :
-
-# opencode
-fish_add_path /Users/luan/.opencode/bin
-
-# git-grove shell integration
-source /Users/luan/.local/share/git-grove/git-grove-auto.fish
-
-alias claude="/Users/luan/.claude/local/claude"
