@@ -1,83 +1,102 @@
 [include]
-path = ~/dotfiles/themes.gitconfig
+  path = ~/dotfiles/themes.gitconfig
 
 [user]
-email = git@luan.sh
-name = Luan Santos
+  email = git@luan.sh
+  name = Luan Santos
 
 [color]
-ui = true
+  ui = true
 
 [color "branch"]
-current = yellow reverse
-local = yellow
-remote = green
+  current = yellow reverse
+  local = yellow
+  remote = green
 
 [color "diff"]
-meta = yellow bold
-frag = magenta bold
-old = red bold
-new = green bold
+  meta = yellow bold
+  frag = magenta bold
+  old = red bold
+  new = green bold
 
 [alias]
-ci = commit
-commit = commit
-co = checkout
-cp = cherry-pick -x
-st = status
+  ci = commit
+  commit = commit
+  co = checkout
+  cp = cherry-pick -x
+  st = status
 
-l = log --graph --abbrev-commit --date=relative --decorate --pretty=format:\"%C(yellow)%h%C(bold yellow)%d%Creset %C(blue)%s %C(green)(%ad)%Creset %C(magenta) [%an]%Creset \"
-lg = log --graph --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'
-changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
-ignore = "!f() { [ -z \"$1\" ] && echo \"Usage: git ignore <pattern>\" && exit 1; gitignore=\"$(git rev-parse --show-toplevel 2>/dev/null)/.gitignore\"; [ ! -f \"$gitignore\" ] && touch \"$gitignore\"; grep -Fxq \"$1\" \"$gitignore\" || echo \"$1\" >> \"$gitignore\"; }; f"
+  l = log --graph --abbrev-commit --date=relative --decorate --pretty=format:\"%C(yellow)%h%C(bold yellow)%d%Creset %C(blue)%s %C(green)(%ad)%Creset %C(magenta) [%an]%Creset \"
+  lg = log --graph --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'
+  changes = log --pretty=format:\"%h %cr %cn %Cgreen%s%Creset\" --name-status
+  ignore = "!f() { [ -z \"$1\" ] && echo \"Usage: git ignore <pattern>\" && exit 1; gitignore=\"$(git rev-parse --show-toplevel 2>/dev/null)/.gitignore\"; [ ! -f \"$gitignore\" ] && touch \"$gitignore\"; grep -Fxq \"$1\" \"$gitignore\" || echo \"$1\" >> \"$gitignore\"; }; f"
 
-fixup = commit --amend --no-edit
+  fixup = commit --amend --no-edit
+
+  # git town
+  sync = town sync
+  sw = town switch
+  append = town append
+  compress = town compress
+  contribute = town contribute
+  diff-parent = town diff-parent
+  hack = town hack
+  delete = town delete
+  observe = town observe
+  park = town park
+  prepend = town prepend
+  propose = town propose
+  rename = town rename
+  repo = town repo
+  set-parent = town set-parent
 
 [merge]
-summary = true
-verbosity = 1
-conflictstyle = diff3
+  summary = true
+  verbosity = 1
+  conflictstyle = diff3
 
 [apply]
-whitespace = nowarn
+  whitespace = nowarn
 
 [branch]
-autosetupmerge = true
+  autosetupmerge = true
 
 [push]
-default = tracking
-recurseSubmodules=check
+  default = tracking
+  recurseSubmodules=check
 
 [core]
-autocrlf = false
-editor = vim
-excludesfile = ~/luan/.gitignore_global
-pager = delta
+  autocrlf = false
+  editor = vim
+  excludesfile = ~/luan/.gitignore_global
+  pager = delta
 
 [interactive]
-diffFilter = delta --color-only
+  diffFilter = delta --color-only
 
 [add.interactive]
-useBuiltin = false # required for git 2.37.0
+  useBuiltin = false # required for git 2.37.0
 
 [delta]
-syntax-theme = TwoDark
-navigate = true    # use n and N to move between diff sections
-light = false      # set to true if you're in a terminal w/ a light background color (e.g. the default macOS terminal)
-side-by-side = false
+  syntax-theme = TwoDark
+  navigate = true    # use n and N to move between diff sections
+  light = false      # set to true if you're in a terminal w/ a light background color (e.g. the default macOS terminal)
+  side-by-side = false
 
 [advice]
-statusHints = false
+  statusHints = false
 
 [diff]
-colorMoved = default
+  colorMoved = default
 
 [rerere]
-enabled = true
-autoupdate = true
+  enabled = true
+  autoupdate = true
 
 [submodule]
-fetchJobs = 16
+  fetchJobs = 16
 
-[hub]
-protocol = https
+[rebase]
+  updateRefs = true
+
+# vim: ft=gitconfig
