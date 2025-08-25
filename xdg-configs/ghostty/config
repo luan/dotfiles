@@ -23,89 +23,89 @@ macos-option-as-alt = left
 
 keybind = clear
 
-# {{{ final bindings
+# # {{{ final bindings
+#
+# # scrollback navigation
+# keybind = cmd+shift+k=jump_to_prompt:-1
+# keybind = cmd+shift+j=jump_to_prompt:+1
+#
+# keybind = alt+shift+left_bracket=write_scrollback_file:open
+#
+# keybind = cmd+physical:one=goto_tab:1
+# keybind = cmd+physical:two=goto_tab:2
+# keybind = cmd+physical:three=goto_tab:3
+# keybind = cmd+physical:four=goto_tab:4
+# keybind = cmd+physical:five=goto_tab:5
+# keybind = cmd+physical:six=goto_tab:6
+# keybind = cmd+physical:seven=goto_tab:7
+# keybind = cmd+physical:eight=goto_tab:8
+# keybind = cmd+physical:nine=last_tab
+#
+# keybind = cmd+shift+left_bracket=previous_tab
+# keybind = cmd+shift+right_bracket=next_tab
+#
+# keybind = cmd+right=text:\x05
+# keybind = cmd+left=text:\x01
+# keybind = cmd+backspace=text:\x15
+#
+# keybind = alt+right=esc:f
+# keybind = alt+left=esc:b
+#
+# keybind = shift+up=adjust_selection:up
+# keybind = shift+down=adjust_selection:down
+# keybind = shift+left=adjust_selection:left
+# keybind = shift+right=adjust_selection:right
+# keybind = shift+page_up=adjust_selection:page_up
+# keybind = shift+page_down=adjust_selection:page_down
+# keybind = shift+home=adjust_selection:home
+# keybind = shift+end=adjust_selection:end
+# # }}} final bindngs
 
-# scrollback navigation
-keybind = cmd+shift+k=jump_to_prompt:-1
-keybind = cmd+shift+j=jump_to_prompt:+1
-
-keybind = alt+shift+left_bracket=write_scrollback_file:open
-
-keybind = cmd+physical:one=goto_tab:1
-keybind = cmd+physical:two=goto_tab:2
-keybind = cmd+physical:three=goto_tab:3
-keybind = cmd+physical:four=goto_tab:4
-keybind = cmd+physical:five=goto_tab:5
-keybind = cmd+physical:six=goto_tab:6
-keybind = cmd+physical:seven=goto_tab:7
-keybind = cmd+physical:eight=goto_tab:8
-keybind = cmd+physical:nine=last_tab
-
-keybind = cmd+shift+left_bracket=previous_tab
-keybind = cmd+shift+right_bracket=next_tab
-
-keybind = cmd+right=text:\x05
-keybind = cmd+left=text:\x01
-keybind = cmd+backspace=text:\x15
-
-keybind = alt+right=esc:f
-keybind = alt+left=esc:b
-
-keybind = shift+up=adjust_selection:up
-keybind = shift+down=adjust_selection:down
-keybind = shift+left=adjust_selection:left
-keybind = shift+right=adjust_selection:right
-keybind = shift+page_up=adjust_selection:page_up
-keybind = shift+page_down=adjust_selection:page_down
-keybind = shift+home=adjust_selection:home
-keybind = shift+end=adjust_selection:end
-# }}} final bindngs
-
-# {{{ tmux emulation
-# Pane navigation (M-H/J/K/L from tmux)
-keybind = alt+shift+h=goto_split:left
-keybind = alt+shift+j=goto_split:down  
-keybind = alt+shift+k=goto_split:up
-keybind = alt+shift+l=goto_split:right
-keybind = alt+shift+o=goto_split:next
-
-# Window management (M-N/P/Tab from tmux)
-keybind = alt+shift+n=next_tab
-keybind = alt+shift+p=previous_tab
-
-# Pane/Split controls (from tmux prefix-v/-)
-keybind = ctrl+space>v=new_split:right
-keybind = ctrl+space>s=new_split:down
-keybind = ctrl+space>c=new_tab
-
-# Pane management (M-X/Z from tmux)
-keybind = ctrl+space>x=close_surface
-keybind = alt+shift+z=toggle_split_zoom
-
-# Copy mode emulation (C-M-[ from tmux)
-keybind = ctrl+alt+left_bracket=select_all
-keybind = ctrl+alt+right_bracket=paste_from_clipboard
-
-# tmux-yank plugin emulation (enhanced clipboard)
-keybind = ctrl+space>equal=paste_from_clipboard
-
-# tmux-thumbs plugin emulation (hint mode for URLs/text)
-keybind = ctrl+space>f=toggle_quick_terminal
-
-# tmux-fzf plugin emulation (fuzzy finding)
-keybind = ctrl+space>ctrl+shift+f=toggle_quick_terminal
-
-# tmux-pain-control plugin emulation (pane resizing)
-keybind = ctrl+shift+h=resize_split:left,5
-keybind = ctrl+shift+j=resize_split:down,5
-keybind = ctrl+shift+k=resize_split:up,5
-keybind = ctrl+shift+l=resize_split:right,5
-
-# Additional tmux bindings
-keybind = alt+shift+backslash=equalize_splits
-keybind = alt+shift+c=clear_screen
-keybind = alt+shift+r=reload_config
-# }}} tmux emulation
+# # {{{ tmux emulation
+# # Pane navigation (M-H/J/K/L from tmux)
+# keybind = alt+shift+h=goto_split:left
+# keybind = alt+shift+j=goto_split:down  
+# keybind = alt+shift+k=goto_split:up
+# keybind = alt+shift+l=goto_split:right
+# keybind = alt+shift+o=goto_split:next
+#
+# # Window management (M-N/P/Tab from tmux)
+# keybind = alt+shift+n=next_tab
+# keybind = alt+shift+p=previous_tab
+#
+# # Pane/Split controls (from tmux prefix-v/-)
+# keybind = ctrl+space>v=new_split:right
+# keybind = ctrl+space>s=new_split:down
+# keybind = ctrl+space>c=new_tab
+#
+# # Pane management (M-X/Z from tmux)
+# keybind = ctrl+space>x=close_surface
+# keybind = alt+shift+z=toggle_split_zoom
+#
+# # Copy mode emulation (C-M-[ from tmux)
+# keybind = ctrl+alt+left_bracket=select_all
+# keybind = ctrl+alt+right_bracket=paste_from_clipboard
+#
+# # tmux-yank plugin emulation (enhanced clipboard)
+# keybind = ctrl+space>equal=paste_from_clipboard
+#
+# # tmux-thumbs plugin emulation (hint mode for URLs/text)
+# keybind = ctrl+space>f=toggle_quick_terminal
+#
+# # tmux-fzf plugin emulation (fuzzy finding)
+# keybind = ctrl+space>ctrl+shift+f=toggle_quick_terminal
+#
+# # tmux-pain-control plugin emulation (pane resizing)
+# keybind = ctrl+shift+h=resize_split:left,5
+# keybind = ctrl+shift+j=resize_split:down,5
+# keybind = ctrl+shift+k=resize_split:up,5
+# keybind = ctrl+shift+l=resize_split:right,5
+#
+# # Additional tmux bindings
+# keybind = alt+shift+backslash=equalize_splits
+# keybind = alt+shift+c=clear_screen
+# keybind = alt+shift+r=reload_config
+# # }}} tmux emulation
 
 keybind = super+n=new_window
 keybind = super+shift+w=close_window
@@ -120,21 +120,21 @@ keybind = super+equal=increase_font_size:1
 keybind = super+plus=increase_font_size:1
 keybind = super+zero=reset_font_size
 
-keybind = super+k=clear_screen
-keybind = super+alt+i=inspector:toggle
+# keybind = super+k=clear_screen
+# keybind = super+alt+i=inspector:toggle
 
-keybind = super+c=copy_to_clipboard
-keybind = super+v=paste_from_clipboard
+keybind = performable:super+c=copy_to_clipboard
+keybind = performable:super+v=paste_from_clipboard
 
 # Valid values:
 # 
 #   * `true`
 #   * `false` - windows won't have native decorations, i.e. titlebar and
 #      borders. On MacOS this also disables tabs and tab overview.
-window-decoration = true
+window-decoration = false
 
 macos-titlebar-style = tabs
 
 copy-on-select = false
 keybind = shift+enter=text:\n
-# vi: ft=toml
+# vim: ft=toml fdm=marker
