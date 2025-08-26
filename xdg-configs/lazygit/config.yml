@@ -8,18 +8,18 @@ gui:
     "Luan Santos": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
   branchColorPatterns:
     "^luan/": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
-  spinner:
-    # The frames of the spinner animation.
-    frames:
-      - 
-      - 
-      - 
-      - 
-      - 
-      - 
-
-    # The "speed" of the spinner in milliseconds.
-    rate: 50
+  # spinner:
+  #   # The frames of the spinner animation.
+  #   frames:
+  #     - 
+  #     - 
+  #     - 
+  #     - 
+  #     - 
+  #     - 
+  #
+  #   # The "speed" of the spinner in milliseconds.
+  #   rate: 50
 
 git:
   overrideGpg: true
@@ -27,3 +27,7 @@ git:
   paging:
     colorArg: always
     pager: delta -s --dark --paging=never --24-bit-color=never
+
+keybinding:
+  universal:
+    openFile: O
