@@ -39,11 +39,4 @@ end
 # This won't be added again if you remove it.
 source ~/.orbstack/shell/init2.fish 2>/dev/null || :
 
-# opencode
-fish_add_path /Users/luan/.opencode/bin
-
-# git-grove shell integration
-source /Users/luan/.local/share/git-grove/git-grove-auto.fish
-
-alias claude="/Users/luan/.claude/local/claude"
 alias view="nvim -R"
