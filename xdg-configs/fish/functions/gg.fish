@@ -55,11 +55,11 @@ function gg_cleanup_stale_locks --description "Remove stale Git index.lock files
             set -l age (math "$current_time - $file_time")
             
             if test $age -gt 300  # 5 minutes
-                test "$verbose" = true; and echo "[CLEANUP] Removing stale index.lock (age: ${age}s)"
+                test "$verbose" = true; and echo "[CLEANUP] Removing stale index.lock (age: $age"s")"
                 rm -f "$lock_file"
                 return 0
             else
-                test "$verbose" = true; and echo "[WAIT] index.lock exists but is recent (age: ${age}s), waiting..."
+                test "$verbose" = true; and echo "[WAIT] index.lock exists but is recent (age: $age"s"), waiting..."
                 sleep 1
                 return 1  # Signal that we should retry
             end
@@ -114,7 +114,7 @@ end
 
 function gg --description "Git Grove - Manage git worktrees as a pool of detached workspaces"
     # Setup cleanup on exit
-    function __gg_cleanup_on_exit --on-signal INT TERM
+    function __gg_cleanup_on_exit --on-signal INT --on-signal TERM
         # Clean up any temporary files
         rm -f /tmp/gg_*.log
         

@@ -27,3 +27,4 @@ bin/__pycache__/
 **/zed/embeddings
 xdg-configs/kitty/logs/
 xdg-configs/fish/fish_variables
+.claude/settings.local.json
