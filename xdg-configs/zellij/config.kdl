@@ -48,7 +48,7 @@ keybinds clear-defaults=true {
     bind "Esc" { SwitchToMode "Normal"; }
 
     bind "v" { NewPane "Right"; SwitchToMode "Normal"; }
-    bind "s" { NewPane "Down"; SwitchToMode "Normal"; }
+    bind "-" { NewPane "Down"; SwitchToMode "Normal"; }
 
     // Window management
     bind "c" { NewTab; SwitchToMode "Normal"; }
@@ -77,9 +77,6 @@ keybinds clear-defaults=true {
     bind "J" { Resize "Down"; }
     bind "K" { Resize "Up"; }
     bind "L" { Resize "Right"; }
-    bind "=" { Resize "Increase"; }
-    bind "+" { Resize "Increase"; }
-    bind "-" { Resize "Decrease"; }
 
     // Session management
     bind "d" { Detach; }
