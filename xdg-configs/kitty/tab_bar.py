@@ -1,15 +1,175 @@
-"""
-Beautiful Custom Tab Bar for Kitty
-Inspired by the best examples from GitHub discussions
-Features: icons, indicators, clean design, tmux-like appearance
-"""
+import json
+import subprocess
+from collections import defaultdict
+from datetime import datetime, timezone
 
-import datetime
-from kitty.fast_data_types import Screen, get_options
+from kitty.boss import get_boss
+from kitty.fast_data_types import Screen, add_timer
+from kitty.rgb import Color
 from kitty.tab_bar import (
-    DrawData, ExtraData, Formatter, TabBarData, as_rgb, draw_title
+    DrawData,
+    ExtraData,
+    Formatter,
+    TabBarData,
+    as_rgb,
+    draw_attributed_string,
+    draw_title,
 )
 from kitty.utils import color_as_int
+
+timer_id = None
+
+ICON = "  "
+RIGHT_MARGIN = 1
+REFRESH_TIME = 15
+
+icon_fg = as_rgb(color_as_int(Color(255, 250, 205)))
+icon_bg = as_rgb(color_as_int(Color(47, 61, 68)))
+# OR icon_bg = as_rgb(0x2f3d44)
+bat_text_color = as_rgb(0x999F93)
+clock_color = as_rgb(0x7FBBB3)
+dnd_color = as_rgb(0x465258)
+sep_color = as_rgb(0x999F93)
+utc_color = as_rgb(color_as_int(Color(113, 115, 116)))
+
+
+# cells = [
+#     (Color(113, 115, 116), dnd),
+#     (Color(135, 192, 149), clock),
+#     (Color(113, 115, 116), utc),
+# ]
+
+
+def calc_draw_spaces(*args) -> int:
+    length = 0
+    for i in args:
+        if not isinstance(i, str):
+            i = str(i)
+        length += len(i)
+    return length
+
+
+def _draw_icon(screen: Screen, index: int) -> int:
+    if index != 1:
+        return 0
+
+    fg, bg = screen.cursor.fg, screen.cursor.bg
+    screen.cursor.fg = icon_fg
+    screen.cursor.bg = icon_bg
+    screen.draw(ICON)
+    screen.cursor.fg, screen.cursor.bg = fg, bg
+    screen.cursor.x = len(ICON)
+    return screen.cursor.x
+
+
+def _draw_left_status(
+    draw_data: DrawData,
+    screen: Screen,
+    tab: TabBarData,
+    before: int,
+    max_title_length: int,
+    index: int,
+    is_last: bool,
+    extra_data: ExtraData,
+) -> int:
+    # print(extra_data)
+    if draw_data.leading_spaces:
+        screen.draw(" " * draw_data.leading_spaces)
+
+    # TODO: https://github.com/kovidgoyal/kitty/discussions/4447#discussioncomment-2463083
+    # tm = get_boss().active_tab_manager
+    #     if tm is not None:
+    #         w = tm.active_window
+    #         if w is not None:
+    #             cwd = w.cwd_of_child or ''
+    #             log_error(cwd)
+
+    draw_title(draw_data, screen, tab, index)
+    trailing_spaces = min(max_title_length - 1, draw_data.trailing_spaces)
+    max_title_length -= trailing_spaces
+    extra = screen.cursor.x - before - max_title_length
+    if extra > 0:
+        screen.cursor.x -= extra + 1
+        screen.draw("…")
+    if trailing_spaces:
+        screen.draw(" " * trailing_spaces)
+    end = screen.cursor.x
+    screen.cursor.bold = screen.cursor.italic = False
+    screen.cursor.fg = 0
+    if not is_last:
+        screen.cursor.bg = as_rgb(color_as_int(draw_data.inactive_bg))
+        screen.draw(draw_data.sep)
+    screen.cursor.bg = 0
+    return end
+
+
+def _get_dnd_status():
+    result = subprocess.run("~/.dotfiles/bin/dnd -k", shell=True, capture_output=True)
+    status = ""
+
+    if result.stderr:
+        raise subprocess.CalledProcessError(
+            returncode=result.returncode, cmd=result.args, stderr=result.stderr
+        )
+
+    if result.stdout:
+        status = result.stdout.decode("utf-8").strip()
+
+    return status
+
+
+# more handy kitty tab_bar things:
+# REF: https://github.com/kovidgoyal/kitty/discussions/4447#discussioncomment-2183440
+def _draw_right_status(screen: Screen, is_last: bool) -> int:
+    if not is_last:
+        return 0
+    # global timer_id
+    # if timer_id is None:
+    #     timer_id = add_timer(_redraw_tab_bar, REFRESH_TIME, True)
+
+    draw_attributed_string(Formatter.reset, screen)
+
+    clock = datetime.now().strftime("%H:%M")
+    utc = datetime.now(timezone.utc).strftime(" (UTC %H:%M)")
+    dnd = _get_dnd_status()
+
+    cells = []
+    if dnd != "":
+        cells.append((dnd_color, dnd))
+        cells.append((sep_color, " ⋮ "))
+
+    cells.append((clock_color, clock))
+    cells.append((utc_color, utc))
+
+    # right_status_length = calc_draw_spaces(dnd + " " + clock + " " + utc)
+
+    right_status_length = RIGHT_MARGIN
+    for cell in cells:
+        right_status_length += len(str(cell[1]))
+
+    draw_spaces = screen.columns - screen.cursor.x - right_status_length
+
+    if draw_spaces > 0:
+        screen.draw(" " * draw_spaces)
+
+    screen.cursor.fg = 0
+    for color, status in cells:
+        screen.cursor.fg = color  # as_rgb(color_as_int(color))
+        screen.draw(status)
+    screen.cursor.bg = 0
+
+    if screen.columns - screen.cursor.x > right_status_length:
+        screen.cursor.x = screen.columns - right_status_length
+
+    return screen.cursor.x
+
+
+# REF: https://github.com/kovidgoyal/kitty/discussions/4447#discussioncomment-1940795
+# def _redraw_tab_bar():
+#     tm = get_boss().active_tab_manager
+#     if tm is not None:
+#         tm.mark_tab_bar_dirty()
+
 
 def draw_tab(
     draw_data: DrawData,
@@ -21,221 +181,280 @@ def draw_tab(
     is_last: bool,
     extra_data: ExtraData,
 ) -> int:
-    """
-    Custom tab drawing function with beautiful styling
-    """
-    orig_bg = screen.cursor.bg
-    orig_fg = screen.cursor.fg
-    
-    # Get theme colors
-    opts = get_options()
-    
-    # Color scheme (Tokyo Night inspired)
-    if tab.is_active:
-        # Active tab colors
-        bg = as_rgb(color_as_int(opts.color7))  # Light foreground
-        fg = as_rgb(color_as_int(opts.background))  # Dark background
-        accent = as_rgb(color_as_int(opts.color4))  # Blue accent
-    else:
-        # Inactive tab colors  
-        bg = as_rgb(color_as_int(opts.color8))  # Dim
-        fg = as_rgb(color_as_int(opts.color7))  # Light
-        accent = as_rgb(color_as_int(opts.color8))  # Dim accent
-    
-    # Tab separator and styling
-    separator = ""  # Powerline separator
-    left_sep = ""
-    right_sep = ""
-    
-    # Set colors
-    screen.cursor.bg = bg
-    screen.cursor.fg = fg
-    
-    # Draw left separator for non-first tabs
-    if index > 0:
-        screen.cursor.bg = orig_bg
-        screen.cursor.fg = bg
-        screen.draw("")
-        screen.cursor.bg = bg
-        screen.cursor.fg = fg
-    
-    # Activity and bell indicators
-    bell_symbol = " " if tab.has_activity else ""
-    
-    # Get window count for tab
-    num_windows = tab.num_windows
-    window_indicator = f"[{num_windows}]" if num_windows > 1 else ""
-    
-    # Create title with smart truncation
-    title = tab.title
-    max_title_len = max_title_length - 15  # Account for decorations and padding
-    if len(title) > max_title_len:
-        # Smart truncation - keep beginning and end
-        if max_title_len > 10:
-            mid = max_title_len // 2 - 2
-            title = title[:mid] + "…" + title[-(max_title_len - mid - 1):]
-        else:
-            title = title[:max_title_len-1] + "…"
-    
-    # Smart tab icon based on content and process
-    icon = ""
-    title_lower = title.lower()
-    
-    # Process-based icons
-    if any(x in title_lower for x in ["nvim", "vim", "vi ", "neovim"]):
-        icon = " "
-    elif any(x in title_lower for x in ["git", "tig", "lazygit"]):
-        icon = " "
-    elif any(x in title_lower for x in ["ssh", "scp", "sftp"]):
-        icon = " "
-    elif any(x in title_lower for x in ["node", "npm", "yarn", "pnpm"]):
-        icon = " "
-    elif any(x in title_lower for x in ["python", "python3", "pip", "conda"]):
-        icon = " "
-    elif any(x in title_lower for x in ["docker", "docker-compose"]):
-        icon = " "
-    elif any(x in title_lower for x in ["cargo", "rust"]):
-        icon = " "
-    elif any(x in title_lower for x in ["go ", "golang"]):
-        icon = " "
-    elif any(x in title_lower for x in ["mysql", "psql", "sqlite"]):
-        icon = " "
-    elif any(x in title_lower for x in ["fish", "zsh", "bash", "sh"]):
-        icon = " "
-    elif any(x in title_lower for x in ["htop", "top", "btop"]):
-        icon = " "
-    else:
-        icon = " "
-    
-    # Format tab content with better spacing
-    tab_content = f" {icon} {index + 1}:{title}"
-    if window_indicator:
-        tab_content += f" {window_indicator}"
-    if bell_symbol:
-        tab_content += bell_symbol
-    tab_content += " "
-    
-    # Draw the tab content
-    screen.draw(tab_content)
-    
-    # Draw right separator
-    if not is_last:
-        screen.cursor.fg = bg
-        screen.cursor.bg = orig_bg
-        screen.draw("")
-    
-    # Reset colors
-    screen.cursor.bg = orig_bg
-    screen.cursor.fg = orig_fg
-    
-    return screen.cursor.x
-
-
-def draw_right_status(screen: Screen, is_last: bool) -> int:
-    """
-    Draw beautiful right status area with system information
-    """
-    if not is_last:
-        return screen.cursor.x
-    
-    opts = get_options()
-    
-    # Get current time with better formatting
-    now = datetime.datetime.now()
-    time_str = now.strftime("%H:%M")
-    date_str = now.strftime("%a %d")
-    
-    # Battery status (macOS specific)
-    try:
-        import subprocess
-        battery_result = subprocess.run(
-            ["pmset", "-g", "batt"], 
-            capture_output=True, 
-            text=True, 
-            timeout=0.5
-        )
-        if battery_result.returncode == 0:
-            battery_line = battery_result.stdout.split('\n')[1]
-            if "%" in battery_line:
-                battery_percent = battery_line.split('%')[0].split()[-1]
-                is_charging = "AC Power" in battery_line
-                
-                # Battery icon based on level
-                level = int(battery_percent)
-                if is_charging:
-                    battery_icon = " "
-                elif level > 80:
-                    battery_icon = " "
-                elif level > 60:
-                    battery_icon = " "
-                elif level > 40:
-                    battery_icon = " "
-                elif level > 20:
-                    battery_icon = " "
-                else:
-                    battery_icon = " "
-                
-                battery_str = f"{battery_icon} {battery_percent}%"
-            else:
-                battery_str = ""
-        else:
-            battery_str = ""
-    except:
-        battery_str = ""
-    
-    # Build status components
-    components = []
-    
-    if battery_str:
-        components.append(("battery", battery_str, opts.color3))  # Yellow for battery
-    
-    components.append(("date", f" {date_str}", opts.color6))  # Cyan for date
-    components.append(("time", f" {time_str}", opts.color4))  # Blue for time
-    
-    # Calculate total length
-    total_length = sum(len(comp[1]) for comp in components) + len(components) - 1  # separators
-    
-    # Right-align the status
-    padding = " " * max(0, screen.columns - screen.cursor.x - total_length - 2)
-    screen.draw(padding)
-    
-    # Draw each component
-    for i, (name, text, color) in enumerate(components):
-        if i > 0:
-            # Draw separator
-            screen.cursor.fg = as_rgb(color_as_int(opts.color8))  # Dim separator
-            screen.draw("│")
-        
-        # Draw component
-        screen.cursor.fg = as_rgb(color_as_int(color))
-        screen.draw(text)
-    
-    # Add final padding
-    screen.draw(" ")
-    
-    return screen.cursor.x
-
-
-# Custom tab bar configuration
-def draw_tab_with_powerline_separator(
-    draw_data: DrawData,
-    screen: Screen,
-    tab: TabBarData,
-    before: int,
-    max_title_length: int,
-    index: int,
-    is_last: bool,
-    extra_data: ExtraData,
-) -> int:
-    """
-    Main tab drawing function with powerline separators
-    """
-    end = draw_tab(
-        draw_data, screen, tab, before, max_title_length, index, is_last, extra_data
+    _draw_icon(screen, index)
+    _draw_left_status(
+        draw_data,
+        screen,
+        tab,
+        before,
+        max_title_length,
+        index,
+        is_last,
+        extra_data,
     )
-    
-    # Draw right status on the last tab
-    if is_last:
-        draw_right_status(screen, is_last)
-    
-    return end
+    _draw_right_status(
+        screen,
+        is_last,
+    )
+
+    return screen.cursor.x
+
+
+# # pyright: reportMissingImports=false
+
+# # REF: https://github.com/kovidgoyal/kitty/discussions/4447#discussioncomment-3240635
+# import subprocess
+# from datetime import datetime, timezone
+# from pprint import pprint
+
+# # from kitty.boss import get_boss
+# from kitty.fast_data_types import Screen, add_timer, get_boss, get_options
+# from kitty.rgb import Color
+# from kitty.tab_bar import (
+#     DrawData,
+#     ExtraData,
+#     Formatter,
+#     TabBarData,
+#     as_rgb,
+#     draw_attributed_string,
+#     draw_title,
+# )
+# from kitty.utils import color_as_int
+
+# opts = get_options()
+# icon_fg = as_rgb(color_as_int(Color(255, 250, 205)))
+# icon_bg = as_rgb(color_as_int(Color(47, 61, 68)))
+# # OR icon_bg = as_rgb(0x2f3d44)
+# bat_text_color = as_rgb(0x999F93)
+# clock_color = as_rgb(0x7FBBB3)
+# utc_color = as_rgb(color_as_int(Color(113, 115, 116)))
+
+# # BATTERY_CMD = "pmset -g batt | awk -F '; *' 'NR==2 { print $2 }'"
+# SEPARATOR_SYMBOL, SOFT_SEPARATOR_SYMBOL = ("", "")
+# RIGHT_MARGIN = 1
+# REFRESH_TIME = 5
+# ICON = "  "
+# UNPLUGGED_ICONS = {
+#     10: "",
+#     20: "",
+#     30: "",
+#     40: "",
+#     50: "",
+#     60: "",
+#     70: "",
+#     80: "",
+#     90: "",
+#     100: "",
+# }
+# PLUGGED_ICONS = {
+#     1: "",
+# }
+# UNPLUGGED_COLORS = {
+#     15: as_rgb(color_as_int(opts.color1)),
+#     16: as_rgb(color_as_int(opts.color15)),
+# }
+# PLUGGED_COLORS = {
+#     15: as_rgb(color_as_int(opts.color1)),
+#     16: as_rgb(color_as_int(opts.color6)),
+#     99: as_rgb(color_as_int(opts.color6)),
+#     100: as_rgb(0xA7C080),
+# }
+
+
+# def _draw_icon(screen: Screen, index: int) -> int:
+#     if index != 1:
+#         return 0
+#     fg, bg = screen.cursor.fg, screen.cursor.bg
+#     screen.cursor.fg = icon_fg
+#     screen.cursor.bg = icon_bg
+#     screen.draw(ICON)
+#     screen.cursor.fg, screen.cursor.bg = fg, bg
+#     screen.cursor.x = len(ICON)
+#     return screen.cursor.x
+
+
+# def _draw_left_status(
+#     draw_data: DrawData,
+#     screen: Screen,
+#     tab: TabBarData,
+#     before: int,
+#     max_title_length: int,
+#     index: int,
+#     is_last: bool,
+#     extra_data: ExtraData,
+# ) -> int:
+#     if screen.cursor.x >= screen.columns - right_status_length:
+#         return screen.cursor.x
+#     tab_bg = screen.cursor.bg
+#     tab_fg = screen.cursor.fg
+#     default_bg = as_rgb(int(draw_data.default_bg))
+#     if extra_data.next_tab:
+#         next_tab_bg = as_rgb(draw_data.tab_bg(extra_data.next_tab))
+#         needs_soft_separator = next_tab_bg == tab_bg
+#     else:
+#         next_tab_bg = default_bg
+#         needs_soft_separator = False
+#     if screen.cursor.x <= len(ICON):
+#         screen.cursor.x = len(ICON)
+#     # screen.draw(" ")
+#     screen.cursor.bg = tab_bg
+
+#     # @REF: https://github.com/kovidgoyal/kitty/discussions/4447#discussioncomment-3459140
+#     # title = f"{opts.os_window_class}{tab.title}"
+#     # tab = TabBarData(
+#     #     title,
+#     #     tab.is_active,
+#     #     tab.needs_attention,
+#     #     tab.num_windows,
+#     #     tab.num_window_groups,
+#     #     tab.layout_name,
+#     #     tab.has_activity_since_last_focus,
+#     #     tab.active_fg,
+#     #     tab.active_bg,
+#     #     tab.inactive_fg,
+#     #     tab.inactive_bg,
+#     # )
+#     # pprint(dir(tab))
+#     # pprint(vars(screen))
+#     draw_title(draw_data, screen, tab, index)
+
+#     if not needs_soft_separator:
+#         # screen.draw(" ")
+#         screen.cursor.fg = tab_bg
+#         screen.cursor.bg = next_tab_bg
+#         # screen.draw(SEPARATOR_SYMBOL)
+#     else:
+#         prev_fg = screen.cursor.fg
+#         if tab_bg == tab_fg:
+#             screen.cursor.fg = default_bg
+#         elif tab_bg != default_bg:
+#             c1 = draw_data.inactive_bg.contrast(draw_data.default_bg)
+#             c2 = draw_data.inactive_bg.contrast(draw_data.inactive_fg)
+#             if c1 < c2:
+#                 screen.cursor.fg = default_bg
+#         # screen.draw(" " + SOFT_SEPARATOR_SYMBOL)
+#         screen.cursor.fg = prev_fg
+#     end = screen.cursor.x
+#     return end
+
+
+# def _draw_right_status(screen: Screen, is_last: bool, cells: list) -> int:
+#     if not is_last:
+#         return 0
+#     draw_attributed_string(Formatter.reset, screen)
+#     screen.cursor.x = screen.columns - right_status_length
+#     screen.cursor.fg = 0
+#     for color, status in cells:
+#         screen.cursor.fg = color
+#         screen.draw(status)
+#     screen.cursor.bg = 0
+#     return screen.cursor.x
+
+
+# def _redraw_tab_bar(_):
+#     tm = get_boss().active_tab_manager
+#     if tm is not None:
+#         tm.mark_tab_bar_dirty()
+
+
+# def get_battery_cells() -> list:
+#     s_result = subprocess.run(
+#         "~/.dotfiles/bin/btry -s", shell=True, capture_output=True
+#     )
+#     status = ""
+
+#     if s_result.stderr:
+#         raise subprocess.CalledProcessError(
+#             returncode=s_result.returncode, cmd=s_result.args, stderr=s_result.stderr
+#         )
+
+#     if s_result.stdout:
+#         status = s_result.stdout.decode("utf-8").strip()
+
+#     p_result = subprocess.run(
+#         "~/.dotfiles/bin/btry -p", shell=True, capture_output=True
+#     )
+#     percent = ""
+
+#     if p_result.stderr:
+#         raise subprocess.CalledProcessError(
+#             returncode=p_result.returncode, cmd=p_result.args, stderr=p_result.stderr
+#         )
+
+#     if p_result.stdout:
+#         percent = int(p_result.stdout.decode("utf-8").strip())
+
+#     if status == "Discharging \n":
+#         # TODO: declare the lambda once and don't repeat the code
+#         icon_color = UNPLUGGED_COLORS[
+#             min(UNPLUGGED_COLORS.keys(), key=lambda x: abs(x - percent))
+#         ]
+#         icon = UNPLUGGED_ICONS[
+#             min(UNPLUGGED_ICONS.keys(), key=lambda x: abs(x - percent))
+#         ]
+#     elif status == "Not charging \n":
+#         icon_color = UNPLUGGED_COLORS[
+#             min(UNPLUGGED_COLORS.keys(), key=lambda x: abs(x - percent))
+#         ]
+#         icon = PLUGGED_ICONS[min(PLUGGED_ICONS.keys(), key=lambda x: abs(x - percent))]
+#     else:
+#         icon_color = PLUGGED_COLORS[
+#             min(PLUGGED_COLORS.keys(), key=lambda x: abs(x - percent))
+#         ]
+#         icon = PLUGGED_ICONS[min(PLUGGED_ICONS.keys(), key=lambda x: abs(x - percent))]
+
+#     percent_cell = (bat_text_color, " " + str(percent) + "%")
+#     icon_cell = (icon_color, icon)
+#     return [icon_cell, percent_cell]
+
+
+# timer_id = None
+# right_status_length = -1
+
+
+# def draw_tab(
+#     draw_data: DrawData,
+#     screen: Screen,
+#     tab: TabBarData,
+#     before: int,
+#     max_title_length: int,
+#     index: int,
+#     is_last: bool,
+#     extra_data: ExtraData,
+# ) -> int:
+#     # pprint(vars(get_boss()))
+#     global timer_id
+#     global right_status_length
+#     # if timer_id is None:
+#     #     timer_id = add_timer(_redraw_tab_bar, REFRESH_TIME, True)
+
+#     date = datetime.now().strftime("%d.%m.%Y")
+#     clock = datetime.now().strftime("%H:%M")
+#     utc = datetime.now(timezone.utc).strftime(" (UTC %H:%M)")
+
+#     cells = get_battery_cells()
+#     cells.append((as_rgb(color_as_int(opts.color255)), " ⋮ "))
+#     cells.append((clock_color, clock))
+#     cells.append((utc_color, utc))
+
+#     right_status_length = RIGHT_MARGIN
+#     for cell in cells:
+#         right_status_length += len(str(cell[1]))
+
+#     _draw_icon(screen, index)
+#     _draw_left_status(
+#         draw_data,
+#         screen,
+#         tab,
+#         before,
+#         max_title_length,
+#         index,
+#         is_last,
+#         extra_data,
+#     )
+#     _draw_right_status(
+#         screen,
+#         is_last,
+#         cells,
+#     )
+#     return screen.cursor.x
