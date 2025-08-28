@@ -2,7 +2,7 @@ theme = tokyonight
 
 desktop-notifications = true
 
-font-family = "IosevkaTerm Nerd Font"
+font-family = "Iosevka Nerd Font Mono"
 font-style = "Light"
 font-style-italic = "Light Italic"
 font-style-bold = "SemiBold"
