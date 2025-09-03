@@ -31,6 +31,7 @@ end
 # Helper function to clean up stale index.lock files
 function gg_cleanup_stale_locks --description "Remove stale Git index.lock files"
     set -l verbose $argv[1]
+    set -l worktree_path $argv[2]  # Optional worktree path
     
     # Get repository info
     set -l repo_info (gg_get_repo_info)
@@ -43,30 +44,70 @@ function gg_cleanup_stale_locks --description "Remove stale Git index.lock files
     set -l repo_root $parts[2]
     set -l is_bare $parts[3]
     
-    # Check for index.lock in the main git directory
-    set -l lock_file "$git_dir_resolved/index.lock"
+    set -l cleaned_any false
     
-    if test -f "$lock_file"
-        # Get file age in seconds (5 minutes = 300 seconds)
-        set -l current_time (date +%s)
-        set -l file_time (stat -f %m "$lock_file" 2>/dev/null; or stat -c %Y "$lock_file" 2>/dev/null)
-        
-        if test -n "$file_time"
-            set -l age (math "$current_time - $file_time")
+    # Helper function to clean a specific lock file
+    function __cleanup_lock_file --argument-names lock_file verbose_flag location_desc
+        if test -f "$lock_file"
+            # Get file age in seconds (5 minutes = 300 seconds)
+            set -l current_time (date +%s)
+            set -l file_time (stat -f %m "$lock_file" 2>/dev/null; or stat -c %Y "$lock_file" 2>/dev/null)
             
-            if test $age -gt 300  # 5 minutes
-                test "$verbose" = true; and echo "[CLEANUP] Removing stale index.lock (age: $age"s")"
+            if test -n "$file_time"
+                set -l age (math "$current_time - $file_time")
+                
+                if test $age -gt 300  # 5 minutes
+                    test "$verbose_flag" = true; and echo "[CLEANUP] Removing stale $location_desc index.lock (age: $age"s")"
+                    rm -f "$lock_file"
+                    return 0
+                else
+                    test "$verbose_flag" = true; and echo "[WAIT] $location_desc index.lock exists but is recent (age: $age"s"), waiting..."
+                    return 1  # Signal that we should retry
+                end
+            else
+                # Can't determine age, remove it to be safe
+                test "$verbose_flag" = true; and echo "[CLEANUP] Removing $location_desc index.lock (unknown age)"
                 rm -f "$lock_file"
                 return 0
-            else
-                test "$verbose" = true; and echo "[WAIT] index.lock exists but is recent (age: $age"s"), waiting..."
-                sleep 1
-                return 1  # Signal that we should retry
             end
-        else
-            # Can't determine age, remove it to be safe
-            test "$verbose" = true; and echo "[CLEANUP] Removing index.lock (unknown age)"
-            rm -f "$lock_file"
+        end
+        return 0
+    end
+    
+    # Check for index.lock in the main git directory
+    set -l git_lock_file "$git_dir_resolved/index.lock"
+    if __cleanup_lock_file "$git_lock_file" "$verbose" "git directory"
+        set cleaned_any true
+    else if test -f "$git_lock_file"
+        # Git directory lock is recent, wait and signal retry
+        sleep 1
+        return 1
+    end
+    
+    # Check for index.lock in the worktree directory if provided
+    if test -n "$worktree_path" -a -d "$worktree_path"
+        set -l worktree_lock_file "$worktree_path/.git/index.lock"
+        # Also check for index.lock directly in worktree root (some git operations create it there)
+        set -l worktree_root_lock_file "$worktree_path/index.lock"
+        
+        # Clean worktree .git/index.lock
+        if test -f "$worktree_lock_file"
+            if __cleanup_lock_file "$worktree_lock_file" "$verbose" "worktree .git"
+                set cleaned_any true
+            else
+                sleep 1
+                return 1
+            end
+        end
+        
+        # Clean worktree root index.lock
+        if test -f "$worktree_root_lock_file"
+            if __cleanup_lock_file "$worktree_root_lock_file" "$verbose" "worktree root"
+                set cleaned_any true
+            else
+                sleep 1
+                return 1
+            end
         end
     end
     
@@ -118,8 +159,29 @@ function gg --description "Git Grove - Manage git worktrees as a pool of detache
         # Clean up any temporary files
         rm -f /tmp/gg_*.log
         
-        # Try to clean up any stale locks (suppress output)
-        gg_cleanup_stale_locks false >/dev/null 2>&1
+        # Aggressive cleanup of lock files on abnormal exit
+        # First try normal cleanup with current working directory if we're in a worktree
+        set -l current_dir $PWD
+        if test -d "$current_dir/.git" -o -f "$current_dir/.git"
+            gg_cleanup_stale_locks false "$current_dir" >/dev/null 2>&1
+        else
+            gg_cleanup_stale_locks false >/dev/null 2>&1
+        end
+        
+        # Emergency cleanup: remove any index.lock files regardless of age
+        if git rev-parse --git-dir >/dev/null 2>&1
+            set -l git_dir (git rev-parse --git-dir 2>/dev/null)
+            set -l git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
+            
+            # Remove locks from git directory
+            rm -f "$git_dir/index.lock" 2>/dev/null
+            rm -f "$git_common_dir/index.lock" 2>/dev/null
+            
+            # If we're in a worktree, also clean the worktree directory
+            set -l worktree_dir $PWD
+            rm -f "$worktree_dir/.git/index.lock" 2>/dev/null
+            rm -f "$worktree_dir/index.lock" 2>/dev/null
+        end
     end
     
     # Define help function
@@ -681,7 +743,7 @@ function __gg_add
             test "$verbose" = true; and cat /tmp/gg_add.log >&2
             rm -f /tmp/gg_add.log
             # Clean up any locks that might have been left
-            gg_cleanup_stale_locks false >/dev/null 2>&1
+            gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
             return 1
         end
     else
@@ -694,7 +756,7 @@ function __gg_add
             test "$verbose" = true; and cat /tmp/gg_add.log >&2
             rm -f /tmp/gg_add.log
             # Clean up any locks that might have been left
-            gg_cleanup_stale_locks false >/dev/null 2>&1
+            gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
             return 1
         end
     end
@@ -746,6 +808,9 @@ function __gg_add
     
     # Change to new worktree
     cd "$worktree_path"
+    
+    # Defensive cleanup after worktree creation
+    gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
     
     # Execute hook if exists and not disabled
     if not set -ql _flag_no_hook; and test -f "$project_root/.gg_hook.fish"
@@ -997,7 +1062,7 @@ function __gg_remove
     end
     
     # Clean up any stale locks before removing worktree
-    gg_cleanup_stale_locks "$verbose" >/dev/null
+    gg_cleanup_stale_locks "$verbose" "$worktree_path" >/dev/null
     
     # Remove worktree
     test "$quiet" = false; and echo "Removing grove worktree..."
@@ -1016,7 +1081,7 @@ function __gg_remove
         test "$verbose" = true; and cat /tmp/gg_remove.log >&2
         rm -f /tmp/gg_remove.log
         # Clean up any locks that might have been left
-        gg_cleanup_stale_locks false >/dev/null 2>&1
+        gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
         return 1
     end
     
@@ -1300,7 +1365,7 @@ function __gg_detach
                     test "$verbose" = true; and cat /tmp/gg_detach.log >&2
                     rm -f /tmp/gg_detach.log
                     # Clean up any locks that might have been left
-                    gg_cleanup_stale_locks false >/dev/null 2>&1
+                    gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
                     return 1
                 end
             else
@@ -1350,7 +1415,7 @@ function __gg_detach
     test "$quiet" = false; and echo "[DETACH] Detaching grove '$grove_name' from branch '$current_branch'..."
     
     # Clean up any stale locks before checkout operation
-    gg_cleanup_stale_locks "$verbose" >/dev/null
+    gg_cleanup_stale_locks "$verbose" "$worktree_path" >/dev/null
     
     # Change to worktree directory for git operations
     set -l original_dir $PWD
@@ -1368,12 +1433,15 @@ function __gg_detach
     if git checkout --detach &>/tmp/gg_detach.log
         test "$quiet" = false; and echo "[OK] Successfully detached from branch '$current_branch'"
         test "$quiet" = false; and echo "     HEAD is now at: $(git rev-parse --short HEAD) $(git log -1 --format='%s' 2>/dev/null)"
+        
+        # Defensive cleanup after successful detach
+        gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
     else
         echo "Error: Failed to detach from branch '$current_branch'" >&2
         test "$verbose" = true; and cat /tmp/gg_detach.log >&2
         rm -f /tmp/gg_detach.log
         # Clean up any locks that might have been left
-        gg_cleanup_stale_locks false >/dev/null 2>&1
+        gg_cleanup_stale_locks false "$worktree_path" >/dev/null 2>&1
         cd "$original_dir"
         return 1
     end
@@ -1793,19 +1861,22 @@ function __gg_go
                         test "$quiet" = false; and echo "Checking out branch '$target_branch' in detached worktree..."
                         
                         # Clean up any stale locks before checkout operation
-                        gg_cleanup_stale_locks "$verbose" >/dev/null
+                        gg_cleanup_stale_locks "$verbose" "$resolved_path" >/dev/null
                         
                         if git -C "$resolved_path" checkout "$target_branch" &>/tmp/gg_go.log
                             set target_worktree $worktree
                             test "$quiet" = false; and echo "[OK] Checked out '$target_branch' in $resolved_path"
                             rm -f /tmp/gg_go.log
+                            
+                            # Defensive cleanup after successful checkout
+                            gg_cleanup_stale_locks false "$resolved_path" >/dev/null 2>&1
                             break
                         else
                             echo "Error: Failed to checkout branch '$target_branch'" >&2
                             test "$verbose" = true; and cat /tmp/gg_go.log >&2
                             rm -f /tmp/gg_go.log
                             # Clean up any locks that might have been left
-                            gg_cleanup_stale_locks false >/dev/null 2>&1
+                            gg_cleanup_stale_locks false "$resolved_path" >/dev/null 2>&1
                             return 1
                         end
                     end
