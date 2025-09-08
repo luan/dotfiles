@@ -55,6 +55,9 @@
   verbosity = 1
   conflictstyle = diff3
 
+[pull]
+  rebase = true
+
 [apply]
   whitespace = nowarn
 

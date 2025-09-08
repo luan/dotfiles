@@ -2,14 +2,16 @@ theme = tokyonight
 
 desktop-notifications = true
 
-font-family = "Iosevka Nerd Font Mono"
+font-family = ""
+font-family = "IosevkaTerm Nerd Font"
+
 font-style = "Light"
 font-style-italic = "Light Italic"
 font-style-bold = "SemiBold"
 font-style-bold-italic = "SemiBold Italic"
 font-size = 13
 
-adjust-cell-height = 40%
+adjust-cell-height = 45%
 adjust-font-baseline = 3
 adjust-underline-position = 25%
 adjust-underline-thickness = 1

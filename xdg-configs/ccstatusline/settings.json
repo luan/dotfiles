@@ -5,35 +5,37 @@
       {
         "id": "2586c748-f67d-48c2-851f-3def147d2aca",
         "type": "git-branch",
-        "color": "blueBright",
+        "color": "hex:1A1B26",
+        "backgroundColor": "hex:BB9AF7",
         "bold": false
-      },
-      {
-        "id": "8d228fb0-e7cb-40e2-866a-64691189e96f",
-        "type": "model",
-        "color": "yellowBright",
-        "bold": false,
-        "rawValue": true
       },
       {
         "id": "7b3d9776-0229-4e54-82ef-6ff8d51dd991",
         "type": "context-length",
-        "color": "gray",
+        "color": "black",
+        "backgroundColor": "bgYellow",
         "bold": false,
         "rawValue": false
       },
       {
         "id": "c3e7f0a6-69d0-44e9-b455-b616a6f03c92",
         "type": "context-percentage-usable",
-        "color": "cyan",
+        "color": "hex:1A1B26",
+        "backgroundColor": "hex:D5D6DB",
         "bold": true,
         "rawValue": true
       }
     ],
-    [],
-    []
+    [
+      {
+        "id": "4b760fcc-a747-4c3b-bdc7-6b96c071cb61",
+        "type": "model",
+        "color": "hex:1A1B26",
+        "backgroundColor": "hex:7AA2F7"
+      }
+    ]
   ],
-  "flexMode": "full-until-compact",
+  "flexMode": "full-minus-40",
   "compactThreshold": 60,
   "colorLevel": 3,
   "defaultPadding": " ",
@@ -42,17 +44,22 @@
   "powerline": {
     "enabled": true,
     "separators": [
+      "",
       ""
     ],
     "separatorInvertBackground": [
+      true,
       false
     ],
     "startCaps": [
-      ""
+      "",
+      ""
     ],
     "endCaps": [
+      "",
       ""
     ],
-    "theme": "nord-aurora"
+    "theme": "nord-aurora",
+    "autoAlign": true
   }
 }
