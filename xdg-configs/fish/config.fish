@@ -40,3 +40,7 @@ end
 source ~/.orbstack/shell/init2.fish 2>/dev/null || :
 
 alias view="nvim -R"
+
+COMPLETE=fish jj | source
+
+alias claude="$HOME/.claude/local/claude"

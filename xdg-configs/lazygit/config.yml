@@ -7,7 +7,10 @@ gui:
   authorColors:
     "Luan Santos": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
   branchColorPatterns:
-    "^luan/": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
+    "^luan/pr": "#339Ccc"
+    "^luan/pu": "#33FCcc"
+    "^luan/el": "#a33CFc"
+    "^luan/[^pe][^rul]": "#FF9CFF"
   # spinner:
   #   # The frames of the spinner animation.
   #   frames:
