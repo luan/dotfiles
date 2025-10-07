@@ -1,31 +1,13 @@
 {
   "servers": [
     {
-      "extensions": [
-        "js",
-        "ts",
-        "jsx",
-        "tsx"
-      ],
-      "command": [
-        "npx",
-        "--",
-        "typescript-language-server",
-        "--stdio"
-      ],
+      "extensions": ["js", "ts", "jsx", "tsx"],
+      "command": ["npx", "--", "typescript-language-server", "--stdio"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "py",
-        "pyi"
-      ],
-      "command": [
-        "uvx",
-        "--from",
-        "python-lsp-server",
-        "pylsp"
-      ],
+      "extensions": ["py", "pyi"],
+      "command": ["uvx", "--from", "python-lsp-server", "pylsp"],
       "rootDir": ".",
       "restartInterval": 5,
       "initializationOptions": {
@@ -71,74 +53,33 @@
       }
     },
     {
-      "extensions": [
-        "go"
-      ],
-      "command": [
-        "gopls"
-      ],
+      "extensions": ["go"],
+      "command": ["gopls"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "rs"
-      ],
-      "command": [
-        "rust-analyzer"
-      ],
+      "extensions": ["rs"],
+      "command": ["rust-analyzer"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "c",
-        "cpp",
-        "cc",
-        "h",
-        "hpp"
-      ],
-      "command": [
-        "clangd"
-      ],
+      "extensions": ["c", "cpp", "cc", "h", "hpp"],
+      "command": ["clangd"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "rb"
-      ],
-      "command": [
-        "solargraph",
-        "stdio"
-      ],
+      "extensions": ["rb"],
+      "command": ["solargraph", "stdio"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "swift"
-      ],
-      "command": [
-        "sourcekit-lsp"
-      ],
+      "extensions": ["swift"],
+      "command": ["sourcekit-lsp"],
       "rootDir": "."
     },
     {
-      "extensions": [
-        "lua"
-      ],
-      "command": [
-        "lua-language-server"
-      ],
-      "rootDir": "."
-    },
-    {
-      "extensions": [
-        "svelte"
-      ],
-      "command": [
-        "npx",
-        "--",
-        "svelteserver",
-        "--stdio"
-      ],
+      "extensions": ["svelte"],
+      "command": ["npx", "--", "svelteserver", "--stdio"],
       "rootDir": "."
     }
   ]

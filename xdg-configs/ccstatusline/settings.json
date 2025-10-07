@@ -4,10 +4,13 @@
     [
       {
         "id": "2586c748-f67d-48c2-851f-3def147d2aca",
-        "type": "git-branch",
+        "type": "block-timer",
         "color": "hex:1A1B26",
         "backgroundColor": "hex:BB9AF7",
-        "bold": false
+        "bold": false,
+        "metadata": {
+          "display": "progress-short"
+        }
       },
       {
         "id": "7b3d9776-0229-4e54-82ef-6ff8d51dd991",
@@ -32,6 +35,14 @@
         "type": "model",
         "color": "hex:1A1B26",
         "backgroundColor": "hex:7AA2F7"
+      },
+      {
+        "id": "1375dfb3-bae6-4b7d-acb9-56c71ae9505c",
+        "type": "session-cost",
+        "backgroundColor": "bgBrightCyan",
+        "metadata": {
+          "display": "time"
+        }
       }
     ]
   ],
@@ -45,11 +56,13 @@
     "enabled": true,
     "separators": [
       "",
-      ""
+      "",
+      ""
     ],
     "separatorInvertBackground": [
       true,
-      false
+      true,
+      true
     ],
     "startCaps": [
       "",
@@ -59,7 +72,7 @@
       "",
       ""
     ],
-    "theme": "nord-aurora",
+    "theme": "catppuccin",
     "autoAlign": true
   }
 }
