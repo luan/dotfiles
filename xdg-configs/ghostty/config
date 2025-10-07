@@ -4,6 +4,8 @@ desktop-notifications = true
 
 font-family = ""
 font-family = "IosevkaTerm Nerd Font"
+# font-family = "JetBrainsMono Nerd Font Mono"
+# font-family = "CaskaydiaMono Nerd Font Mono"
 
 font-style = "Light"
 font-style-italic = "Light Italic"
@@ -133,9 +135,9 @@ keybind = performable:super+v=paste_from_clipboard
 #   * `true`
 #   * `false` - windows won't have native decorations, i.e. titlebar and
 #      borders. On MacOS this also disables tabs and tab overview.
-window-decoration = false
+window-decoration = true
 
-macos-titlebar-style = tabs
+macos-titlebar-style = hidden
 
 copy-on-select = false
 keybind = shift+enter=text:\n

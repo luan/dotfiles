@@ -268,7 +268,7 @@ keybinds clear-defaults=true {
 // Plugins to load in the background when a new session starts
 load_plugins {
     // "https://github.com/dj95/zjstatus/releases/latest/download/zjframes.wasm" {
-    "file:~/.config/zellij/plugins/zframes.wasm" {}
+    // "file:~/.config/zellij/plugins/zframes.wasm" {}
 }
 
 plugins {
@@ -276,8 +276,8 @@ plugins {
     status-bar location="zellij:status-bar"
     strider location="zellij:strider"
     compact-bar location="zellij:compact-bar"
-    // session-manager location="zellij:session-manager" {
-    session-manager location="file:~/.config/zellij/plugins/zj-sesh.wasm" {
+    session-manager location="zellij:session-manager" {
+    // session-manager location="file:~/.config/zellij/plugins/zj-sesh.wasm" {
         floating true
         move_to_focused_tab true
     }

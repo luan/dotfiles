@@ -40,8 +40,8 @@
       }
     },
     "default_model": {
-      "provider": "copilot_chat",
-      "model": "claude-sonnet-4"
+      "provider": "openai",
+      "model": "gpt-5"
     },
     "always_allow_tool_actions": true
   },
@@ -56,7 +56,6 @@
   },
   "icon_theme": "Catppuccin Mocha",
   "auto_signature_help": true,
-  "chat_panel": { "button": "when_in_call" },
   "notification_panel": { "button": false },
   "show_edit_predictions": true,
   "hover_popover_enabled": true,
@@ -64,14 +63,14 @@
     "show_nav_history_buttons": false
   },
   "show_whitespaces": "selection",
-  "theme": "Tokyo Night",
-  "ui_font_size": 16,
+  "theme": "Catppuccin Mocha",
+  "ui_font_size": 14,
   "ui_font_family": "Zed Sans",
-  "ui_font_weight": 300,
-  "buffer_font_size": 14,
-  "buffer_font_family": "Zed Mono",
+  "ui_font_weight": 350,
+  "buffer_font_size": 13,
+  "buffer_font_family": "IosevkaTerm Nerd Font Mono",
   "buffer_font_weight": 300,
-  "buffer_font_fallbacks": ["ZedMono Nerd Font", "Zed Mono", "Zed Sans"],
+  "buffer_font_fallbacks": ["IosevkaTerm Nerd Font Mono", "Zed Sans"],
   "terminal": {
     "option_as_meta": true
   },
@@ -82,14 +81,7 @@
   },
   "lsp": {
     "rust-analyzer": {
-      "initialization_options": {
-        "checkOnSave": {
-          "command": "clippy"
-        },
-        "cargo": {
-          "features": "all"
-        }
-      }
+      "initialization_options": {}
     },
     "sourcekit-lsp": {
       "initialization_options": {

@@ -115,5 +115,11 @@
       "j": "menu::SelectNext",
       "k": "menu::SelectPrevious"
     }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-l": "workspace::ToggleRightDock"
+    }
   }
 ]
