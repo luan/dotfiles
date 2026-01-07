@@ -23,14 +23,12 @@ gui:
   #
   #   # The "speed" of the spinner in milliseconds.
   #   rate: 50
-
 git:
   overrideGpg: true
   branchPrefix: "luan/"
-  paging:
-    colorArg: always
-    pager: delta -s --dark --paging=never --24-bit-color=never
-
+  pagers:
+    - colorArg: always
+      pager: delta -s --dark --paging=never --24-bit-color=never
 keybinding:
   universal:
     openFile: O
