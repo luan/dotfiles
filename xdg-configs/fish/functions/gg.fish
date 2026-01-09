@@ -8,7 +8,7 @@ function gg_get_repo_info --description "Get repository information for bare and
     set -l is_bare (git rev-parse --is-bare-repository 2>/dev/null)
     set -l repo_root
 
-    if test "$is_bare" = "true"
+    if test "$is_bare" = true
         set repo_root $git_dir_resolved
     else
         set repo_root (git rev-parse --show-toplevel 2>/dev/null)
@@ -25,10 +25,33 @@ function __gg_is_grove --argument-names worktree_path git_dir
     string match -q "wt*" $name; and test "$parent" = "$expected"
 end
 
+function __gg_cleanup_stale_lock --argument-names lock_path
+    # Only clean truly stale locks (>60 seconds old)
+    # This avoids racing with active git operations
+    test -f "$lock_path"; or return 1
+
+    set -l file_time (stat -f %m "$lock_path" 2>/dev/null)
+    test -z "$file_time"; and return 1
+
+    set -l age (math (date +%s) - $file_time)
+    if test $age -gt 60
+        rm -f "$lock_path" 2>/dev/null
+        return 0
+    end
+    return 1
+end
+
+function __gg_try_cleanup_locks --argument-names worktree_path git_dir
+    # Clean stale locks for a worktree before operating on it
+    __gg_cleanup_stale_lock "$worktree_path/index.lock"
+    __gg_cleanup_stale_lock "$worktree_path/.git/index.lock"
+    test -n "$git_dir"; and __gg_cleanup_stale_lock "$git_dir/index.lock"
+end
+
 function gg_generate_name --description "Generate next available grove name"
     set -l repo_info (gg_get_repo_info)
     if test $status -ne 0
-        echo "wt1"
+        echo wt1
         return
     end
 
@@ -53,7 +76,7 @@ end
 
 function __gg_help
     echo "Git Grove - Manage git worktrees as a pool of detached workspaces"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg [options]                     - Interactive worktree selection with fzf"
@@ -79,7 +102,7 @@ end
 
 function __gg_add_help
     echo "gg add - Create new detached worktree"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg add [name] [options]"
@@ -94,7 +117,7 @@ end
 
 function __gg_remove_help
     echo "gg remove - Remove detached worktree"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg remove [<name>] [options]"
@@ -106,7 +129,7 @@ end
 
 function __gg_detach_help
     echo "gg detach - Detach worktree from branch"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg detach [grove_name] [options]"
@@ -118,7 +141,7 @@ end
 
 function __gg_pool_help
     echo "gg pool - Show pool status overview"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg pool [options]"
@@ -129,7 +152,7 @@ end
 
 function __gg_init_help
     echo "gg init - Create .gg_hook.fish template"
-    echo "---"
+    echo ---
     echo ""
     echo "DESCRIPTION:"
     echo "  Creates a .gg_hook.fish template for post-create setup."
@@ -137,7 +160,7 @@ end
 
 function __gg_go_help
     echo "gg go - Smart branch switcher"
-    echo "---"
+    echo ---
     echo ""
     echo "USAGE:"
     echo "  gg go [branch_name]"
@@ -223,6 +246,8 @@ function __gg_interactive --argument-names verbose quiet
         set -l worktree_path $parts[3]
 
         if test -d "$worktree_path"
+            # Clean stale locks before switching (helps Git Town, starship, etc.)
+            __gg_try_cleanup_locks "$worktree_path" "$git_dir_resolved"
             cd "$worktree_path"
             test "$verbose" = true; and echo "Switched to: $worktree_path"
             return 0
@@ -234,7 +259,7 @@ function __gg_interactive --argument-names verbose quiet
 end
 
 function __gg_add --argument-names verbose quiet
-    argparse 'from=' 'b/branch=' 'sync' 'no-hook' 'h/help' -- $argv
+    argparse 'from=' 'b/branch=' sync no-hook h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_add_help; and return 0
@@ -259,7 +284,7 @@ function __gg_add --argument-names verbose quiet
     set -l repo_root $parts[2]
     set -l is_bare $parts[3]
 
-    test "$is_bare" != "true"; and cd "$repo_root"
+    test "$is_bare" != true; and cd "$repo_root"
 
     set -l worktree_path "$git_dir_resolved/$grove_name"
 
@@ -276,12 +301,12 @@ function __gg_add --argument-names verbose quiet
             return 1
         end
     else
-        set base_ref "main"
+        set base_ref main
         if not git rev-parse --verify main &>/dev/null
             if git rev-parse --verify master &>/dev/null
-                set base_ref "master"
+                set base_ref master
             else
-                set base_ref "HEAD"
+                set base_ref HEAD
             end
         end
     end
@@ -303,7 +328,7 @@ function __gg_add --argument-names verbose quiet
         test "$quiet" = false; and echo "[OK] Created detached grove"
     end
 
-    if set -ql _flag_sync; and test "$is_bare" != "true"
+    if set -ql _flag_sync; and test "$is_bare" != true
         test "$quiet" = false; and echo "[SYNC] Syncing changes..."
         for file in (git diff --cached --name-only) (git diff --name-only) (git ls-files --others --exclude-standard)
             if test -f "$repo_root/$file"
@@ -334,7 +359,7 @@ function __gg_add --argument-names verbose quiet
 end
 
 function __gg_remove --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_remove_help; and return 0
@@ -399,7 +424,7 @@ function __gg_remove --argument-names verbose quiet
 
     echo "Remove grove '$grove_name' at $worktree_path?"
     read -l -P "Confirm (y/N) " confirm
-    string match -qi 'y' $confirm; or return 0
+    string match -qi y $confirm; or return 0
 
     if git worktree remove --force "$worktree_path"
         test "$quiet" = false; and echo "[OK] Removed grove '$grove_name'"
@@ -410,7 +435,7 @@ function __gg_remove --argument-names verbose quiet
 end
 
 function __gg_list --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     if set -ql _flag_help
@@ -425,7 +450,7 @@ function __gg_list --argument-names verbose quiet
     set -l grove_worktrees (git worktree list 2>/dev/null)
 
     test "$quiet" = false; and echo "Git Grove - Worktree List"
-    test "$quiet" = false; and echo "---"
+    test "$quiet" = false; and echo ---
     test "$quiet" = false; and echo ""
 
     set -l grove_count 0
@@ -467,12 +492,12 @@ function __gg_list --argument-names verbose quiet
     end
 
     set -l total (count $grove_worktrees)
-    echo "---"
+    echo ---
     echo "Summary: $total total ($grove_count grove) • $detached_count detached"
 end
 
 function __gg_detach --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_detach_help; and return 0
@@ -542,7 +567,7 @@ function __gg_detach --argument-names verbose quiet
 end
 
 function __gg_pool --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_pool_help; and return 0
@@ -554,7 +579,7 @@ function __gg_pool --argument-names verbose quiet
     set -l grove_worktrees (git worktree list 2>/dev/null)
 
     test "$quiet" = false; and echo "Git Grove - Pool Status"
-    test "$quiet" = false; and echo "---"
+    test "$quiet" = false; and echo ---
     test "$quiet" = false; and echo ""
 
     set -l total 0
@@ -606,7 +631,7 @@ function __gg_pool --argument-names verbose quiet
 end
 
 function __gg_init --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_init_help; and return 0
@@ -652,24 +677,24 @@ for item in $copy_items
     end
 end
 
-echo "[OK] Hook completed"' > .gg_hook.fish
+echo "[OK] Hook completed"' >.gg_hook.fish
 
     chmod +x .gg_hook.fish
     test "$quiet" = false; and echo "[OK] Created .gg_hook.fish"
 
     if test -f .gitignore
         if not grep -q '^\\.gg_hook\\.fish$' .gitignore
-            echo ".gg_hook.fish" >> .gitignore
+            echo ".gg_hook.fish" >>.gitignore
             test "$quiet" = false; and echo "[OK] Added to .gitignore"
         end
     else
-        echo ".gg_hook.fish" > .gitignore
+        echo ".gg_hook.fish" >.gitignore
         test "$quiet" = false; and echo "[OK] Created .gitignore"
     end
 end
 
 function __gg_go --argument-names verbose quiet
-    argparse 'h/help' -- $argv
+    argparse h/help -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_go_help; and return 0
@@ -678,6 +703,10 @@ function __gg_go --argument-names verbose quiet
     set -l grove_worktrees (git worktree list 2>/dev/null)
 
     test -z "$grove_worktrees"; and echo "Error: No worktrees exist" >&2; and return 1
+
+    # Get git dir for lock cleanup
+    set -l repo_info (gg_get_repo_info)
+    set -l git_dir (test -n "$repo_info"; and string split '|' $repo_info)[1]
 
     set -l target_worktree
 
@@ -707,6 +736,8 @@ function __gg_go --argument-names verbose quiet
                 if test -d "$resolved_path"
                     set -l current_branch (git -C "$resolved_path" branch --show-current 2>/dev/null)
                     if test -z "$current_branch"
+                        # Clean stale locks before checkout
+                        __gg_try_cleanup_locks "$resolved_path" "$git_dir"
                         test "$quiet" = false; and echo "Checking out '$target_branch'..."
                         if git -C "$resolved_path" checkout "$target_branch"
                             set target_worktree "$resolved_path"
@@ -745,7 +776,7 @@ function __gg_go --argument-names verbose quiet
 end
 
 function gg --description "Git Grove - Manage git worktrees"
-    argparse -s 'h/help' 'v/verbose' 'q/quiet' -- $argv
+    argparse -s h/help v/verbose q/quiet -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_help; and return 0
