@@ -23,6 +23,8 @@ current_todos = []
 total_cost = 0.0
 start_time = datetime.now()
 status_lines = 0  # Track how many lines our status block takes
+spinner_frame = 0
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner
 
 
 def get_context_limit(model_name):
@@ -78,14 +80,20 @@ def draw_status():
 
     # Todos first (all of them)
     if current_todos:
+        global spinner_frame
+        spin_char = SPINNER[spinner_frame % len(SPINNER)]
+        spinner_frame += 1
+
         for todo in current_todos:
             status = todo.get("status")
+            content = todo.get("content", "")
+            active = todo.get("activeForm", content)
             if status == "completed":
-                lines.append(f"\033[92m  ✓\033[0m {todo.get('content', '')}")
+                lines.append(f"\033[0m\033[92m  ✓\033[0m {content}\033[0m")
             elif status == "in_progress":
-                lines.append(f"\033[93m  ▶\033[0m \033[1m{todo.get('activeForm', '')}\033[0m")
+                lines.append(f"\033[0m\033[93m  {spin_char}\033[0m \033[1m{active}\033[0m")
             else:
-                lines.append(f"\033[90m  ○ {todo.get('content', '')}\033[0m")
+                lines.append(f"\033[0m\033[90m  ○ {content}\033[0m")
         lines.append(f"\033[90m{'─' * width}\033[0m")
 
     # Progress bar and stats
