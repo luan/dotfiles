@@ -282,18 +282,31 @@ for line in sys.stdin:
                         output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}")
                     elif name == "Bash":
                         cmd = inp.get("command", "")
-                        w = get_width() - 4
+                        width = get_width()
+                        inner = width - 2  # space between │ and │
+                        max_len = inner - 4  # for " $ " or "   " prefix and " " suffix
                         clear_status()
-                        print(f"\n\033[90m╭{'─' * (w + 2)}╮\033[0m")
-                        # Wrap long commands
-                        if len(cmd) <= w:
-                            print(f"\033[90m│\033[0m \033[93m$\033[0m {cmd}{' ' * (w - len(cmd) - 2)}\033[90m│\033[0m")
-                        else:
-                            lines_cmd = [cmd[i:i+w] for i in range(0, len(cmd), w)]
-                            print(f"\033[90m│\033[0m \033[93m$\033[0m {lines_cmd[0]}{' ' * (w - len(lines_cmd[0]) - 2)}\033[90m│\033[0m")
-                            for ln in lines_cmd[1:]:
-                                print(f"\033[90m│\033[0m   {ln}{' ' * (w - len(ln))}\033[90m│\033[0m")
-                        print(f"\033[90m╰{'─' * (w + 2)}╯\033[0m")
+                        print(f"\n\033[90m╭{'─' * inner}╮\033[0m")
+
+                        # Split on newlines first, then wrap each line
+                        cmd_lines = cmd.split('\n')
+                        first = True
+                        for line in cmd_lines:
+                            # Wrap long lines
+                            if len(line) <= max_len:
+                                chunks = [line]
+                            else:
+                                chunks = [line[i:i+max_len] for i in range(0, len(line), max_len)]
+
+                            for chunk in chunks:
+                                pad = max_len - len(chunk)
+                                if first:
+                                    print(f"\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m")
+                                    first = False
+                                else:
+                                    print(f"\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m")
+
+                        print(f"\033[90m╰{'─' * inner}╯\033[0m")
                         draw_status()
                     elif name == "Grep":
                         output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}")
