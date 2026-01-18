@@ -1,7 +1,7 @@
 #!/usr/bin/env uv run
 # /// script
 # requires-python = ">=3.12"
-# dependencies = []
+# dependencies = ["rich>=13.0.0"]
 # ///
 """
 Ralph formatter - clean scrolling output with updating status block.
@@ -12,10 +12,16 @@ import subprocess
 import shutil
 import os
 from datetime import datetime
+from io import StringIO
+
+from rich.console import Console
+from rich.markdown import Markdown
 
 # Tools
 DELTA_PATH = shutil.which("delta")
-GLOW_PATH = shutil.which("glow")
+
+# Rich console for markdown
+_md_console = Console(file=StringIO(), force_terminal=True, width=120)
 
 # State
 context_usage = 0
@@ -151,18 +157,11 @@ def output_raw(text):
 
 
 def render_markdown(text):
-    if not GLOW_PATH:
-        return text
+    """Render markdown using rich."""
     try:
-        proc = subprocess.Popen(
-            [GLOW_PATH, "-s", "dark"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        out, _ = proc.communicate(input=text)
-        return out.rstrip() if out else text
+        _md_console.file = StringIO()
+        _md_console.print(Markdown(text))
+        return _md_console.file.getvalue().rstrip()
     except Exception:
         return text
 
