@@ -5,7 +5,7 @@ show_help() {
 ralph - Automated Claude Code Execution Loop
 
 SYNOPSIS
-    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-h] <mode>
+    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-w delay] [-h] <mode> [mode...]
 
 DESCRIPTION
     Ralph orchestrates automated coding loops with Claude Code, reading prompts
@@ -19,6 +19,13 @@ MODES
     plan        Plan mode - executes PROMPT_plan.md
                 Default model: opus (more thorough, ideal for planning)
 
+    wait "cmd"  Wait mode - executes the given shell command instead of Claude
+                Useful for adding delays, running tests, or custom scripts
+
+    You can specify a sequence of modes: ralph plan wait "sleep 30" build
+    - Iteration 1 uses the first mode, iteration 2 the second, etc.
+    - After the sequence ends, the last mode repeats for remaining iterations
+
 OPTIONS
     -i <num>    Maximum number of iterations (default: 5)
                 Set to 0 for unlimited iterations.
@@ -26,11 +33,14 @@ OPTIONS
     -m <model>  AI model to use: opus, sonnet, or haiku
                 Defaults: opus for plan mode, sonnet for build mode.
 
-    -d <dir>    Directory containing PROMPT_*.md files (default: .)
+    -d <dir>    Directory containing PROMPT_*.md files (default: ./ralph)
                 Ralph will look for PROMPT_<mode>.md in this directory.
 
     -c <cli>    Claude CLI command or path (default: claude)
                 Use this to specify a custom claude binary location.
+
+    -w <secs>   Delay in seconds between iterations (default: 0)
+                Useful to avoid rate limits or give time to review output.
 
     -t         Enable TUI mode (text user interface from Claude) instead
                of headless, requires manual exit each iteration.
@@ -42,15 +52,14 @@ BEHAVIOR
     1. Reads the prompt file (PROMPT_<mode>.md)
     2. Pipes it to Claude Code in headless mode
     3. Auto-approves all tool calls (--dangerously-skip-permissions)
-    4. Pushes changes to the current git branch
     5. Repeats until max iterations reached
 
     The loop continues autonomously, allowing Claude to complete multi-step
     tasks without manual intervention.
 
 FILES
-    PROMPT_build.md     Prompt file for build mode
-    PROMPT_plan.md      Prompt file for plan mode
+    ./ralph/PROMPT_build.md     Prompt file for build mode
+    ./ralph/PROMPT_plan.md      Prompt file for plan mode
 
 EXAMPLES
     # Basic usage - 5 iterations of build mode with sonnet
@@ -58,6 +67,15 @@ EXAMPLES
 
     # Plan mode with 10 iterations using opus
     ralph -i 10 plan
+
+    # Mode sequence: plan first, then build for the rest
+    ralph plan build
+
+    # With wait: plan, wait 30s, then build
+    ralph plan wait "sleep 30" build
+
+    # Run tests between iterations
+    ralph build wait "npm test" build
 
     # Fast prototyping with haiku
     ralph -m haiku build
@@ -71,16 +89,33 @@ EXAMPLES
 ENVIRONMENT
     Requires:
     - claude CLI (Claude Code) in PATH or specified via -c
-    - Git repository (for automatic pushing)
     - PROMPT_*.md files in the working directory
 
     Optional:
     - ralph-format.py for pretty output (always used if available)
     - delta for enhanced diff visualization in formatted output
 
+INTERACTIVE CONTROLS (non-TUI mode)
+    While running in non-TUI mode, you can adjust settings:
+
+    ↑ (up arrow)    Increase max iterations
+    ↓ (down arrow)  Decrease max iterations
+    ← (left arrow)  Select previous sequence entry
+    → (right arrow) Select next sequence entry
+    a               Toggle mode (build/plan) for selected entry (exits wait)
+    w               Set wait mode - prompts for command, Enter to confirm
+    m               Toggle model (sonnet/opus/haiku) for selected entry
+    t               Toggle TUI mode for selected entry (shows in RED)
+    = / -           Increase/decrease delay by 1 second
+    + / _           Increase/decrease delay by 1 minute
+    I (Shift+I)     INTERVENE: Stop current session, continue in TUI with --continue
+    Q (Shift+Q)     ABORT: Stop everything and exit ralph
+
+    Sequence display: Ps=Plan+sonnet, Bo=Build+opus, W=Wait, RED=TUI
+    [current] <selected> upcoming - use arrows to select, a/w/m/t to modify
+
 NOTES
     - Ralph runs in YOLO mode (--dangerously-skip-permissions)
-    - Each iteration auto-pushes to the current branch
     - Use Ctrl+C to stop the loop early
     - Hook outputs are suppressed for cleaner output
 
@@ -93,18 +128,20 @@ EOF
 
 # Default values
 MAX_ITERATIONS=5
-RALPH_DIR="."
+RALPH_DIR="./ralph"
 MODEL=""
 CLI="claude"
 TUI="false"
+DELAY=0
 
 # Parse flags
-while getopts "i:m:d:c:th" opt; do
+while getopts "i:m:d:c:w:th" opt; do
     case $opt in
     i) MAX_ITERATIONS="$OPTARG" ;;
     m) MODEL="$OPTARG" ;;
     d) RALPH_DIR="$OPTARG" ;;
     c) CLI="$OPTARG" ;;
+    w) DELAY="$OPTARG" ;;
     t) TUI="true" ;;
     h)
         show_help
@@ -118,15 +155,42 @@ while getopts "i:m:d:c:th" opt; do
 done
 shift $((OPTIND - 1))
 
-# Require mode
-MODE=$1
-if [[ "$MODE" != "build" && "$MODE" != "plan" ]]; then
-    echo "Error: Mode must be 'build' or 'plan'"
+# Require at least one mode
+if [ $# -eq 0 ]; then
+    echo "Error: At least one mode (build/plan) required"
     echo "Try 'ralph -h' for more information."
     exit 1
 fi
 
-# Set defaults based on mode if not provided
+# Parse mode sequence (handles: plan, build, wait "command")
+MODE_SEQUENCE=()
+WAIT_COMMANDS=()  # Parallel array for wait commands (empty string if not wait)
+while [ $# -gt 0 ]; do
+    m="$1"
+    if [[ "$m" == "wait" ]]; then
+        if [ $# -lt 2 ]; then
+            echo "Error: 'wait' requires a command argument"
+            echo "Try 'ralph -h' for more information."
+            exit 1
+        fi
+        MODE_SEQUENCE+=("wait")
+        WAIT_COMMANDS+=("$2")
+        shift 2
+    elif [[ "$m" == "build" || "$m" == "plan" ]]; then
+        MODE_SEQUENCE+=("$m")
+        WAIT_COMMANDS+=("")
+        shift
+    else
+        echo "Error: Mode must be 'build', 'plan', or 'wait \"command\"', got '$m'"
+        echo "Try 'ralph -h' for more information."
+        exit 1
+    fi
+done
+
+# Initial mode is the first in sequence
+MODE="${MODE_SEQUENCE[0]}"
+
+# Set defaults based on first mode if not provided
 if [ -z "$MODEL" ]; then
     if [ "$MODE" = "plan" ]; then
         MODEL="opus"
@@ -135,23 +199,50 @@ if [ -z "$MODEL" ]; then
     fi
 fi
 
-PROMPT_FILE="$RALPH_DIR/PROMPT_$MODE.md"
+# Verify all prompt files exist (skip wait mode)
+for m in "${MODE_SEQUENCE[@]}"; do
+    if [[ "$m" != "wait" ]] && [ ! -f "$RALPH_DIR/PROMPT_$m.md" ]; then
+        echo "Error: $RALPH_DIR/PROMPT_$m.md not found"
+        exit 1
+    fi
+done
 
-# Verify prompt file exists
-if [ ! -f "$PROMPT_FILE" ]; then
-    echo "Error: $PROMPT_FILE not found"
-    exit 1
-fi
+PROMPT_FILE="$RALPH_DIR/PROMPT_$MODE.md"
 
 ITERATION=1
 CURRENT_BRANCH=$(git branch --show-current)
+SETTINGS_FILE="/tmp/ralph_settings_$$"
+TUI_NEXT="false"
 
-# Export for ralph-format.py
+# Cleanup on exit
+cleanup() {
+    rm -f "$SETTINGS_FILE"
+    rm -f "/tmp/ralph_claude_pid_$$"
+}
+trap cleanup EXIT
+
+# Build model sequence and TUI flags (same length as mode sequence)
+MODEL_SEQUENCE=()
+TUI_FLAGS=()
+for m in "${MODE_SEQUENCE[@]}"; do
+    MODEL_SEQUENCE+=("$MODEL")
+    TUI_FLAGS+=("0")
+done
+
+# Export for ralph-format.py (use | as delimiter for wait commands since they may contain spaces)
+WAIT_COMMANDS_STR=$(IFS='|'; echo "${WAIT_COMMANDS[*]}")
+
 export RALPH_MODE="$MODE"
 export RALPH_PROMPT="$PROMPT_FILE"
 export RALPH_MODEL="$MODEL"
 export RALPH_BRANCH="$CURRENT_BRANCH"
 export RALPH_MAX_ITERATIONS="$MAX_ITERATIONS"
+export RALPH_SETTINGS_FILE="$SETTINGS_FILE"
+export RALPH_MODE_SEQUENCE="${MODE_SEQUENCE[*]}"
+export RALPH_MODEL_SEQUENCE="${MODEL_SEQUENCE[*]}"
+export RALPH_WAIT_COMMANDS="$WAIT_COMMANDS_STR"
+export RALPH_TUI_FLAGS="${TUI_FLAGS[*]}"
+export RALPH_DELAY="$DELAY"
 
 while true; do
     if [ $MAX_ITERATIONS -gt 0 ] && [ $ITERATION -gt $MAX_ITERATIONS ]; then
@@ -159,18 +250,117 @@ while true; do
         break
     fi
 
+    # Select mode, model, wait command, and TUI flag from sequences (use last if past sequence length)
+    SEQ_LEN=${#MODE_SEQUENCE[@]}
+    if [ $ITERATION -le $SEQ_LEN ]; then
+        MODE="${MODE_SEQUENCE[$((ITERATION - 1))]}"
+        MODEL="${MODEL_SEQUENCE[$((ITERATION - 1))]}"
+        WAIT_CMD="${WAIT_COMMANDS[$((ITERATION - 1))]}"
+        TUI_FLAG="${TUI_FLAGS[$((ITERATION - 1))]}"
+    else
+        MODE="${MODE_SEQUENCE[$((SEQ_LEN - 1))]}"
+        MODEL="${MODEL_SEQUENCE[$((SEQ_LEN - 1))]}"
+        WAIT_CMD="${WAIT_COMMANDS[$((SEQ_LEN - 1))]}"
+        TUI_FLAG="${TUI_FLAGS[$((SEQ_LEN - 1))]}"
+    fi
+    PROMPT_FILE="$RALPH_DIR/PROMPT_$MODE.md"
+    export RALPH_MODE="$MODE"
+    export RALPH_MODEL="$MODEL"
+    export RALPH_PROMPT="$PROMPT_FILE"
+
     export RALPH_ITERATION="$ITERATION"
 
+    # Handle WAIT mode - execute command instead of claude
+    if [ "$MODE" = "wait" ]; then
+        echo "[$ITERATION] WAIT: $WAIT_CMD"
+        eval "$WAIT_CMD"
     # Run Ralph iteration with selected prompt
     # -p: Headless mode
     # --dangerously-skip-permissions: Auto-approve all tool calls
     # --output-format=stream-json: Structured output
     # --model: Selected model
     # --verbose: Detailed logging
-    if [ "$TUI" = "true" ]; then
+    elif [ "$TUI" = "true" ] || [ "$TUI_FLAG" = "1" ]; then
         "$CLI" --dangerously-skip-permissions --model "$MODEL" "$(cat "$PROMPT_FILE")"
     else
-        cat "$PROMPT_FILE" | "$CLI" -p --dangerously-skip-permissions --output-format=stream-json --model "$MODEL" --verbose | ralph-format.py
+        # Run claude in background, capture PID for ralph-format.py to kill if needed
+        CLAUDE_PID_FILE="/tmp/ralph_claude_pid_$$"
+        (
+            "$CLI" -p --dangerously-skip-permissions --output-format=stream-json --model "$MODEL" --verbose < "$PROMPT_FILE" &
+            echo $! > "$CLAUDE_PID_FILE"
+            wait $!
+        ) | RALPH_CLAUDE_PID_FILE="$CLAUDE_PID_FILE" ralph-format.py
+        rm -f "$CLAUDE_PID_FILE"
+    fi
+
+    # Read settings from ralph-format.py for next iteration
+    if [ -f "$SETTINGS_FILE" ]; then
+        NEW_ITERATIONS=$(grep "^ITERATIONS=" "$SETTINGS_FILE" | cut -d= -f2)
+        INTERVENE=$(grep "^INTERVENE=" "$SETTINGS_FILE" | cut -d= -f2)
+        ABORT=$(grep "^ABORT=" "$SETTINGS_FILE" | cut -d= -f2)
+        NEW_MODE_SEQUENCE=$(grep "^MODE_SEQUENCE=" "$SETTINGS_FILE" | cut -d= -f2)
+        NEW_MODEL_SEQUENCE=$(grep "^MODEL_SEQUENCE=" "$SETTINGS_FILE" | cut -d= -f2)
+        NEW_WAIT_COMMANDS=$(grep "^WAIT_COMMANDS=" "$SETTINGS_FILE" | cut -d= -f2)
+        NEW_TUI_FLAGS=$(grep "^TUI_FLAGS=" "$SETTINGS_FILE" | cut -d= -f2)
+        NEW_DELAY=$(grep "^DELAY=" "$SETTINGS_FILE" | cut -d= -f2)
+
+        # Handle ABORT - exit immediately
+        if [ "$ABORT" = "true" ]; then
+            rm -f "$SETTINGS_FILE"
+            echo "Aborted by user."
+            exit 0
+        fi
+
+        # Handle INTERVENE mode - continue in TUI
+        if [ "$INTERVENE" = "true" ]; then
+            rm -f "$SETTINGS_FILE"
+            echo ""
+            echo "Continuing session in TUI mode..."
+            "$CLI" --dangerously-skip-permissions --model "$MODEL" --continue
+            # After TUI session, continue the loop
+            ITERATION=$((ITERATION + 1))
+            continue
+        fi
+
+        # Apply changes if set
+        if [ -n "$NEW_MODE_SEQUENCE" ]; then
+            read -ra MODE_SEQUENCE <<< "$NEW_MODE_SEQUENCE"
+            export RALPH_MODE_SEQUENCE="${MODE_SEQUENCE[*]}"
+        fi
+        if [ -n "$NEW_MODEL_SEQUENCE" ]; then
+            read -ra MODEL_SEQUENCE <<< "$NEW_MODEL_SEQUENCE"
+            export RALPH_MODEL_SEQUENCE="${MODEL_SEQUENCE[*]}"
+        fi
+        if [ -n "$NEW_WAIT_COMMANDS" ]; then
+            IFS='|' read -ra WAIT_COMMANDS <<< "$NEW_WAIT_COMMANDS"
+            export RALPH_WAIT_COMMANDS="$NEW_WAIT_COMMANDS"
+        fi
+        if [ -n "$NEW_TUI_FLAGS" ]; then
+            read -ra TUI_FLAGS <<< "$NEW_TUI_FLAGS"
+            export RALPH_TUI_FLAGS="${TUI_FLAGS[*]}"
+        fi
+        if [ -n "$NEW_DELAY" ]; then
+            DELAY="$NEW_DELAY"
+            export RALPH_DELAY="$DELAY"
+        fi
+        if [ -n "$NEW_ITERATIONS" ]; then
+            MAX_ITERATIONS="$NEW_ITERATIONS"
+            export RALPH_MAX_ITERATIONS="$MAX_ITERATIONS"
+            # Check immediately if we should stop
+            if [ "$MAX_ITERATIONS" -gt 0 ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
+                echo "Reached max iterations: $MAX_ITERATIONS"
+                rm -f "$SETTINGS_FILE"
+                break
+            fi
+        fi
+
+        rm -f "$SETTINGS_FILE"
+    fi
+
+    # Apply delay between iterations
+    if [ "$DELAY" -gt 0 ]; then
+        echo "Waiting ${DELAY}s before next iteration..."
+        sleep "$DELAY"
     fi
 
     ITERATION=$((ITERATION + 1))

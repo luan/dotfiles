@@ -6,6 +6,7 @@
 """
 Ralph formatter - clean scrolling output with updating status block.
 """
+
 import sys
 import json
 import subprocess
@@ -13,6 +14,7 @@ import shutil
 import os
 import threading
 import time
+import termios
 from datetime import datetime
 from io import StringIO
 
@@ -35,8 +37,65 @@ spinner_frame = 0
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner
 status_lock = threading.Lock()
 running = True
-thinking_state = {"lines": 0}  # Track lines used by current thinking block
 active_agents = {}  # Track active agents by tool_use_id -> agent_type
+
+# Interactive settings (for next iteration)
+MODELS = ["sonnet", "opus", "haiku"]
+MODES = ["build", "plan"]
+next_settings = {
+    "mode": os.environ.get("RALPH_MODE", "build").lower(),
+    "model": os.environ.get("RALPH_MODEL", "sonnet").lower(),
+    "iterations": int(os.environ.get("RALPH_MAX_ITERATIONS", "5")),
+}
+settings_file = os.environ.get("RALPH_SETTINGS_FILE", "/tmp/ralph_settings")
+claude_pid_file = os.environ.get("RALPH_CLAUDE_PID_FILE", "")
+mode_sequence_raw = os.environ.get("RALPH_MODE_SEQUENCE", "").split()
+model_sequence_raw = os.environ.get("RALPH_MODEL_SEQUENCE", "").split()
+wait_commands_raw = os.environ.get("RALPH_WAIT_COMMANDS", "").split("|") if os.environ.get("RALPH_WAIT_COMMANDS") else []
+current_iteration = int(os.environ.get("RALPH_ITERATION", "1"))
+max_iterations = int(os.environ.get("RALPH_MAX_ITERATIONS", "5"))
+default_model = os.environ.get("RALPH_MODEL", "sonnet").lower()
+
+# Build sequence as list of (mode, model, wait_cmd, tui) tuples
+tui_flags_raw = os.environ.get("RALPH_TUI_FLAGS", "").split()
+
+def build_sequence():
+    seq = []
+    for i, m in enumerate(mode_sequence_raw):
+        if i < len(model_sequence_raw):
+            mdl = model_sequence_raw[i]
+        elif model_sequence_raw:
+            mdl = model_sequence_raw[-1]
+        else:
+            mdl = default_model
+        if i < len(wait_commands_raw):
+            wait_cmd = wait_commands_raw[i]
+        else:
+            wait_cmd = ""
+        if i < len(tui_flags_raw):
+            tui = tui_flags_raw[i] == "1"
+        else:
+            tui = False
+        seq.append((m, mdl, wait_cmd, tui))
+    return seq
+
+# Editable sequence state
+next_settings["sequence"] = build_sequence()  # List of (mode, model, wait_cmd, tui) tuples
+next_settings["selected_idx"] = current_iteration  # 1-indexed, start at current
+next_settings["delay"] = int(os.environ.get("RALPH_DELAY", "0"))  # Delay in seconds
+next_settings["wait_input"] = ""  # Current wait command being typed
+next_settings["inputting_wait"] = False  # Whether we're inputting a wait command
+
+
+def kill_claude():
+    """Kill the claude process if we have its PID."""
+    if claude_pid_file:
+        try:
+            with open(claude_pid_file, "r") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 15)  # SIGTERM
+        except Exception:
+            pass
 
 
 def animation_thread():
@@ -45,13 +104,187 @@ def animation_thread():
     while running:
         time.sleep(0.1)
         # Animate if we have in_progress todos OR no todos (showing "Working")
-        has_in_progress = current_todos and any(t.get("status") == "in_progress" for t in current_todos)
+        has_in_progress = current_todos and any(
+            t.get("status") == "in_progress" for t in current_todos
+        )
         has_no_todos = not current_todos
         if has_in_progress or has_no_todos:
             with status_lock:
                 spinner_frame += 1
                 clear_status()
                 draw_status()
+
+
+def keypress_thread():
+    """Background thread to listen for keypresses."""
+    global running
+    # We need to read from /dev/tty since stdin is used for piped data
+    try:
+        tty_fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return  # No TTY available
+
+    old_settings = termios.tcgetattr(tty_fd)
+    try:
+        # Set to cbreak mode (not full raw) - allows output to work normally
+        new_settings = termios.tcgetattr(tty_fd)
+        new_settings[3] = new_settings[3] & ~(termios.ICANON | termios.ECHO)
+        new_settings[6][termios.VMIN] = 0
+        new_settings[6][termios.VTIME] = 0
+        termios.tcsetattr(tty_fd, termios.TCSANOW, new_settings)
+
+        while running:
+            time.sleep(0.05)
+            try:
+                ch = os.read(tty_fd, 3).decode("utf-8", errors="ignore")
+                if ch:
+                    handle_keypress(ch)
+            except BlockingIOError:
+                pass
+    finally:
+        termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_settings)
+        os.close(tty_fd)
+
+
+def handle_keypress(ch):
+    """Handle a keypress and update settings."""
+    with status_lock:
+        changed = False
+        seq = next_settings["sequence"]
+        sel = next_settings["selected_idx"]
+        max_idx = next_settings["iterations"] if next_settings["iterations"] > 0 else max(len(seq), current_iteration + 5)
+
+        # Handle wait command input mode
+        if next_settings["inputting_wait"]:
+            if ch == "\r" or ch == "\n":  # Enter - confirm
+                if sel <= len(seq):
+                    _, curr_model, _, curr_tui = seq[sel - 1]
+                    seq[sel - 1] = ("wait", curr_model, next_settings["wait_input"], curr_tui)
+                next_settings["inputting_wait"] = False
+                next_settings["wait_input"] = ""
+                changed = True
+            elif ch == "\x1b":  # Escape - cancel
+                next_settings["inputting_wait"] = False
+                next_settings["wait_input"] = ""
+                changed = True
+            elif ch == "\x7f" or ch == "\b":  # Backspace
+                next_settings["wait_input"] = next_settings["wait_input"][:-1]
+                changed = True
+            elif len(ch) == 1 and ch.isprintable():  # Regular character
+                next_settings["wait_input"] += ch
+                changed = True
+            if changed:
+                clear_status()
+                draw_status()
+            return
+
+        # Up arrow: \x1b[A - more iterations
+        if ch == "\x1b[A":
+            next_settings["iterations"] += 1
+            # Extend sequence if needed
+            if len(seq) < next_settings["iterations"]:
+                last = seq[-1] if seq else ("build", default_model, "", False)
+                seq.append(last)
+            changed = True
+        # Down arrow: \x1b[B - fewer iterations
+        elif ch == "\x1b[B":
+            if next_settings["iterations"] > current_iteration:
+                next_settings["iterations"] -= 1
+            changed = True
+        # Left arrow: \x1b[D - select previous sequence entry
+        elif ch == "\x1b[D":
+            if sel > current_iteration:
+                next_settings["selected_idx"] -= 1
+            changed = True
+        # Right arrow: \x1b[C - select next sequence entry
+        elif ch == "\x1b[C":
+            if sel < max_idx:
+                next_settings["selected_idx"] += 1
+                # Extend sequence if needed
+                while len(seq) < next_settings["selected_idx"]:
+                    last = seq[-1] if seq else ("build", default_model, "", False)
+                    seq.append(last)
+            changed = True
+        # 'a': toggle mode for selected entry (plan/build, exits wait)
+        elif ch == "a":
+            if sel <= len(seq):
+                curr_mode, curr_model, _, curr_tui = seq[sel - 1]
+                if curr_mode == "wait":
+                    new_mode = "plan"
+                elif curr_mode == "plan":
+                    new_mode = "build"
+                else:
+                    new_mode = "plan"
+                seq[sel - 1] = (new_mode, curr_model, "", curr_tui)
+            changed = True
+        # 'w': set wait mode and start command input
+        elif ch == "w":
+            if sel <= len(seq):
+                next_settings["inputting_wait"] = True
+                next_settings["wait_input"] = ""
+            changed = True
+        # 'm': toggle model for selected entry
+        elif ch == "m":
+            if sel <= len(seq):
+                curr_mode, curr_model, wait_cmd, curr_tui = seq[sel - 1]
+                idx = MODELS.index(curr_model) if curr_model in MODELS else 0
+                new_model = MODELS[(idx + 1) % len(MODELS)]
+                seq[sel - 1] = (curr_mode, new_model, wait_cmd, curr_tui)
+            changed = True
+        # 't': toggle TUI for selected entry
+        elif ch == "t":
+            if sel <= len(seq):
+                curr_mode, curr_model, wait_cmd, curr_tui = seq[sel - 1]
+                seq[sel - 1] = (curr_mode, curr_model, wait_cmd, not curr_tui)
+            changed = True
+        # '=' or '+': increase delay
+        elif ch == "=":
+            next_settings["delay"] += 1
+            changed = True
+        elif ch == "+":
+            next_settings["delay"] += 60
+            changed = True
+        # '-' or '_': decrease delay
+        elif ch == "-":
+            if next_settings["delay"] > 0:
+                next_settings["delay"] = max(0, next_settings["delay"] - 1)
+            changed = True
+        elif ch == "_":
+            if next_settings["delay"] > 0:
+                next_settings["delay"] = max(0, next_settings["delay"] - 60)
+            changed = True
+        # 'I' (Shift+I): INTERVENE - stop current session and continue in TUI
+        elif ch == "I":
+            next_settings["intervene"] = True
+            # Write settings and exit immediately
+            clear_status()
+            try:
+                with open(settings_file, "w") as f:
+                    f.write(f"MODE={next_settings['mode']}\n")
+                    f.write(f"MODEL={next_settings['model']}\n")
+                    f.write(f"ITERATIONS={next_settings['iterations']}\n")
+                    f.write(f"TUI_NEXT={('true' if next_settings['tui_next'] else 'false')}\n")
+                    f.write("INTERVENE=true\n")
+            except Exception:
+                pass
+            print(f"\n\033[1;95m⚡ INTERVENE\033[0m - switching to TUI with --continue")
+            kill_claude()
+            os._exit(0)
+        # 'Q' (Shift+Q): ABORT - stop everything and exit ralph
+        elif ch == "Q":
+            clear_status()
+            try:
+                with open(settings_file, "w") as f:
+                    f.write("ABORT=true\n")
+            except Exception:
+                pass
+            print(f"\n\033[1;91m⛔ ABORT\033[0m - stopping ralph")
+            kill_claude()
+            os._exit(0)
+
+        if changed:
+            clear_status()
+            draw_status()
 
 
 def get_context_limit(model_name):
@@ -107,18 +340,6 @@ def safe_draw_status():
         draw_status()
 
 
-def collapse_thinking():
-    """Collapse/clear the current thinking block."""
-    if thinking_state["lines"] > 0:
-        with status_lock:
-            for _ in range(thinking_state["lines"]):
-                sys.stdout.write(CURSOR_UP.format(n=1))
-                sys.stdout.write(CLEAR_LINE)
-                sys.stdout.write("\r")
-            sys.stdout.flush()
-            thinking_state["lines"] = 0
-
-
 def draw_status():
     """Draw the status block and track its line count."""
     global status_lines
@@ -140,7 +361,9 @@ def draw_status():
             if status == "completed":
                 lines.append(f"\033[0m\033[92m  ✓\033[0m {content}\033[0m")
             elif status == "in_progress":
-                lines.append(f"\033[0m\033[93m  {spin_char}\033[0m \033[1m{active}\033[0m")
+                lines.append(
+                    f"\033[0m\033[93m  {spin_char}\033[0m \033[1m{active}\033[0m"
+                )
             else:
                 lines.append(f"\033[0m\033[90m  ○ {content}\033[0m")
         lines.append(f"\033[90m{'─' * width}\033[0m")
@@ -179,7 +402,68 @@ def draw_status():
     lines.append(progress)
 
     # Header line at the bottom
-    lines.append(f"\033[1;94m◆ RALPH\033[0m {mode} • Loop {iteration} • {branch} • {model}")
+    max_iter_display = next_settings["iterations"] if next_settings["iterations"] > 0 else "∞"
+    lines.append(
+        f"\033[1;94m◆ RALPH\033[0m {mode} • Loop {iteration}/{max_iter_display} • {branch} • {model}"
+    )
+
+    # Show mode sequence with upcoming modes and models
+    seq = next_settings["sequence"]
+    sel = next_settings["selected_idx"]
+    if seq:
+        seq_display = []
+        iters_to_show = next_settings["iterations"] if next_settings["iterations"] > 0 else max(len(seq), current_iteration + 3)
+        for i in range(1, iters_to_show + 1):
+            if i <= len(seq):
+                m, mdl, wait_cmd, tui = seq[i - 1]
+            else:
+                m, mdl, wait_cmd, tui = seq[-1] if seq else ("build", default_model, "", False)
+            # Format: Ps (Plan+sonnet), Bo (Build+opus), W (Wait)
+            if m == "wait":
+                short = "W"
+            else:
+                short = m[0].upper() + mdl[0].lower()
+            # TUI entries show in RED
+            if tui and i >= current_iteration:
+                if i == current_iteration:
+                    seq_display.append(f"\033[1;91m[{short}]\033[0m")  # current TUI - red + brackets
+                elif i == sel:
+                    seq_display.append(f"\033[1;91m<{short}>\033[0m")  # selected TUI - red + angle brackets
+                else:
+                    seq_display.append(f"\033[91m{short}\033[0m")  # future TUI - red
+            elif i < current_iteration:
+                seq_display.append(f"\033[90m{short}\033[0m")  # past - dim
+            elif i == current_iteration:
+                seq_display.append(f"\033[1;96m[{short}]\033[0m")  # current - bright cyan + brackets
+            elif i == sel:
+                seq_display.append(f"\033[1;95m<{short}>\033[0m")  # selected - magenta + angle brackets
+            else:
+                seq_display.append(f"\033[93m{short}\033[0m")  # future - yellow
+        lines.append(f"  \033[90mSequence:\033[0m {' '.join(seq_display)}")
+
+    # Show wait command input prompt if active
+    if next_settings["inputting_wait"]:
+        lines.append(f"\033[1;93m  Wait cmd:\033[0m {next_settings['wait_input']}▌")
+    # Show wait command for selected entry if it's a wait
+    elif sel <= len(seq) and seq[sel - 1][0] == "wait" and seq[sel - 1][2]:
+        lines.append(f"  \033[90mWait cmd:\033[0m {seq[sel - 1][2]}")
+
+    # Show pending changes for next iteration
+    changes = []
+    if next_settings["delay"] > 0:
+        delay_s = next_settings["delay"]
+        if delay_s >= 60:
+            changes.append(f"delay:{delay_s // 60}m{delay_s % 60}s")
+        else:
+            changes.append(f"delay:{delay_s}s")
+
+    if changes:
+        lines.append(f"\033[95m  {' | '.join(changes)}\033[0m")
+
+    # Controls hint
+    lines.append(
+        f"\033[90m  ↑↓:loops ←→:select a:mode w:wait m:model ±:delay t:tui I:intervene Q:abort\033[0m"
+    )
 
     # Print and track
     for line in lines:
@@ -230,10 +514,24 @@ def truncate(text, limit=500):
 
 
 IGNORE_KEYS = {
-    "type", "durationMs", "session_id", "uuid", "interrupted", "truncated",
-    "search_path", "total_lines", "lines_returned", "numFiles", "count",
-    "is_error", "num_matches", "parent_tool_use_id", "description",
-    "subagent_type", "isImage", "isTruncated",
+    "type",
+    "durationMs",
+    "session_id",
+    "uuid",
+    "interrupted",
+    "truncated",
+    "search_path",
+    "total_lines",
+    "lines_returned",
+    "numFiles",
+    "count",
+    "is_error",
+    "num_matches",
+    "parent_tool_use_id",
+    "description",
+    "subagent_type",
+    "isImage",
+    "isTruncated",
 }
 
 
@@ -313,6 +611,10 @@ draw_status()
 anim_thread = threading.Thread(target=animation_thread, daemon=True)
 anim_thread.start()
 
+# Start keypress listener thread
+key_thread = threading.Thread(target=keypress_thread, daemon=True)
+key_thread.start()
+
 # Main loop
 for line in sys.stdin:
     if not line.strip():
@@ -351,7 +653,6 @@ for line in sys.stdin:
                 if ptype == "text":
                     text = part.get("text", "")
                     if text.strip():
-                        collapse_thinking()
                         output(f"\n\033[1;96m◆ Claude\033[0m", is_sidechain)
                         rendered = render_markdown(text)
                         for ln in rendered.split("\n"):
@@ -361,22 +662,12 @@ for line in sys.stdin:
                 elif ptype == "thinking":
                     thinking_text = part.get("thinking", "")
                     if thinking_text.strip():
-                        collapse_thinking()
-                        with status_lock:
-                            clear_status()
-                            print(f"\n\033[90m◇ Thinking…\033[0m")
-                            lines = thinking_text.strip().split("\n")
-                            # Show up to 10 lines
-                            for ln in lines[:10]:
-                                print(f"  \033[90m{ln[:100]}\033[0m")
-                            if len(lines) > 10:
-                                print(f"  \033[90m… [{len(lines) - 10} more lines]\033[0m")
-                            thinking_state["lines"] = min(len(lines), 10) + 1 + (1 if len(lines) > 10 else 0)
-                            sys.stdout.flush()
-                            draw_status()
+                        output(f"\n\033[90m◇ Thinking…\033[0m", is_sidechain)
+                        for ln in thinking_text.strip().split("\n"):
+                            output_raw(f"  \033[90m{ln}\033[0m", is_sidechain)
+                        draw_status()
 
                 elif ptype == "tool_use":
-                    collapse_thinking()
                     name = part.get("name")
                     inp = part.get("input", {})
 
@@ -385,11 +676,20 @@ for line in sys.stdin:
                         clear_status()
                         draw_status()
                     elif name == "Edit":
-                        output(f"\n\033[93m⚙ Edit\033[0m {inp.get('file_path')}", is_sidechain)
+                        output(
+                            f"\n\033[93m⚙ Edit\033[0m {inp.get('file_path')}",
+                            is_sidechain,
+                        )
                     elif name == "Write":
-                        output(f"\n\033[93m⚙ Write\033[0m {inp.get('file_path')}", is_sidechain)
+                        output(
+                            f"\n\033[93m⚙ Write\033[0m {inp.get('file_path')}",
+                            is_sidechain,
+                        )
                     elif name == "Read":
-                        output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}", is_sidechain)
+                        output(
+                            f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}",
+                            is_sidechain,
+                        )
                     elif name == "Bash":
                         cmd = inp.get("command", "")
                         width = get_width()
@@ -400,36 +700,53 @@ for line in sys.stdin:
                         indent_prefix = "\033[95m│\033[0m " if is_sidechain else ""
                         print(f"\n{indent_prefix}\033[90m╭{'─' * inner}╮\033[0m")
 
-                        cmd_lines = cmd.split('\n')
+                        cmd_lines = cmd.split("\n")
                         first = True
                         for line in cmd_lines:
                             if len(line) <= max_len:
                                 chunks = [line]
                             else:
-                                chunks = [line[i:i+max_len] for i in range(0, len(line), max_len)]
+                                chunks = [
+                                    line[i : i + max_len]
+                                    for i in range(0, len(line), max_len)
+                                ]
 
                             for chunk in chunks:
                                 pad = max_len - len(chunk)
                                 if first:
-                                    print(f"{indent_prefix}\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m")
+                                    print(
+                                        f"{indent_prefix}\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m"
+                                    )
                                     first = False
                                 else:
-                                    print(f"{indent_prefix}\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m")
+                                    print(
+                                        f"{indent_prefix}\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m"
+                                    )
 
                         print(f"{indent_prefix}\033[90m╰{'─' * inner}╯\033[0m")
                         draw_status()
                     elif name == "Grep":
-                        output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}", is_sidechain)
+                        output(
+                            f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}",
+                            is_sidechain,
+                        )
                     elif name == "Glob":
-                        output(f"\n\033[93m⚙ Glob\033[0m {inp.get('pattern')}", is_sidechain)
+                        output(
+                            f"\n\033[93m⚙ Glob\033[0m {inp.get('pattern')}",
+                            is_sidechain,
+                        )
                     elif name == "Task":
                         desc = inp.get("description", "")
                         agent = inp.get("subagent_type", "")
                         tool_id = part.get("id")
                         clear_status()
-                        print(indent_text(f"\n\033[95m┌ 🤖 {agent}\033[0m", is_sidechain))
+                        print(
+                            indent_text(f"\n\033[95m┌ 🤖 {agent}\033[0m", is_sidechain)
+                        )
                         if desc:
-                            print(indent_text(f"\033[95m│\033[0m  {desc}", is_sidechain))
+                            print(
+                                indent_text(f"\033[95m│\033[0m  {desc}", is_sidechain)
+                            )
                         print(indent_text(f"\033[95m│\033[0m", is_sidechain))
                         sys.stdout.flush()
                         draw_status()
@@ -447,7 +764,9 @@ for line in sys.stdin:
                 res = data["tool_use_result"]
                 if isinstance(res, str):
                     if "error" in res.lower() or res.startswith("<tool_use_error>"):
-                        msg = res.replace("<tool_use_error>", "").replace("</tool_use_error>", "")
+                        msg = res.replace("<tool_use_error>", "").replace(
+                            "</tool_use_error>", ""
+                        )
                         output(f"  \033[91m✗ {truncate(msg, 200)}\033[0m", is_sidechain)
                     elif res.strip():
                         # Short results inline
@@ -463,7 +782,9 @@ for line in sys.stdin:
                         lines_count = len(f_info.get("content", "").split("\n"))
                         output(f"  \033[90m→ {lines_count} lines\033[0m", is_sidechain)
                     elif "structuredPatch" in res:
-                        show_diff(res.get("filePath"), res["structuredPatch"], is_sidechain)
+                        show_diff(
+                            res.get("filePath"), res["structuredPatch"], is_sidechain
+                        )
                     elif res.get("type") == "create":
                         output(f"  \033[92m✓ Created\033[0m", is_sidechain)
                     elif "filenames" in res or "matches" in res:
@@ -480,7 +801,9 @@ for line in sys.stdin:
                                 draw_status()
                         elif out:
                             out_lines = out.split("\n")
-                            if len(out_lines) <= 5 and all(len(l) < 80 for l in out_lines):
+                            if len(out_lines) <= 5 and all(
+                                len(l) < 80 for l in out_lines
+                            ):
                                 for ln in out_lines:
                                     output_raw(f"  \033[90m{ln}\033[0m", is_sidechain)
                                 draw_status()
@@ -499,7 +822,26 @@ for line in sys.stdin:
     except Exception:
         pass
 
-# Final cleanup - clear status and print final state
+# Final cleanup
+running = False
 clear_status()
+
+# Write settings for next iteration
+try:
+    seq = next_settings["sequence"]
+    modes = " ".join(m for m, _, _, _ in seq)
+    models = " ".join(mdl for _, mdl, _, _ in seq)
+    wait_cmds = "|".join(cmd for _, _, cmd, _ in seq)
+    tui_flags = " ".join("1" if tui else "0" for _, _, _, tui in seq)
+    with open(settings_file, "w") as f:
+        f.write(f"ITERATIONS={next_settings['iterations']}\n")
+        f.write(f"MODE_SEQUENCE={modes}\n")
+        f.write(f"MODEL_SEQUENCE={models}\n")
+        f.write(f"WAIT_COMMANDS={wait_cmds}\n")
+        f.write(f"TUI_FLAGS={tui_flags}\n")
+        f.write(f"DELAY={next_settings['delay']}\n")
+except Exception:
+    pass
+
 print(f"\n\033[90m{'─' * 60}\033[0m")
 print(f"\033[92m✓ Done\033[0m")
