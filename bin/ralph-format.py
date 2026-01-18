@@ -316,7 +316,6 @@ for line in sys.stdin:
                     + usage.get("cache_read_input_tokens", 0)
                     + usage.get("cache_creation_input_tokens", 0)
                 )
-            stop_reason = message.get("stop_reason")
             for part in message.get("content", []):
                 if part.get("type") == "text":
                     print(
@@ -354,19 +353,16 @@ for line in sys.stdin:
                             f"  {FG_CYAN}Pattern:{RESET} {BOLD}{inp.get('pattern')}{RESET}"
                         )
                     elif name == "TodoWrite":
-                        # Just store, don't print - shown at turn completion
                         current_todos[:] = inp.get("todos", [])
+                        if current_todos:
+                            print(format_todos(current_todos))
                     else:
                         kv = format_kv(inp)
                         if kv:
                             print(kv)
-            # Show status at end of turn (when stop_reason is set)
-            if stop_reason:
-                turn_number += 1
-                print(f"\n  {create_progress_bar(context_usage, context_limit)}")
-                if current_todos:
-                    print(format_todos(current_todos))
-                print(f"{FG_GRAY}─{RESET}" * 40)
+            # Show progress bar when we have usage data
+            if usage and context_usage > 0:
+                print(f"  {create_progress_bar(context_usage, context_limit)}")
 
         elif event_type == "result":
             turn_number += 1
