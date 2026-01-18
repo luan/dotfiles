@@ -43,6 +43,40 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 DELTA_PATH = shutil.which("delta")
+GLOW_PATH = shutil.which("glow")
+
+
+def render_markdown(text):
+    """Render markdown text using glow if available."""
+    if not GLOW_PATH:
+        return text
+    try:
+        proc = subprocess.Popen(
+            [GLOW_PATH, "-s", "dark", "-w", "0"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        out, _ = proc.communicate(input=text)
+        return out.rstrip() if out else text
+    except:
+        return text
+
+
+def format_todos(todos):
+    """Format a list of todos with icons and colors."""
+    lines = []
+    for todo in todos:
+        status = todo.get("status")
+        if status == "completed":
+            lines.append(f"  {FG_GREEN}✓{RESET} {todo.get('content')}")
+        elif status == "in_progress":
+            lines.append(f"  {FG_YELLOW}▶{RESET} {BOLD}{todo.get('activeForm')}{RESET}")
+        else:
+            lines.append(f"  {FG_GRAY}○{RESET} {todo.get('content')}")
+    return "\n".join(lines)
+
 
 # Icons
 ICON_CLAUDE = "◆"
@@ -55,6 +89,45 @@ ICON_EDIT = "✏"
 ICON_CREATE = "✨"
 ICON_COST = "💰"
 ICON_TIME = "⏱"
+ICON_CONTEXT = "󱃖"
+
+# Context tracking
+context_usage = 0
+context_limit = 200000  # Default, adjusted based on model
+current_todos = []  # Track current todo state
+
+
+def format_tokens(count):
+    """Format token count as 'k' notation."""
+    if count >= 1000:
+        return f"{count // 1000}k"
+    return str(count)
+
+
+def create_progress_bar(current, limit):
+    """Create a visual progress bar with block characters."""
+    if limit <= 0:
+        return f"{FG_GRAY}No context data{RESET}"
+
+    pct = min((current * 100) / limit, 100)
+    progress_int = int(pct)
+
+    # Progress bar blocks (0-10)
+    filled = min(progress_int // 10, 10)
+    empty = 10 - filled
+
+    # Choose color based on percentage
+    if progress_int < 50:
+        bar_color = FG_GREEN
+    elif progress_int < 80:
+        bar_color = FG_YELLOW
+    else:
+        bar_color = FG_RED
+
+    bar = f"{bar_color}{'█' * filled}{FG_GRAY}{'░' * empty}{RESET}"
+    tokens = f"{format_tokens(current)}/{format_tokens(limit)}"
+    return f"{bar_color}{ICON_CONTEXT}{RESET} {bar} {FG_GRAY}{pct:.0f}% ({tokens}){RESET}"
+
 
 # Metadata to never show
 GLOBAL_IGNORE_KEYS = [
@@ -74,7 +147,22 @@ GLOBAL_IGNORE_KEYS = [
     "parent_tool_use_id",
     "description",
     "subagent_type",
+    "isImage",
+    "isTruncated",
 ]
+
+
+def is_empty_value(v):
+    """Check if a value is empty/boring and should be skipped."""
+    if v is None:
+        return True
+    if v is False:
+        return True
+    if isinstance(v, str) and not v.strip():
+        return True
+    if isinstance(v, (list, dict)) and len(v) == 0:
+        return True
+    return False
 
 
 def timestamp():
@@ -124,6 +212,8 @@ def format_kv(data, indent=2):
     if isinstance(data, dict):
         for k, v in data.items():
             if k.lower() in GLOBAL_IGNORE_KEYS:
+                continue
+            if is_empty_value(v):
                 continue
 
             # Handle complex values
@@ -218,17 +308,27 @@ for line in sys.stdin:
 
         if event_type == "assistant":
             message = data.get("message", {})
+            # Extract context usage from message.usage
+            usage = message.get("usage", {})
+            if usage:
+                context_usage = (
+                    usage.get("input_tokens", 0)
+                    + usage.get("cache_read_input_tokens", 0)
+                    + usage.get("cache_creation_input_tokens", 0)
+                )
             for part in message.get("content", []):
                 if part.get("type") == "text":
                     print(
                         f"\n{BG_BLUE}{FG_BLACK}{BOLD} LOOP {iteration} {RESET}{FG_BLUE}{PL_LEFT_FULL}{RESET} {BOLD}{FG_CYAN}{ICON_CLAUDE} CLAUDE{RESET} {FG_GRAY}[{timestamp()}]{RESET}"
                     )
-                    print(f"  {part.get('text')}")
+                    rendered = render_markdown(part.get("text", ""))
+                    for line in rendered.split("\n"):
+                        print(f"  {line}")
                 elif part.get("type") == "thought":
                     print(f"\n{BOLD}{FG_MAGENTA}{ICON_THOUGHT} THOUGHTS{RESET}")
-                    for t_line in part.get("text", "").split("\n"):
-                        if t_line.strip():
-                            print(f"  {FG_GRAY}{t_line}{RESET}")
+                    rendered = render_markdown(part.get("text", ""))
+                    for t_line in rendered.split("\n"):
+                        print(f"  {FG_GRAY}{t_line}{RESET}")
                 elif part.get("type") == "tool_use":
                     name = part.get("name")
                     inp = part.get("input", {})
@@ -252,6 +352,9 @@ for line in sys.stdin:
                         print(
                             f"  {FG_CYAN}Pattern:{RESET} {BOLD}{inp.get('pattern')}{RESET}"
                         )
+                    elif name == "TodoWrite":
+                        # Just store, don't print - shown at turn completion
+                        current_todos[:] = inp.get("todos", [])
                     else:
                         kv = format_kv(inp)
                         if kv:
@@ -269,9 +372,15 @@ for line in sys.stdin:
             for s in summary:
                 if s.strip():
                     print(f"  {s}")
+            # Show cost, time, and context bar
             print(
                 f"  {FG_GRAY}{ICON_COST} ${cost:.4f}  {ICON_TIME} {duration:.1f}s{RESET}"
             )
+            print(f"  {create_progress_bar(context_usage, context_limit)}")
+            # Show current todos if any
+            if current_todos:
+                print(f"  {FG_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
+                print(format_todos(current_todos))
             print(f"{FG_GRAY}─{RESET}" * 40)
 
         elif event_type == "user":
@@ -293,7 +402,10 @@ for line in sys.stdin:
                         print(f"  {truncate(res_data, 500)}")
                 elif isinstance(res_data, dict):
                     t = res_data.get("type")
-                    if t == "text" and "file" in res_data:
+                    if "newTodos" in res_data:
+                        # Just store, don't print - shown at turn completion
+                        current_todos[:] = res_data.get("newTodos", [])
+                    elif t == "text" and "file" in res_data:
                         f_info = res_data["file"]
                         print(
                             f"  {FG_CYAN}{ICON_FILE} READ COMPLETE:{RESET} {f_info.get('filePath')}"
@@ -336,6 +448,11 @@ for line in sys.stdin:
                     elif "result" in res_data and "usage" in res_data:
                         print(f"  {FG_BLUE}{BOLD}AGENT COMPLETE{RESET}")
                         print(f"  {truncate(res_data.get('result', ''), 500)}")
+                    elif "stdout" in res_data:
+                        # Simple stdout result - just show the value
+                        out = res_data.get("stdout", "")
+                        if out:
+                            print(f"  {truncate(out, 500)}")
                     else:
                         kv = format_kv(res_data)
                         if kv:
