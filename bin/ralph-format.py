@@ -316,6 +316,7 @@ for line in sys.stdin:
                     + usage.get("cache_read_input_tokens", 0)
                     + usage.get("cache_creation_input_tokens", 0)
                 )
+            stop_reason = message.get("stop_reason")
             for part in message.get("content", []):
                 if part.get("type") == "text":
                     print(
@@ -359,6 +360,13 @@ for line in sys.stdin:
                         kv = format_kv(inp)
                         if kv:
                             print(kv)
+            # Show status at end of turn (when stop_reason is set)
+            if stop_reason:
+                turn_number += 1
+                print(f"\n  {create_progress_bar(context_usage, context_limit)}")
+                if current_todos:
+                    print(format_todos(current_todos))
+                print(f"{FG_GRAY}─{RESET}" * 40)
 
         elif event_type == "result":
             turn_number += 1
