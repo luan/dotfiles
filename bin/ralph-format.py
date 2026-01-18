@@ -57,10 +57,22 @@ def draw_status():
     width = get_width()
     lines = []
 
-    # Line 1: Separator
+    # Separator
     lines.append(f"\033[90m{'─' * width}\033[0m")
 
-    # Line 2: Progress bar and stats
+    # Todos first (all of them)
+    if current_todos:
+        for todo in current_todos:
+            status = todo.get("status")
+            if status == "completed":
+                lines.append(f"\033[92m  ✓\033[0m {todo.get('content', '')}")
+            elif status == "in_progress":
+                lines.append(f"\033[93m  ▶\033[0m \033[1m{todo.get('activeForm', '')}\033[0m")
+            else:
+                lines.append(f"\033[90m  ○ {todo.get('content', '')}\033[0m")
+        lines.append(f"\033[90m{'─' * width}\033[0m")
+
+    # Progress bar and stats
     pct = min((context_usage * 100) / context_limit, 100) if context_limit > 0 else 0
     filled = min(int(pct) // 5, 20)
     empty = 20 - filled
@@ -89,25 +101,8 @@ def draw_status():
     )
     lines.append(progress)
 
-    # Todos (show up to 4)
-    if current_todos:
-        lines.append(f"\033[90m{'─' * width}\033[0m")
-        shown = 0
-        for todo in current_todos:
-            if shown >= 4:
-                remaining = len(current_todos) - shown
-                lines.append(f"\033[90m  ... +{remaining} more\033[0m")
-                break
-            status = todo.get("status")
-            content = todo.get("content", "")[:width - 6]
-            if status == "completed":
-                lines.append(f"\033[92m  ✓\033[0m {content}")
-            elif status == "in_progress":
-                active = todo.get("activeForm", content)[:width - 6]
-                lines.append(f"\033[93m  ▶\033[0m \033[1m{active}\033[0m")
-            else:
-                lines.append(f"\033[90m  ○ {content}\033[0m")
-            shown += 1
+    # Header line at the bottom
+    lines.append(f"\033[1;94m◆ RALPH\033[0m {mode} • Loop {iteration} • {branch} • {model}")
 
     # Print and track
     for line in lines:
@@ -227,14 +222,12 @@ def show_diff(file_path, patches):
         pass
 
 
-# Header
+# Config from env
 mode = os.environ.get("RALPH_MODE", "?").upper()
 iteration = os.environ.get("RALPH_ITERATION", "1")
 model = os.environ.get("RALPH_MODEL", "?")
 branch = os.environ.get("RALPH_BRANCH", "?")
 
-print(f"\n\033[1;94m◆ RALPH\033[0m {mode} • Loop {iteration} • {branch} • {model}")
-print(f"\033[90m{'─' * 60}\033[0m")
 draw_status()
 
 # Main loop
@@ -289,9 +282,19 @@ for line in sys.stdin:
                         output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}")
                     elif name == "Bash":
                         cmd = inp.get("command", "")
-                        if len(cmd) > 80:
-                            cmd = cmd[:77] + "…"
-                        output(f"\n\033[93m$\033[0m {cmd}")
+                        w = get_width() - 4
+                        clear_status()
+                        print(f"\n\033[90m╭{'─' * (w + 2)}╮\033[0m")
+                        # Wrap long commands
+                        if len(cmd) <= w:
+                            print(f"\033[90m│\033[0m \033[93m$\033[0m {cmd}{' ' * (w - len(cmd) - 2)}\033[90m│\033[0m")
+                        else:
+                            lines_cmd = [cmd[i:i+w] for i in range(0, len(cmd), w)]
+                            print(f"\033[90m│\033[0m \033[93m$\033[0m {lines_cmd[0]}{' ' * (w - len(lines_cmd[0]) - 2)}\033[90m│\033[0m")
+                            for ln in lines_cmd[1:]:
+                                print(f"\033[90m│\033[0m   {ln}{' ' * (w - len(ln))}\033[90m│\033[0m")
+                        print(f"\033[90m╰{'─' * (w + 2)}╯\033[0m")
+                        draw_status()
                     elif name == "Grep":
                         output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}")
                     elif name == "Glob":
@@ -340,10 +343,15 @@ for line in sys.stdin:
                         if code != 0:
                             output(f"  \033[91m✗ Exit {code}\033[0m")
                             if out:
-                                output_raw(f"  \033[90m{truncate(out, 200)}\033[0m")
+                                for ln in out.split("\n")[:10]:
+                                    output_raw(f"  \033[90m{ln}\033[0m")
                                 draw_status()
-                        elif out and len(out) < 100:
-                            output(f"  \033[90m→ {out}\033[0m")
+                        elif out:
+                            out_lines = out.split("\n")
+                            if len(out_lines) <= 5 and all(len(l) < 80 for l in out_lines):
+                                for ln in out_lines:
+                                    output_raw(f"  \033[90m{ln}\033[0m")
+                                draw_status()
                     elif "result" in res and "usage" in res:
                         output(f"  \033[94m→ Agent done\033[0m")
                     elif "stdout" in res:
