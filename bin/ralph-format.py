@@ -11,6 +11,8 @@ import json
 import subprocess
 import shutil
 import os
+import threading
+import time
 from datetime import datetime
 from io import StringIO
 
@@ -31,6 +33,25 @@ start_time = datetime.now()
 status_lines = 0  # Track how many lines our status block takes
 spinner_frame = 0
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner
+status_lock = threading.Lock()
+running = True
+thinking_state = {"lines": 0}  # Track lines used by current thinking block
+in_subagent = False  # Track if we're inside a subagent scope
+
+
+def animation_thread():
+    """Background thread to animate spinner."""
+    global spinner_frame
+    while running:
+        time.sleep(0.1)
+        # Animate if we have in_progress todos OR no todos (showing "Working")
+        has_in_progress = current_todos and any(t.get("status") == "in_progress" for t in current_todos)
+        has_no_todos = not current_todos
+        if has_in_progress or has_no_todos:
+            with status_lock:
+                spinner_frame += 1
+                clear_status()
+                draw_status()
 
 
 def get_context_limit(model_name):
@@ -66,13 +87,36 @@ def clear_status():
     """Clear the previous status block by moving up and clearing lines."""
     global status_lines
     if status_lines > 0:
-        # Move up and clear each line
         for _ in range(status_lines):
             sys.stdout.write(CURSOR_UP.format(n=1))
             sys.stdout.write(CLEAR_LINE)
             sys.stdout.write("\r")
         status_lines = 0
         sys.stdout.flush()
+
+
+def safe_clear_status():
+    """Thread-safe clear."""
+    with status_lock:
+        clear_status()
+
+
+def safe_draw_status():
+    """Thread-safe draw."""
+    with status_lock:
+        draw_status()
+
+
+def collapse_thinking():
+    """Collapse/clear the current thinking block."""
+    if thinking_state["lines"] > 0:
+        with status_lock:
+            for _ in range(thinking_state["lines"]):
+                sys.stdout.write(CURSOR_UP.format(n=1))
+                sys.stdout.write(CLEAR_LINE)
+                sys.stdout.write("\r")
+            sys.stdout.flush()
+            thinking_state["lines"] = 0
 
 
 def draw_status():
@@ -84,12 +128,11 @@ def draw_status():
     # Separator
     lines.append(f"\033[90m{'─' * width}\033[0m")
 
-    # Todos first (all of them)
-    if current_todos:
-        global spinner_frame
-        spin_char = SPINNER[spinner_frame % len(SPINNER)]
-        spinner_frame += 1
+    # Todos first (or "Working" if none)
+    global spinner_frame
+    spin_char = SPINNER[spinner_frame % len(SPINNER)]
 
+    if current_todos:
         for todo in current_todos:
             status = todo.get("status")
             content = todo.get("content", "")
@@ -100,6 +143,10 @@ def draw_status():
                 lines.append(f"\033[0m\033[93m  {spin_char}\033[0m \033[1m{active}\033[0m")
             else:
                 lines.append(f"\033[0m\033[90m  ○ {content}\033[0m")
+        lines.append(f"\033[90m{'─' * width}\033[0m")
+    else:
+        # Show animated "Working" when no todos
+        lines.append(f"\033[0m\033[90m  {spin_char} Working…\033[0m")
         lines.append(f"\033[90m{'─' * width}\033[0m")
 
     # Progress bar and stats
@@ -141,19 +188,28 @@ def draw_status():
     sys.stdout.flush()
 
 
+def indent_text(text):
+    """Add indentation if in subagent."""
+    if in_subagent:
+        return f"\033[95m│\033[0m {text}"
+    return text
+
+
 def output(text):
     """Print text, clearing old status first, then redrawing."""
-    clear_status()
-    print(text)
-    sys.stdout.flush()
-    draw_status()
+    with status_lock:
+        clear_status()
+        print(indent_text(text))
+        sys.stdout.flush()
+        draw_status()
 
 
 def output_raw(text):
     """Print without status update (for bulk output)."""
-    clear_status()
-    print(text)
-    sys.stdout.flush()
+    with status_lock:
+        clear_status()
+        print(indent_text(text))
+        sys.stdout.flush()
 
 
 def render_markdown(text):
@@ -253,6 +309,10 @@ branch = os.environ.get("RALPH_BRANCH", "?")
 
 draw_status()
 
+# Start animation thread
+anim_thread = threading.Thread(target=animation_thread, daemon=True)
+anim_thread.start()
+
 # Main loop
 for line in sys.stdin:
     if not line.strip():
@@ -260,6 +320,15 @@ for line in sys.stdin:
     try:
         data = json.loads(line)
         event_type = data.get("type")
+        is_sidechain = data.get("isSidechain", False)
+
+        # Track subagent scope
+        if is_sidechain and not in_subagent:
+            in_subagent = True
+        elif not is_sidechain and in_subagent:
+            # Closing subagent scope
+            output(f"\033[95m└\033[0m")
+            in_subagent = False
 
         if event_type == "assistant":
             message = data.get("message", {})
@@ -280,6 +349,7 @@ for line in sys.stdin:
                 if ptype == "text":
                     text = part.get("text", "")
                     if text.strip():
+                        collapse_thinking()
                         output(f"\n\033[1;96m◆ Claude\033[0m")
                         rendered = render_markdown(text)
                         for ln in rendered.split("\n"):
@@ -287,9 +357,24 @@ for line in sys.stdin:
                         draw_status()
 
                 elif ptype == "thinking":
-                    output(f"\n\033[90m◇ Thinking…\033[0m")
+                    thinking_text = part.get("thinking", "")
+                    if thinking_text.strip():
+                        collapse_thinking()
+                        with status_lock:
+                            clear_status()
+                            print(f"\n\033[90m◇ Thinking…\033[0m")
+                            lines = thinking_text.strip().split("\n")
+                            # Show up to 10 lines
+                            for ln in lines[:10]:
+                                print(f"  \033[90m{ln[:100]}\033[0m")
+                            if len(lines) > 10:
+                                print(f"  \033[90m… [{len(lines) - 10} more lines]\033[0m")
+                            thinking_state["lines"] = min(len(lines), 10) + 1 + (1 if len(lines) > 10 else 0)
+                            sys.stdout.flush()
+                            draw_status()
 
                 elif ptype == "tool_use":
+                    collapse_thinking()
                     name = part.get("name")
                     inp = part.get("input", {})
 
