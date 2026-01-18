@@ -36,7 +36,7 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner
 status_lock = threading.Lock()
 running = True
 thinking_state = {"lines": 0}  # Track lines used by current thinking block
-in_subagent = False  # Track if we're inside a subagent scope
+active_agents = {}  # Track active agents by tool_use_id -> agent_type
 
 
 def animation_thread():
@@ -188,27 +188,27 @@ def draw_status():
     sys.stdout.flush()
 
 
-def indent_text(text):
+def indent_text(text, is_sidechain=False):
     """Add indentation if in subagent."""
-    if in_subagent:
+    if is_sidechain:
         return f"\033[95m│\033[0m {text}"
     return text
 
 
-def output(text):
+def output(text, is_sidechain=False):
     """Print text, clearing old status first, then redrawing."""
     with status_lock:
         clear_status()
-        print(indent_text(text))
+        print(indent_text(text, is_sidechain))
         sys.stdout.flush()
         draw_status()
 
 
-def output_raw(text):
+def output_raw(text, is_sidechain=False):
     """Print without status update (for bulk output)."""
     with status_lock:
         clear_status()
-        print(indent_text(text))
+        print(indent_text(text, is_sidechain))
         sys.stdout.flush()
 
 
@@ -271,9 +271,9 @@ def format_kv(data, indent=2):
     return "\n".join(lines)
 
 
-def show_diff(file_path, patches):
+def show_diff(file_path, patches, is_sidechain=False):
     if not DELTA_PATH:
-        output(f"  \033[1;95mDIFF: {file_path}\033[0m")
+        output(f"  \033[1;95mDIFF: {file_path}\033[0m", is_sidechain)
         return
 
     diff_lines = [f"--- {file_path}", f"+++ {file_path}"]
@@ -295,7 +295,7 @@ def show_diff(file_path, patches):
         if out:
             clear_status()
             for line in out.strip().split("\n"):
-                print(f"  {line}")
+                print(indent_text(f"  {line}", is_sidechain))
             draw_status()
     except:
         pass
@@ -322,13 +322,15 @@ for line in sys.stdin:
         event_type = data.get("type")
         is_sidechain = data.get("isSidechain", False)
 
-        # Track subagent scope
-        if is_sidechain and not in_subagent:
-            in_subagent = True
-        elif not is_sidechain and in_subagent:
-            # Closing subagent scope
-            output(f"\033[95m└\033[0m")
-            in_subagent = False
+        # Close subagent scope when leaving sidechain
+        if not is_sidechain and active_agents:
+            with status_lock:
+                clear_status()
+                for _ in active_agents:
+                    print(f"\033[95m└\033[0m")
+                sys.stdout.flush()
+                draw_status()
+            active_agents.clear()
 
         if event_type == "assistant":
             message = data.get("message", {})
@@ -350,10 +352,10 @@ for line in sys.stdin:
                     text = part.get("text", "")
                     if text.strip():
                         collapse_thinking()
-                        output(f"\n\033[1;96m◆ Claude\033[0m")
+                        output(f"\n\033[1;96m◆ Claude\033[0m", is_sidechain)
                         rendered = render_markdown(text)
                         for ln in rendered.split("\n"):
-                            output_raw(f"  {ln}")
+                            output_raw(f"  {ln}", is_sidechain)
                         draw_status()
 
                 elif ptype == "thinking":
@@ -383,24 +385,24 @@ for line in sys.stdin:
                         clear_status()
                         draw_status()
                     elif name == "Edit":
-                        output(f"\n\033[93m⚙ Edit\033[0m {inp.get('file_path')}")
+                        output(f"\n\033[93m⚙ Edit\033[0m {inp.get('file_path')}", is_sidechain)
                     elif name == "Write":
-                        output(f"\n\033[93m⚙ Write\033[0m {inp.get('file_path')}")
+                        output(f"\n\033[93m⚙ Write\033[0m {inp.get('file_path')}", is_sidechain)
                     elif name == "Read":
-                        output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}")
+                        output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path')}", is_sidechain)
                     elif name == "Bash":
                         cmd = inp.get("command", "")
                         width = get_width()
-                        inner = width - 2  # space between │ and │
-                        max_len = inner - 4  # for " $ " or "   " prefix and " " suffix
+                        indent_offset = 2 if is_sidechain else 0
+                        inner = width - 2 - indent_offset
+                        max_len = inner - 4
                         clear_status()
-                        print(f"\n\033[90m╭{'─' * inner}╮\033[0m")
+                        indent_prefix = "\033[95m│\033[0m " if is_sidechain else ""
+                        print(f"\n{indent_prefix}\033[90m╭{'─' * inner}╮\033[0m")
 
-                        # Split on newlines first, then wrap each line
                         cmd_lines = cmd.split('\n')
                         first = True
                         for line in cmd_lines:
-                            # Wrap long lines
                             if len(line) <= max_len:
                                 chunks = [line]
                             else:
@@ -409,31 +411,35 @@ for line in sys.stdin:
                             for chunk in chunks:
                                 pad = max_len - len(chunk)
                                 if first:
-                                    print(f"\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m")
+                                    print(f"{indent_prefix}\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m")
                                     first = False
                                 else:
-                                    print(f"\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m")
+                                    print(f"{indent_prefix}\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m")
 
-                        print(f"\033[90m╰{'─' * inner}╯\033[0m")
+                        print(f"{indent_prefix}\033[90m╰{'─' * inner}╯\033[0m")
                         draw_status()
                     elif name == "Grep":
-                        output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}")
+                        output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern')}", is_sidechain)
                     elif name == "Glob":
-                        output(f"\n\033[93m⚙ Glob\033[0m {inp.get('pattern')}")
+                        output(f"\n\033[93m⚙ Glob\033[0m {inp.get('pattern')}", is_sidechain)
                     elif name == "Task":
                         desc = inp.get("description", "")
                         agent = inp.get("subagent_type", "")
+                        tool_id = part.get("id")
                         clear_status()
-                        print(f"\n\033[95m┌ 🤖 {agent}\033[0m")
+                        print(indent_text(f"\n\033[95m┌ 🤖 {agent}\033[0m", is_sidechain))
                         if desc:
-                            print(f"\033[95m│\033[0m  {desc}")
-                        print(f"\033[95m└\033[0m")
+                            print(indent_text(f"\033[95m│\033[0m  {desc}", is_sidechain))
+                        print(indent_text(f"\033[95m│\033[0m", is_sidechain))
+                        sys.stdout.flush()
                         draw_status()
+                        if tool_id:
+                            active_agents[tool_id] = agent
                     else:
-                        output(f"\n\033[93m⚙ {name}\033[0m")
+                        output(f"\n\033[93m⚙ {name}\033[0m", is_sidechain)
                         kv = format_kv(inp)
                         if kv:
-                            output_raw(kv)
+                            output_raw(kv, is_sidechain)
                             draw_status()
 
         elif event_type == "user":
@@ -442,11 +448,11 @@ for line in sys.stdin:
                 if isinstance(res, str):
                     if "error" in res.lower() or res.startswith("<tool_use_error>"):
                         msg = res.replace("<tool_use_error>", "").replace("</tool_use_error>", "")
-                        output(f"  \033[91m✗ {truncate(msg, 200)}\033[0m")
+                        output(f"  \033[91m✗ {truncate(msg, 200)}\033[0m", is_sidechain)
                     elif res.strip():
                         # Short results inline
                         if len(res) < 100:
-                            output(f"  \033[90m→ {res.strip()}\033[0m")
+                            output(f"  \033[90m→ {res.strip()}\033[0m", is_sidechain)
                 elif isinstance(res, dict):
                     if "newTodos" in res:
                         current_todos[:] = res.get("newTodos", [])
@@ -455,38 +461,38 @@ for line in sys.stdin:
                     elif res.get("type") == "text" and "file" in res:
                         f_info = res["file"]
                         lines_count = len(f_info.get("content", "").split("\n"))
-                        output(f"  \033[90m→ {lines_count} lines\033[0m")
+                        output(f"  \033[90m→ {lines_count} lines\033[0m", is_sidechain)
                     elif "structuredPatch" in res:
-                        show_diff(res.get("filePath"), res["structuredPatch"])
+                        show_diff(res.get("filePath"), res["structuredPatch"], is_sidechain)
                     elif res.get("type") == "create":
-                        output(f"  \033[92m✓ Created\033[0m")
+                        output(f"  \033[92m✓ Created\033[0m", is_sidechain)
                     elif "filenames" in res or "matches" in res:
                         items = res.get("filenames") or res.get("matches") or []
-                        output(f"  \033[90m→ {len(items)} matches\033[0m")
+                        output(f"  \033[90m→ {len(items)} matches\033[0m", is_sidechain)
                     elif "output" in res and "exitCode" in res:
                         code = res.get("exitCode", 0)
                         out = res.get("output", "").strip()
                         if code != 0:
-                            output(f"  \033[91m✗ Exit {code}\033[0m")
+                            output(f"  \033[91m✗ Exit {code}\033[0m", is_sidechain)
                             if out:
                                 for ln in out.split("\n")[:10]:
-                                    output_raw(f"  \033[90m{ln}\033[0m")
+                                    output_raw(f"  \033[90m{ln}\033[0m", is_sidechain)
                                 draw_status()
                         elif out:
                             out_lines = out.split("\n")
                             if len(out_lines) <= 5 and all(len(l) < 80 for l in out_lines):
                                 for ln in out_lines:
-                                    output_raw(f"  \033[90m{ln}\033[0m")
+                                    output_raw(f"  \033[90m{ln}\033[0m", is_sidechain)
                                 draw_status()
                     elif "result" in res and "usage" in res:
-                        output(f"  \033[94m→ Agent done\033[0m")
+                        output(f"  \033[94m→ Agent done\033[0m", is_sidechain)
                     elif "stdout" in res:
                         out = res.get("stdout", "").strip()
                         if out and len(out) < 100:
-                            output(f"  \033[90m→ {out}\033[0m")
+                            output(f"  \033[90m→ {out}\033[0m", is_sidechain)
 
         elif event_type == "system" and data.get("is_error"):
-            output(f"\n\033[1;91m✗ Error:\033[0m {data.get('message')}")
+            output(f"\n\033[1;91m✗ Error:\033[0m {data.get('message')}", is_sidechain)
 
     except json.JSONDecodeError:
         pass
