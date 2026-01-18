@@ -19,11 +19,27 @@ GLOW_PATH = shutil.which("glow")
 
 # State
 context_usage = 0
-context_limit = 200000
 current_todos = []
 total_cost = 0.0
 start_time = datetime.now()
 status_lines = 0  # Track how many lines our status block takes
+
+
+def get_context_limit(model_name):
+    """Get context limit based on model."""
+    model = model_name.lower()
+    if "1m" in model or "1000k" in model:
+        return 1000000
+    elif "opus" in model:
+        return 200000
+    elif "sonnet" in model:
+        return 200000
+    elif "haiku" in model:
+        return 200000
+    return 200000  # Default
+
+
+context_limit = get_context_limit(os.environ.get("RALPH_MODEL", ""))
 
 # ANSI
 CURSOR_UP = "\033[{n}A"
