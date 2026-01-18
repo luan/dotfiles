@@ -147,7 +147,7 @@ def render_markdown(text):
         return text
     try:
         proc = subprocess.Popen(
-            [GLOW_PATH, "-s", "dark", "-w", "0"],
+            [GLOW_PATH, "-s", "dark"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -155,7 +155,7 @@ def render_markdown(text):
         )
         out, _ = proc.communicate(input=text)
         return out.rstrip() if out else text
-    except:
+    except Exception:
         return text
 
 
