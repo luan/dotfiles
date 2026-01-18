@@ -315,7 +315,12 @@ for line in sys.stdin:
                     elif name == "Task":
                         desc = inp.get("description", "")
                         agent = inp.get("subagent_type", "")
-                        output(f"\n\033[93m⚙ Task\033[0m {agent}: {desc}")
+                        clear_status()
+                        print(f"\n\033[95m┌ 🤖 {agent}\033[0m")
+                        if desc:
+                            print(f"\033[95m│\033[0m  {desc}")
+                        print(f"\033[95m└\033[0m")
+                        draw_status()
                     else:
                         output(f"\n\033[93m⚙ {name}\033[0m")
                         kv = format_kv(inp)
