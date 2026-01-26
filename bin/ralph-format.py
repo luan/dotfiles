@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import termios
+import signal
 from datetime import datetime
 from io import StringIO
 
@@ -38,6 +39,13 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner
 status_lock = threading.Lock()
 running = True
 active_agents = {}  # Track active agents by tool_use_id -> agent_type
+ctrl_c_count = 0
+ctrl_c_time = 0
+
+
+# CLI type detection
+cli_type = os.environ.get("RALPH_CLI_TYPE", "claude")
+assistant_name = "Claude" if cli_type == "claude" else "Assistant"
 
 # Interactive settings (for next iteration)
 MODELS = ["sonnet", "opus", "haiku"]
@@ -51,13 +59,18 @@ settings_file = os.environ.get("RALPH_SETTINGS_FILE", "/tmp/ralph_settings")
 claude_pid_file = os.environ.get("RALPH_CLAUDE_PID_FILE", "")
 mode_sequence_raw = os.environ.get("RALPH_MODE_SEQUENCE", "").split()
 model_sequence_raw = os.environ.get("RALPH_MODEL_SEQUENCE", "").split()
-wait_commands_raw = os.environ.get("RALPH_WAIT_COMMANDS", "").split("|") if os.environ.get("RALPH_WAIT_COMMANDS") else []
+wait_commands_raw = (
+    os.environ.get("RALPH_WAIT_COMMANDS", "").split("|")
+    if os.environ.get("RALPH_WAIT_COMMANDS")
+    else []
+)
 current_iteration = int(os.environ.get("RALPH_ITERATION", "1"))
 max_iterations = int(os.environ.get("RALPH_MAX_ITERATIONS", "5"))
 default_model = os.environ.get("RALPH_MODEL", "sonnet").lower()
 
 # Build sequence as list of (mode, model, wait_cmd, tui) tuples
 tui_flags_raw = os.environ.get("RALPH_TUI_FLAGS", "").split()
+
 
 def build_sequence():
     seq = []
@@ -79,8 +92,11 @@ def build_sequence():
         seq.append((m, mdl, wait_cmd, tui))
     return seq
 
+
 # Editable sequence state
-next_settings["sequence"] = build_sequence()  # List of (mode, model, wait_cmd, tui) tuples
+next_settings["sequence"] = (
+    build_sequence()
+)  # List of (mode, model, wait_cmd, tui) tuples
 next_settings["selected_idx"] = current_iteration  # 1-indexed, start at current
 next_settings["delay"] = int(os.environ.get("RALPH_DELAY", "0"))  # Delay in seconds
 next_settings["wait_input"] = ""  # Current wait command being typed
@@ -96,6 +112,33 @@ def kill_claude():
             os.kill(pid, 15)  # SIGTERM
         except Exception:
             pass
+
+
+def handle_sigint(signum, frame):
+    """Handle Ctrl+C - abort on second press within 2 seconds."""
+    global ctrl_c_count, ctrl_c_time, running
+    now = time.time()
+    if now - ctrl_c_time > 2:
+        ctrl_c_count = 0
+    ctrl_c_count += 1
+    ctrl_c_time = now
+
+    if ctrl_c_count >= 2:
+        # Abort
+        try:
+            with open(settings_file, "w") as f:
+                f.write("ABORT=true\n")
+        except Exception:
+            pass
+        print(f"\n\033[1;91m⛔ ABORT\033[0m - Ctrl+C twice")
+        kill_claude()
+        running = False
+        os._exit(0)
+    else:
+        print(f"\n\033[93m⚠ Press Ctrl+C again to abort\033[0m")
+
+
+signal.signal(signal.SIGINT, handle_sigint)
 
 
 def animation_thread():
@@ -152,14 +195,23 @@ def handle_keypress(ch):
         changed = False
         seq = next_settings["sequence"]
         sel = next_settings["selected_idx"]
-        max_idx = next_settings["iterations"] if next_settings["iterations"] > 0 else max(len(seq), current_iteration + 5)
+        max_idx = (
+            next_settings["iterations"]
+            if next_settings["iterations"] > 0
+            else max(len(seq), current_iteration + 5)
+        )
 
         # Handle wait command input mode
         if next_settings["inputting_wait"]:
             if ch == "\r" or ch == "\n":  # Enter - confirm
                 if sel <= len(seq):
                     _, curr_model, _, curr_tui = seq[sel - 1]
-                    seq[sel - 1] = ("wait", curr_model, next_settings["wait_input"], curr_tui)
+                    seq[sel - 1] = (
+                        "wait",
+                        curr_model,
+                        next_settings["wait_input"],
+                        curr_tui,
+                    )
                 next_settings["inputting_wait"] = False
                 next_settings["wait_input"] = ""
                 changed = True
@@ -260,10 +312,7 @@ def handle_keypress(ch):
             clear_status()
             try:
                 with open(settings_file, "w") as f:
-                    f.write(f"MODE={next_settings['mode']}\n")
-                    f.write(f"MODEL={next_settings['model']}\n")
                     f.write(f"ITERATIONS={next_settings['iterations']}\n")
-                    f.write(f"TUI_NEXT={('true' if next_settings['tui_next'] else 'false')}\n")
                     f.write("INTERVENE=true\n")
             except Exception:
                 pass
@@ -402,7 +451,9 @@ def draw_status():
     lines.append(progress)
 
     # Header line at the bottom
-    max_iter_display = next_settings["iterations"] if next_settings["iterations"] > 0 else "∞"
+    max_iter_display = (
+        next_settings["iterations"] if next_settings["iterations"] > 0 else "∞"
+    )
     lines.append(
         f"\033[1;94m◆ RALPH\033[0m {mode} • Loop {iteration}/{max_iter_display} • {branch} • {model}"
     )
@@ -412,12 +463,18 @@ def draw_status():
     sel = next_settings["selected_idx"]
     if seq:
         seq_display = []
-        iters_to_show = next_settings["iterations"] if next_settings["iterations"] > 0 else max(len(seq), current_iteration + 3)
+        iters_to_show = (
+            next_settings["iterations"]
+            if next_settings["iterations"] > 0
+            else max(len(seq), current_iteration + 3)
+        )
         for i in range(1, iters_to_show + 1):
             if i <= len(seq):
                 m, mdl, wait_cmd, tui = seq[i - 1]
             else:
-                m, mdl, wait_cmd, tui = seq[-1] if seq else ("build", default_model, "", False)
+                m, mdl, wait_cmd, tui = (
+                    seq[-1] if seq else ("build", default_model, "", False)
+                )
             # Format: Ps (Plan+sonnet), Bo (Build+opus), W (Wait)
             if m == "wait":
                 short = "W"
@@ -426,17 +483,25 @@ def draw_status():
             # TUI entries show in RED
             if tui and i >= current_iteration:
                 if i == current_iteration:
-                    seq_display.append(f"\033[1;91m[{short}]\033[0m")  # current TUI - red + brackets
+                    seq_display.append(
+                        f"\033[1;91m[{short}]\033[0m"
+                    )  # current TUI - red + brackets
                 elif i == sel:
-                    seq_display.append(f"\033[1;91m<{short}>\033[0m")  # selected TUI - red + angle brackets
+                    seq_display.append(
+                        f"\033[1;91m<{short}>\033[0m"
+                    )  # selected TUI - red + angle brackets
                 else:
                     seq_display.append(f"\033[91m{short}\033[0m")  # future TUI - red
             elif i < current_iteration:
                 seq_display.append(f"\033[90m{short}\033[0m")  # past - dim
             elif i == current_iteration:
-                seq_display.append(f"\033[1;96m[{short}]\033[0m")  # current - bright cyan + brackets
+                seq_display.append(
+                    f"\033[1;96m[{short}]\033[0m"
+                )  # current - bright cyan + brackets
             elif i == sel:
-                seq_display.append(f"\033[1;95m<{short}>\033[0m")  # selected - magenta + angle brackets
+                seq_display.append(
+                    f"\033[1;95m<{short}>\033[0m"
+                )  # selected - magenta + angle brackets
             else:
                 seq_display.append(f"\033[93m{short}\033[0m")  # future - yellow
         lines.append(f"  \033[90mSequence:\033[0m {' '.join(seq_display)}")
@@ -599,6 +664,132 @@ def show_diff(file_path, patches, is_sidechain=False):
         pass
 
 
+def is_opencode_event(data):
+    """Detect if this is an OpenCode format event."""
+    event_type = data.get("type", "")
+    # OpenCode uses: text, tool_use, step_start, step_finish, and has "part" key
+    if event_type in ("step_start", "step_finish") or "part" in data:
+        return True
+    # Also detect by presence of opencode-specific structures
+    if event_type == "text" and "part" in data:
+        return True
+    if event_type == "tool_use" and "part" in data:
+        return True
+    return False
+
+
+def process_opencode_event(data):
+    """Process an OpenCode format event."""
+    global context_usage, total_cost, current_todos
+
+    event_type = data.get("type", "")
+    part = data.get("part", {})
+
+    if event_type == "text":
+        # Text output from the model
+        text = part.get("text", "")
+        if text.strip():
+            output(f"\n\033[1;96m◆ {assistant_name}\033[0m")
+            rendered = render_markdown(text)
+            for ln in rendered.split("\n"):
+                output_raw(f"  {ln}")
+            draw_status()
+
+    elif event_type == "tool_use":
+        # Tool invocation
+        tool = part.get("tool", "")
+        state = part.get("state", {})
+        inp = state.get("input", {})
+        out = state.get("output", {})
+
+        if tool == "TodoWrite" or tool == "todo_write":
+            todos = inp.get("todos", [])
+            if todos:
+                current_todos[:] = todos
+                safe_clear_status()
+                safe_draw_status()
+        elif tool == "Edit" or tool == "edit":
+            output(f"\n\033[93m⚙ Edit\033[0m {inp.get('file_path', inp.get('path', ''))}")
+        elif tool == "Write" or tool == "write":
+            output(f"\n\033[93m⚙ Write\033[0m {inp.get('file_path', inp.get('path', ''))}")
+        elif tool == "Read" or tool == "read":
+            output(f"\n\033[93m⚙ Read\033[0m {inp.get('file_path', inp.get('path', ''))}")
+        elif tool == "Bash" or tool == "bash":
+            cmd = inp.get("command", "")
+            if cmd:
+                width = get_width()
+                inner = width - 2
+                max_len = inner - 4
+                with status_lock:
+                    clear_status()
+                    print(f"\n\033[90m╭{'─' * inner}╮\033[0m")
+                    cmd_lines = cmd.split("\n")
+                    first = True
+                    for line in cmd_lines:
+                        if len(line) <= max_len:
+                            chunks = [line]
+                        else:
+                            chunks = [line[i : i + max_len] for i in range(0, len(line), max_len)]
+                        for chunk in chunks:
+                            pad = max_len - len(chunk)
+                            if first:
+                                print(f"\033[90m│\033[0m \033[93m$\033[0m {chunk}{' ' * pad} \033[90m│\033[0m")
+                                first = False
+                            else:
+                                print(f"\033[90m│\033[0m   {chunk}{' ' * pad} \033[90m│\033[0m")
+                    print(f"\033[90m╰{'─' * inner}╯\033[0m")
+                    draw_status()
+        elif tool == "Grep" or tool == "grep":
+            output(f"\n\033[93m⚙ Grep\033[0m {inp.get('pattern', '')}")
+        elif tool == "Glob" or tool == "glob":
+            output(f"\n\033[93m⚙ Glob\033[0m {inp.get('pattern', '')}")
+        elif tool == "Task" or tool == "task":
+            desc = inp.get("description", "")
+            agent = inp.get("subagent_type", "")
+            with status_lock:
+                clear_status()
+                print(f"\n\033[95m┌ 🤖 {agent}\033[0m")
+                if desc:
+                    print(f"\033[95m│\033[0m  {desc}")
+                print(f"\033[95m│\033[0m")
+                sys.stdout.flush()
+                draw_status()
+        else:
+            output(f"\n\033[93m⚙ {tool}\033[0m")
+            kv = format_kv(inp)
+            if kv:
+                output_raw(kv)
+                draw_status()
+
+        # Handle tool output/result
+        if out:
+            if isinstance(out, str):
+                if "error" in out.lower():
+                    output(f"  \033[91m✗ {truncate(out, 200)}\033[0m")
+                elif len(out) < 100:
+                    output(f"  \033[90m→ {out.strip()}\033[0m")
+            elif isinstance(out, dict):
+                if out.get("exitCode", 0) != 0:
+                    output(f"  \033[91m✗ Exit {out.get('exitCode')}\033[0m")
+                elif "output" in out and len(out.get("output", "")) < 100:
+                    output(f"  \033[90m→ {out['output'].strip()}\033[0m")
+
+    elif event_type == "step_finish":
+        # End of a step - contains token/cost info
+        tokens = part.get("tokens", {})
+        cost = part.get("cost", 0)
+        if tokens:
+            context_usage = tokens.get("input", 0) + tokens.get("cache_read", 0)
+        if cost:
+            total_cost = cost
+        safe_clear_status()
+        safe_draw_status()
+
+    elif event_type == "step_start":
+        # Start of a new step - can be ignored or used for tracking
+        pass
+
+
 # Config from env
 mode = os.environ.get("RALPH_MODE", "?").upper()
 iteration = os.environ.get("RALPH_ITERATION", "1")
@@ -621,6 +812,13 @@ for line in sys.stdin:
         continue
     try:
         data = json.loads(line)
+
+        # Detect and handle OpenCode format
+        if is_opencode_event(data):
+            process_opencode_event(data)
+            continue
+
+        # Claude Code format handling below
         event_type = data.get("type")
         is_sidechain = data.get("isSidechain", False)
 
@@ -653,7 +851,7 @@ for line in sys.stdin:
                 if ptype == "text":
                     text = part.get("text", "")
                     if text.strip():
-                        output(f"\n\033[1;96m◆ Claude\033[0m", is_sidechain)
+                        output(f"\n\033[1;96m◆ {assistant_name}\033[0m", is_sidechain)
                         rendered = render_markdown(text)
                         for ln in rendered.split("\n"):
                             output_raw(f"  {ln}", is_sidechain)

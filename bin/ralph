@@ -5,7 +5,7 @@ show_help() {
 ralph - Automated Claude Code Execution Loop
 
 SYNOPSIS
-    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-w delay] [-h] <mode> [mode...]
+    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-C cli_type] [-w delay] [-h] <mode> [mode...]
 
 DESCRIPTION
     Ralph orchestrates automated coding loops with Claude Code, reading prompts
@@ -36,8 +36,11 @@ OPTIONS
     -d <dir>    Directory containing PROMPT_*.md files (default: ./ralph)
                 Ralph will look for PROMPT_<mode>.md in this directory.
 
-    -c <cli>    Claude CLI command or path (default: claude)
-                Use this to specify a custom claude binary location.
+    -c <cli>    CLI command or path (default: claude or opencode based on -C)
+                Use this to specify a custom binary location.
+
+    -C <type>   CLI type: claude (default) or opencode
+                Determines command format and JSON parsing.
 
     -w <secs>   Delay in seconds between iterations (default: 0)
                 Useful to avoid rate limits or give time to review output.
@@ -130,17 +133,19 @@ EOF
 MAX_ITERATIONS=5
 RALPH_DIR="./ralph"
 MODEL=""
-CLI="claude"
+CLI=""
+CLI_TYPE="claude"
 TUI="false"
 DELAY=0
 
 # Parse flags
-while getopts "i:m:d:c:w:th" opt; do
+while getopts "i:m:d:c:C:w:th" opt; do
     case $opt in
     i) MAX_ITERATIONS="$OPTARG" ;;
     m) MODEL="$OPTARG" ;;
     d) RALPH_DIR="$OPTARG" ;;
     c) CLI="$OPTARG" ;;
+    C) CLI_TYPE="$OPTARG" ;;
     w) DELAY="$OPTARG" ;;
     t) TUI="true" ;;
     h)
@@ -154,6 +159,27 @@ while getopts "i:m:d:c:w:th" opt; do
     esac
 done
 shift $((OPTIND - 1))
+
+# Validate CLI type
+if [[ "$CLI_TYPE" != "claude" && "$CLI_TYPE" != "opencode" ]]; then
+    echo "Error: CLI type must be 'claude' or 'opencode', got '$CLI_TYPE'"
+    exit 1
+fi
+
+# Set default CLI based on type
+if [ -z "$CLI" ]; then
+    CLI="$CLI_TYPE"
+fi
+
+# Model mapping for opencode
+map_model_for_opencode() {
+    case "$1" in
+        sonnet) echo "anthropic/claude-sonnet-4" ;;
+        opus) echo "anthropic/claude-opus-4" ;;
+        haiku) echo "anthropic/claude-haiku-3.5" ;;
+        *) echo "$1" ;;  # Pass through if already full name
+    esac
+}
 
 # Require at least one mode
 if [ $# -eq 0 ]; then
@@ -243,6 +269,7 @@ export RALPH_MODEL_SEQUENCE="${MODEL_SEQUENCE[*]}"
 export RALPH_WAIT_COMMANDS="$WAIT_COMMANDS_STR"
 export RALPH_TUI_FLAGS="${TUI_FLAGS[*]}"
 export RALPH_DELAY="$DELAY"
+export RALPH_CLI_TYPE="$CLI_TYPE"
 
 while true; do
     if [ $MAX_ITERATIONS -gt 0 ] && [ $ITERATION -gt $MAX_ITERATIONS ]; then
@@ -275,22 +302,32 @@ while true; do
         echo "[$ITERATION] WAIT: $WAIT_CMD"
         eval "$WAIT_CMD"
     # Run Ralph iteration with selected prompt
-    # -p: Headless mode
-    # --dangerously-skip-permissions: Auto-approve all tool calls
-    # --output-format=stream-json: Structured output
-    # --model: Selected model
-    # --verbose: Detailed logging
     elif [ "$TUI" = "true" ] || [ "$TUI_FLAG" = "1" ]; then
-        "$CLI" --dangerously-skip-permissions --model "$MODEL" "$(cat "$PROMPT_FILE")"
+        # TUI mode (interactive)
+        if [ "$CLI_TYPE" = "opencode" ]; then
+            MAPPED_MODEL=$(map_model_for_opencode "$MODEL")
+            "$CLI" -m "$MAPPED_MODEL" "$(cat "$PROMPT_FILE")"
+        else
+            "$CLI" --dangerously-skip-permissions --model "$MODEL" "$(cat "$PROMPT_FILE")"
+        fi
     else
-        # Run claude in background, capture PID for ralph-format.py to kill if needed
-        CLAUDE_PID_FILE="/tmp/ralph_claude_pid_$$"
-        (
-            "$CLI" -p --dangerously-skip-permissions --output-format=stream-json --model "$MODEL" --verbose < "$PROMPT_FILE" &
-            echo $! > "$CLAUDE_PID_FILE"
-            wait $!
-        ) | RALPH_CLAUDE_PID_FILE="$CLAUDE_PID_FILE" ralph-format.py
-        rm -f "$CLAUDE_PID_FILE"
+        # Headless mode - capture PID for ralph-format.py to kill if needed
+        CLI_PID_FILE="/tmp/ralph_cli_pid_$$"
+        if [ "$CLI_TYPE" = "opencode" ]; then
+            MAPPED_MODEL=$(map_model_for_opencode "$MODEL")
+            (
+                "$CLI" run --format json -m "$MAPPED_MODEL" "$(cat "$PROMPT_FILE")" &
+                echo $! > "$CLI_PID_FILE"
+                wait $!
+            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" ralph-format.py
+        else
+            (
+                "$CLI" -p --dangerously-skip-permissions --output-format=stream-json --model "$MODEL" --verbose < "$PROMPT_FILE" &
+                echo $! > "$CLI_PID_FILE"
+                wait $!
+            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" ralph-format.py
+        fi
+        rm -f "$CLI_PID_FILE"
     fi
 
     # Read settings from ralph-format.py for next iteration
@@ -316,7 +353,12 @@ while true; do
             rm -f "$SETTINGS_FILE"
             echo ""
             echo "Continuing session in TUI mode..."
-            "$CLI" --dangerously-skip-permissions --model "$MODEL" --continue
+            if [ "$CLI_TYPE" = "opencode" ]; then
+                MAPPED_MODEL=$(map_model_for_opencode "$MODEL")
+                "$CLI" -m "$MAPPED_MODEL" -c
+            else
+                "$CLI" --dangerously-skip-permissions --model "$MODEL" --continue
+            fi
             # After TUI session, continue the loop
             ITERATION=$((ITERATION + 1))
             continue
