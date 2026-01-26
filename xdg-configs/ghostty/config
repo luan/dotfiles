@@ -2,6 +2,9 @@ theme = tokyonight
 
 desktop-notifications = true
 
+shell-integration-features = ssh-terminfo
+shell-integration-features = ssh-env
+
 font-family = ""
 font-family = "IosevkaTerm Nerd Font"
 # font-family = "JetBrainsMono Nerd Font Mono"
@@ -26,6 +29,34 @@ scrollback-limit = 10000000
 macos-option-as-alt = left
 
 keybind = clear
+# {{{ tmux hacks
+# tmux stuff
+keybind = super+1=text:\x001
+keybind = super+2=text:\x002
+keybind = super+3=text:\x003
+keybind = super+4=text:\x004
+keybind = super+5=text:\x005
+keybind = super+6=text:\x006
+keybind = super+7=text:\x007
+keybind = super+8=text:\x008
+keybind = super+9=text:\x009
+keybind = super+0=text:\x000
+# vim stuff
+keybind = super+j=csi:90;1
+keybind = super+s=csi:90;2
+keybind = super+shift+c=csi:90;3
+keybind = super+alt+shift+c=csi:90;4
+keybind = super+o=csi:90;5
+keybind = super+.=csi:90;6
+keybind = super+e=csi:90;7
+keybind = super+b=csi:90;8
+keybind = super+i=csi:90;9
+keybind = super+l=csi:90;10
+keybind = super+shift+i=csi:90;11
+keybind = super+k=csi:90;12
+keybind = super+alt+v=csi:90;13
+# keybind = super+d=esc:gd
+# }}}
 
 # # {{{ final bindings
 #
@@ -64,7 +95,7 @@ keybind = clear
 # keybind = shift+home=adjust_selection:home
 # keybind = shift+end=adjust_selection:end
 # # }}} final bindngs
-
+#
 # # {{{ tmux emulation
 # # Pane navigation (M-H/J/K/L from tmux)
 # keybind = alt+shift+h=goto_split:left
@@ -135,9 +166,9 @@ keybind = performable:super+v=paste_from_clipboard
 #   * `true`
 #   * `false` - windows won't have native decorations, i.e. titlebar and
 #      borders. On MacOS this also disables tabs and tab overview.
-window-decoration = true
+window-decoration = false
 
-macos-titlebar-style = hidden
+macos-titlebar-style = "tabs"
 
 copy-on-select = false
 keybind = shift+enter=text:\n
