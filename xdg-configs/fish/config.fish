@@ -1,3 +1,9 @@
+# Fast exit for non-interactive shells (tmux popups, scripts, etc.)
+if not status is-interactive
+    set --export PATH /opt/homebrew/bin /usr/local/bin $HOME/bin $HOME/.local/bin $PATH
+    return
+end
+
 # aliases
 alias vim=nvim
 
