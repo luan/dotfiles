@@ -43,9 +43,11 @@ keybind = super+7=text:\x007
 keybind = super+8=text:\x008
 keybind = super+9=text:\x009
 keybind = super+0=text:\x000
-# tab switching (super+shift+</> -> M-P/N for tmux prev/next window)
-keybind = super+shift+comma=esc:P
-keybind = super+shift+period=esc:N
+# fzf
+keybind = super+shift+p=text:\x00F
+# tab swapping (super+shift+</> -> M-{/} for tmux swap window left/right)
+keybind = super+shift+comma=esc:{
+keybind = super+shift+period=esc:}
 # window switching (super+shift+{/} -> prefix+p/n for tmux prev/next window)
 keybind = super+shift+left_bracket=text:\x00p
 keybind = super+shift+right_bracket=text:\x00n
@@ -55,6 +57,8 @@ keybind = super+shift+n=esc:n
 keybind = super+shift+a=text:\x00A
 # Ditch session safely (super+shift+x -> prefix+X for tmux)
 keybind = super+shift+x=text:\x00X
+# Session chooser (super+shift+s -> M-s for tmux)
+keybind = super+shift+s=esc:s
 # vim stuff
 keybind = super+j=csi:90;1
 keybind = super+s=csi:90;2
