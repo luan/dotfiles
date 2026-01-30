@@ -45,9 +45,9 @@ keybind = super+9=text:\x009
 keybind = super+0=text:\x000
 # fzf
 keybind = super+shift+p=text:\x00F
-# tab swapping (super+shift+</> -> M-{/} for tmux swap window left/right)
-keybind = super+shift+comma=esc:{
-keybind = super+shift+period=esc:}
+# swap window left/right (super+shift+</> -> prefix+</> for tmux)
+keybind = super+shift+comma=text:\x00<
+keybind = super+shift+period=text:\x00>
 # window switching (super+shift+{/} -> prefix+p/n for tmux prev/next window)
 keybind = super+shift+left_bracket=text:\x00p
 keybind = super+shift+right_bracket=text:\x00n
