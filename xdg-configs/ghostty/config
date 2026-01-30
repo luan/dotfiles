@@ -43,12 +43,12 @@ keybind = super+7=text:\x007
 keybind = super+8=text:\x008
 keybind = super+9=text:\x009
 keybind = super+0=text:\x000
-# tab switching (super+shift+{/} -> M-P/N for tmux prev/next window)
-keybind = super+shift+left_bracket=esc:P
-keybind = super+shift+right_bracket=esc:N
-# window moving (super+shift+</> -> M-{/} for tmux swap-window)
-keybind = super+shift+comma=esc:{
-keybind = super+shift+period=esc:}
+# tab switching (super+shift+</> -> M-P/N for tmux prev/next window)
+keybind = super+shift+comma=esc:P
+keybind = super+shift+period=esc:N
+# window moving (super+shift+{/} -> M-{/} for tmux swap-window)
+keybind = super+shift+left_bracket=esc:{
+keybind = super+shift+right_bracket=esc:}
 # vim stuff
 keybind = super+j=csi:90;1
 keybind = super+s=csi:90;2
@@ -164,7 +164,7 @@ keybind = super+w=close_surface
 keybind = super+q=quit
 
 # keybind = super+comma=open_config
-keybind = super+shift+comma=reload_config
+keybind = super+shift+r=reload_config
 
 keybind = super+minus=decrease_font_size:1
 keybind = super+equal=increase_font_size:1
