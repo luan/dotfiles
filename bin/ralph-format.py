@@ -25,6 +25,9 @@ from rich.markdown import Markdown
 # Tools
 DELTA_PATH = shutil.which("delta")
 
+# Interactive mode detection
+INTERACTIVE = sys.stdout.isatty()
+
 # Rich console for markdown
 _md_console = Console(file=StringIO(), force_terminal=True, width=120)
 
@@ -49,7 +52,7 @@ assistant_name = "Claude" if cli_type == "claude" else "Assistant"
 
 # Interactive settings (for next iteration)
 MODELS = ["sonnet", "opus", "haiku"]
-MODES = ["build", "plan"]
+MODES = ["build", "plan", "spec"]
 next_settings = {
     "mode": os.environ.get("RALPH_MODE", "build").lower(),
     "model": os.environ.get("RALPH_MODEL", "sonnet").lower(),
@@ -57,6 +60,7 @@ next_settings = {
 }
 settings_file = os.environ.get("RALPH_SETTINGS_FILE", "/tmp/ralph_settings")
 claude_pid_file = os.environ.get("RALPH_CLAUDE_PID_FILE", "")
+current_session_id = ""  # Track session ID for --resume
 mode_sequence_raw = os.environ.get("RALPH_MODE_SEQUENCE", "").split()
 model_sequence_raw = os.environ.get("RALPH_MODEL_SEQUENCE", "").split()
 wait_commands_raw = (
@@ -109,7 +113,8 @@ def kill_claude():
         try:
             with open(claude_pid_file, "r") as f:
                 pid = int(f.read().strip())
-            os.kill(pid, 15)  # SIGTERM
+            os.kill(pid, 2)  # SIGINT - graceful shutdown like Ctrl+C
+            time.sleep(0.3)  # Give it time to save session
         except Exception:
             pass
 
@@ -144,6 +149,8 @@ signal.signal(signal.SIGINT, handle_sigint)
 def animation_thread():
     """Background thread to animate spinner."""
     global spinner_frame
+    if not INTERACTIVE:
+        return  # No animation in non-interactive mode
     while running:
         time.sleep(0.1)
         # Animate if we have in_progress todos OR no todos (showing "Working")
@@ -161,6 +168,8 @@ def animation_thread():
 def keypress_thread():
     """Background thread to listen for keypresses."""
     global running
+    if not INTERACTIVE:
+        return  # No keypresses in non-interactive mode
     # We need to read from /dev/tty since stdin is used for piped data
     try:
         tty_fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK)
@@ -257,17 +266,23 @@ def handle_keypress(ch):
                     last = seq[-1] if seq else ("build", default_model, "", False)
                     seq.append(last)
             changed = True
-        # 'a': toggle mode for selected entry (plan/build, exits wait)
+        # 'a': toggle mode for selected entry (build/plan/spec, exits wait)
         elif ch == "a":
             if sel <= len(seq):
                 curr_mode, curr_model, _, curr_tui = seq[sel - 1]
                 if curr_mode == "wait":
-                    new_mode = "plan"
-                elif curr_mode == "plan":
                     new_mode = "build"
-                else:
+                    new_tui = curr_tui
+                elif curr_mode == "build":
                     new_mode = "plan"
-                seq[sel - 1] = (new_mode, curr_model, "", curr_tui)
+                    new_tui = curr_tui
+                elif curr_mode == "plan":
+                    new_mode = "spec"
+                    new_tui = True  # spec defaults to TUI
+                else:  # spec
+                    new_mode = "build"
+                    new_tui = False
+                seq[sel - 1] = (new_mode, curr_model, "", new_tui)
             changed = True
         # 'w': set wait mode and start command input
         elif ch == "w":
@@ -307,6 +322,7 @@ def handle_keypress(ch):
             changed = True
         # 'I' (Shift+I): INTERVENE - stop current session and continue in TUI
         elif ch == "I":
+            global running
             next_settings["intervene"] = True
             # Write settings and exit immediately
             clear_status()
@@ -314,11 +330,14 @@ def handle_keypress(ch):
                 with open(settings_file, "w") as f:
                     f.write(f"ITERATIONS={next_settings['iterations']}\n")
                     f.write("INTERVENE=true\n")
+                    if current_session_id:
+                        f.write(f"SESSION_ID={current_session_id}\n")
             except Exception:
                 pass
-            print(f"\n\033[1;95m⚡ INTERVENE\033[0m - switching to TUI with --continue")
+            print(f"\n\033[1;95m⚡ INTERVENE\033[0m - switching to TUI with --resume")
             kill_claude()
-            os._exit(0)
+            running = False
+            sys.exit(0)  # Use sys.exit for cleaner shutdown
         # 'Q' (Shift+Q): ABORT - stop everything and exit ralph
         elif ch == "Q":
             clear_status()
@@ -368,6 +387,8 @@ def get_width():
 def clear_status():
     """Clear the previous status block by moving up and clearing lines."""
     global status_lines
+    if not INTERACTIVE:
+        return  # No-op in non-interactive mode
     if status_lines > 0:
         for _ in range(status_lines):
             sys.stdout.write(CURSOR_UP.format(n=1))
@@ -392,6 +413,8 @@ def safe_draw_status():
 def draw_status():
     """Draw the status block and track its line count."""
     global status_lines
+    if not INTERACTIVE:
+        return  # No-op in non-interactive mode
     width = get_width()
     lines = []
 
@@ -546,6 +569,11 @@ def indent_text(text, is_sidechain=False):
 
 def output(text, is_sidechain=False):
     """Print text, clearing old status first, then redrawing."""
+    if not INTERACTIVE:
+        # Non-interactive: just print, no status management
+        print(indent_text(text, is_sidechain))
+        sys.stdout.flush()
+        return
     with status_lock:
         clear_status()
         print(indent_text(text, is_sidechain))
@@ -555,6 +583,10 @@ def output(text, is_sidechain=False):
 
 def output_raw(text, is_sidechain=False):
     """Print without status update (for bulk output)."""
+    if not INTERACTIVE:
+        print(indent_text(text, is_sidechain))
+        sys.stdout.flush()
+        return
     with status_lock:
         clear_status()
         print(indent_text(text, is_sidechain))
@@ -796,15 +828,20 @@ iteration = os.environ.get("RALPH_ITERATION", "1")
 model = os.environ.get("RALPH_MODEL", "?")
 branch = os.environ.get("RALPH_BRANCH", "?")
 
-draw_status()
+if INTERACTIVE:
+    draw_status()
 
-# Start animation thread
-anim_thread = threading.Thread(target=animation_thread, daemon=True)
-anim_thread.start()
+    # Start animation thread
+    anim_thread = threading.Thread(target=animation_thread, daemon=True)
+    anim_thread.start()
 
-# Start keypress listener thread
-key_thread = threading.Thread(target=keypress_thread, daemon=True)
-key_thread.start()
+    # Start keypress listener thread
+    key_thread = threading.Thread(target=keypress_thread, daemon=True)
+    key_thread.start()
+else:
+    # Non-interactive mode: simple startup message
+    max_iter_display = next_settings["iterations"] if next_settings["iterations"] > 0 else "unlimited"
+    print(f"[ralph] {mode} mode | loop {iteration}/{max_iter_display} | {model} | {branch}")
 
 # Main loop
 for line in sys.stdin:
@@ -821,6 +858,10 @@ for line in sys.stdin:
         # Claude Code format handling below
         event_type = data.get("type")
         is_sidechain = data.get("isSidechain", False)
+
+        # Capture session_id for --resume (uses module-level variable)
+        if "session_id" in data and data["session_id"]:
+            globals()["current_session_id"] = data["session_id"]
 
         # Close subagent scope when leaving sidechain
         if not is_sidechain and active_agents:
@@ -1041,5 +1082,9 @@ try:
 except Exception:
     pass
 
-print(f"\n\033[90m{'─' * 60}\033[0m")
-print(f"\033[92m✓ Done\033[0m")
+if INTERACTIVE:
+    print(f"\n\033[90m{'─' * 60}\033[0m")
+    print(f"\033[92m✓ Done\033[0m")
+else:
+    elapsed = (datetime.now() - start_time).total_seconds()
+    print(f"\n[ralph] done | {elapsed:.1f}s | ${total_cost:.4f}")

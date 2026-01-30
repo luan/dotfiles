@@ -5,7 +5,7 @@ show_help() {
 ralph - Automated Claude Code Execution Loop
 
 SYNOPSIS
-    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-C cli_type] [-w delay] [-h] <mode> [mode...]
+    ralph [-i iterations] [-m model] [-d directory] [-c cli] [-C cli_type] [-w delay] [-h] <mode> [mode|count...]
 
 DESCRIPTION
     Ralph orchestrates automated coding loops with Claude Code, reading prompts
@@ -13,11 +13,11 @@ DESCRIPTION
     development workflows.
 
 MODES
-    build       Build mode - executes PROMPT_build.md
-                Default model: sonnet (faster, ideal for well-defined tasks)
+    build       Build mode - executes PROMPT_build.md (default model: opus)
 
-    plan        Plan mode - executes PROMPT_plan.md
-                Default model: opus (more thorough, ideal for planning)
+    plan        Plan mode - executes PROMPT_plan.md (default model: opus)
+
+    spec        Spec mode - executes PROMPT_spec.md (default model: opus, TUI)
 
     wait "cmd"  Wait mode - executes the given shell command instead of Claude
                 Useful for adding delays, running tests, or custom scripts
@@ -26,12 +26,18 @@ MODES
     - Iteration 1 uses the first mode, iteration 2 the second, etc.
     - After the sequence ends, the last mode repeats for remaining iterations
 
-OPTIONS
-    -i <num>    Maximum number of iterations (default: 5)
-                Set to 0 for unlimited iterations.
+    Numbers repeat the previous mode: ralph build 3 plan build 3
+    - This runs: build x3, plan x1, build x3 (7 total iterations)
+    - The number specifies total count, not additional repeats
 
-    -m <model>  AI model to use: opus, sonnet, or haiku
-                Defaults: opus for plan mode, sonnet for build mode.
+OPTIONS
+    -i <num>    Maximum number of iterations (default: inferred from sequence)
+                If not specified, runs exactly the sequence length.
+                Set to 0 for unlimited iterations (last mode repeats forever).
+
+    -p <model>  Model for plan mode: opus, sonnet, or haiku (default: opus)
+
+    -b <model>  Model for build/spec modes: opus, sonnet, or haiku (default: opus)
 
     -d <dir>    Directory containing PROMPT_*.md files (default: ./ralph)
                 Ralph will look for PROMPT_<mode>.md in this directory.
@@ -63,16 +69,20 @@ BEHAVIOR
 FILES
     ./ralph/PROMPT_build.md     Prompt file for build mode
     ./ralph/PROMPT_plan.md      Prompt file for plan mode
+    ./ralph/PROMPT_spec.md      Prompt file for spec mode
 
 EXAMPLES
-    # Basic usage - 5 iterations of build mode with sonnet
+    # Basic usage - opus model, inferred iterations
     ralph build
 
-    # Plan mode with 10 iterations using opus
+    # Plan mode with 10 iterations
     ralph -i 10 plan
 
     # Mode sequence: plan first, then build for the rest
     ralph plan build
+
+    # With repeats: build 3x, plan 1x, build 3x
+    ralph build 3 plan build 3
 
     # With wait: plan, wait 30s, then build
     ralph plan wait "sleep 30" build
@@ -80,14 +90,17 @@ EXAMPLES
     # Run tests between iterations
     ralph build wait "npm test" build
 
-    # Fast prototyping with haiku
-    ralph -m haiku build
+    # Fast prototyping with haiku for build
+    ralph -b haiku build
+
+    # Mixed models: haiku for plan, sonnet for build
+    ralph -p haiku -b sonnet plan build
+
+    # Spec mode (TUI by default)
+    ralph spec build 3
 
     # Custom directory and unlimited iterations
     ralph -d ./prompts -i 0 plan
-
-    # Full configuration
-    ralph -i 20 -m opus -d ./my-prompts -c /usr/local/bin/claude build
 
 ENVIRONMENT
     Requires:
@@ -105,7 +118,7 @@ INTERACTIVE CONTROLS (non-TUI mode)
     ↓ (down arrow)  Decrease max iterations
     ← (left arrow)  Select previous sequence entry
     → (right arrow) Select next sequence entry
-    a               Toggle mode (build/plan) for selected entry (exits wait)
+    a               Toggle mode (build/plan/spec) for selected entry (exits wait)
     w               Set wait mode - prompts for command, Enter to confirm
     m               Toggle model (sonnet/opus/haiku) for selected entry
     t               Toggle TUI mode for selected entry (shows in RED)
@@ -114,7 +127,7 @@ INTERACTIVE CONTROLS (non-TUI mode)
     I (Shift+I)     INTERVENE: Stop current session, continue in TUI with --continue
     Q (Shift+Q)     ABORT: Stop everything and exit ralph
 
-    Sequence display: Ps=Plan+sonnet, Bo=Build+opus, W=Wait, RED=TUI
+    Sequence display: Ps=Plan+sonnet, Bo=Build+opus, So=Spec+opus, W=Wait, RED=TUI
     [current] <selected> upcoming - use arrows to select, a/w/m/t to modify
 
 NOTES
@@ -130,19 +143,21 @@ EOF
 }
 
 # Default values
-MAX_ITERATIONS=5
+MAX_ITERATIONS=""
 RALPH_DIR="./ralph"
-MODEL=""
+PLAN_MODEL="opus"
+BUILD_MODEL="opus"
 CLI=""
 CLI_TYPE="claude"
 TUI="false"
 DELAY=0
 
 # Parse flags
-while getopts "i:m:d:c:C:w:th" opt; do
+while getopts "i:p:b:d:c:C:w:th" opt; do
     case $opt in
     i) MAX_ITERATIONS="$OPTARG" ;;
-    m) MODEL="$OPTARG" ;;
+    p) PLAN_MODEL="$OPTARG" ;;
+    b) BUILD_MODEL="$OPTARG" ;;
     d) RALPH_DIR="$OPTARG" ;;
     c) CLI="$OPTARG" ;;
     C) CLI_TYPE="$OPTARG" ;;
@@ -188,9 +203,10 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-# Parse mode sequence (handles: plan, build, wait "command")
+# Parse mode sequence (handles: plan, build, spec, wait "command", and repeat counts)
 MODE_SEQUENCE=()
 WAIT_COMMANDS=()  # Parallel array for wait commands (empty string if not wait)
+TUI_DEFAULTS=()   # Track which modes default to TUI (spec mode)
 while [ $# -gt 0 ]; do
     m="$1"
     if [[ "$m" == "wait" ]]; then
@@ -201,13 +217,38 @@ while [ $# -gt 0 ]; do
         fi
         MODE_SEQUENCE+=("wait")
         WAIT_COMMANDS+=("$2")
+        TUI_DEFAULTS+=("0")
         shift 2
     elif [[ "$m" == "build" || "$m" == "plan" ]]; then
         MODE_SEQUENCE+=("$m")
         WAIT_COMMANDS+=("")
+        TUI_DEFAULTS+=("0")
+        shift
+    elif [[ "$m" == "spec" ]]; then
+        MODE_SEQUENCE+=("$m")
+        WAIT_COMMANDS+=("")
+        TUI_DEFAULTS+=("1")  # spec defaults to TUI
+        shift
+    elif [[ "$m" =~ ^[0-9]+$ ]]; then
+        # Number: repeat previous mode N times total
+        if [ ${#MODE_SEQUENCE[@]} -eq 0 ]; then
+            echo "Error: Number '$m' must follow a mode (build/plan/spec/wait)"
+            echo "Try 'ralph -h' for more information."
+            exit 1
+        fi
+        repeat_count=$((m - 1))  # -1 because we already added one
+        last_idx=$((${#MODE_SEQUENCE[@]} - 1))
+        last_mode="${MODE_SEQUENCE[$last_idx]}"
+        last_wait="${WAIT_COMMANDS[$last_idx]}"
+        last_tui="${TUI_DEFAULTS[$last_idx]}"
+        for ((r = 0; r < repeat_count; r++)); do
+            MODE_SEQUENCE+=("$last_mode")
+            WAIT_COMMANDS+=("$last_wait")
+            TUI_DEFAULTS+=("$last_tui")
+        done
         shift
     else
-        echo "Error: Mode must be 'build', 'plan', or 'wait \"command\"', got '$m'"
+        echo "Error: Mode must be 'build', 'plan', 'spec', 'wait \"command\"', or a number, got '$m'"
         echo "Try 'ralph -h' for more information."
         exit 1
     fi
@@ -216,20 +257,27 @@ done
 # Initial mode is the first in sequence
 MODE="${MODE_SEQUENCE[0]}"
 
-# Set defaults based on first mode if not provided
-if [ -z "$MODEL" ]; then
-    if [ "$MODE" = "plan" ]; then
-        MODEL="opus"
-    else
-        MODEL="sonnet"
-    fi
+# Set MAX_ITERATIONS to sequence length if not specified
+if [ -z "$MAX_ITERATIONS" ]; then
+    MAX_ITERATIONS=${#MODE_SEQUENCE[@]}
 fi
 
-# Verify all prompt files exist (skip wait mode)
+# Set MODEL based on first mode (for display purposes)
+if [ "$MODE" = "plan" ]; then
+    MODEL="$PLAN_MODEL"
+else
+    MODEL="$BUILD_MODEL"
+fi
+
+# Verify all prompt files exist (skip wait mode, dedupe modes)
+checked_modes=""
 for m in "${MODE_SEQUENCE[@]}"; do
-    if [[ "$m" != "wait" ]] && [ ! -f "$RALPH_DIR/PROMPT_$m.md" ]; then
-        echo "Error: $RALPH_DIR/PROMPT_$m.md not found"
-        exit 1
+    if [[ "$m" != "wait" ]] && [[ ! "$checked_modes" == *"|$m|"* ]]; then
+        checked_modes="$checked_modes|$m|"
+        if [ ! -f "$RALPH_DIR/PROMPT_$m.md" ]; then
+            echo "Error: $RALPH_DIR/PROMPT_$m.md not found"
+            exit 1
+        fi
     fi
 done
 
@@ -250,9 +298,14 @@ trap cleanup EXIT
 # Build model sequence and TUI flags (same length as mode sequence)
 MODEL_SEQUENCE=()
 TUI_FLAGS=()
-for m in "${MODE_SEQUENCE[@]}"; do
-    MODEL_SEQUENCE+=("$MODEL")
-    TUI_FLAGS+=("0")
+for i in "${!MODE_SEQUENCE[@]}"; do
+    m="${MODE_SEQUENCE[$i]}"
+    if [ "$m" = "plan" ]; then
+        MODEL_SEQUENCE+=("$PLAN_MODEL")
+    else
+        MODEL_SEQUENCE+=("$BUILD_MODEL")
+    fi
+    TUI_FLAGS+=("${TUI_DEFAULTS[$i]}")
 done
 
 # Export for ralph-format.py (use | as delimiter for wait commands since they may contain spaces)
@@ -334,6 +387,7 @@ while true; do
     if [ -f "$SETTINGS_FILE" ]; then
         NEW_ITERATIONS=$(grep "^ITERATIONS=" "$SETTINGS_FILE" | cut -d= -f2)
         INTERVENE=$(grep "^INTERVENE=" "$SETTINGS_FILE" | cut -d= -f2)
+        SESSION_ID=$(grep "^SESSION_ID=" "$SETTINGS_FILE" | cut -d= -f2)
         ABORT=$(grep "^ABORT=" "$SETTINGS_FILE" | cut -d= -f2)
         NEW_MODE_SEQUENCE=$(grep "^MODE_SEQUENCE=" "$SETTINGS_FILE" | cut -d= -f2)
         NEW_MODEL_SEQUENCE=$(grep "^MODEL_SEQUENCE=" "$SETTINGS_FILE" | cut -d= -f2)
@@ -356,6 +410,8 @@ while true; do
             if [ "$CLI_TYPE" = "opencode" ]; then
                 MAPPED_MODEL=$(map_model_for_opencode "$MODEL")
                 "$CLI" -m "$MAPPED_MODEL" -c
+            elif [ -n "$SESSION_ID" ]; then
+                "$CLI" --dangerously-skip-permissions --model "$MODEL" --resume "$SESSION_ID"
             else
                 "$CLI" --dangerously-skip-permissions --model "$MODEL" --continue
             fi
