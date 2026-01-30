@@ -1,6 +1,8 @@
 theme = tokyonight
 
 desktop-notifications = true
+shell-integration-features = ssh-terminfo
+shell-integration-features = ssh-env
 
 shell-integration-features = ssh-terminfo
 shell-integration-features = ssh-env
@@ -41,6 +43,12 @@ keybind = super+7=text:\x007
 keybind = super+8=text:\x008
 keybind = super+9=text:\x009
 keybind = super+0=text:\x000
+# tab switching (super+shift+{/} -> M-P/N for tmux prev/next window)
+keybind = super+shift+left_bracket=esc:P
+keybind = super+shift+right_bracket=esc:N
+# window moving (super+shift+</> -> M-{/} for tmux swap-window)
+keybind = super+shift+comma=esc:{
+keybind = super+shift+period=esc:}
 # vim stuff
 keybind = super+j=csi:90;1
 keybind = super+s=csi:90;2
@@ -55,7 +63,15 @@ keybind = super+l=csi:90;10
 keybind = super+shift+i=csi:90;11
 keybind = super+k=csi:90;12
 keybind = super+alt+v=csi:90;13
-# keybind = super+d=esc:gd
+# multicursor
+keybind = super+d=csi:90;14
+keybind = super+shift+d=csi:90;15
+keybind = super+u=csi:90;16
+keybind = super+shift+u=csi:90;17
+keybind = super+alt+k=csi:90;18
+keybind = super+alt+j=csi:90;19
+keybind = super+alt+shift+k=csi:90;20
+keybind = super+alt+shift+j=csi:90;21
 # }}}
 
 # # {{{ final bindings
