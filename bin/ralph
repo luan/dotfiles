@@ -108,7 +108,7 @@ ENVIRONMENT
     - PROMPT_*.md files in the working directory
 
     Optional:
-    - ralph-format.py for pretty output (always used if available)
+    - loop-format.py for pretty output (always used if available)
     - delta for enhanced diff visualization in formatted output
 
 INTERACTIVE CONTROLS (non-TUI mode)
@@ -308,7 +308,7 @@ for i in "${!MODE_SEQUENCE[@]}"; do
     TUI_FLAGS+=("${TUI_DEFAULTS[$i]}")
 done
 
-# Export for ralph-format.py (use | as delimiter for wait commands since they may contain spaces)
+# Export for loop-format.py (use | as delimiter for wait commands since they may contain spaces)
 WAIT_COMMANDS_STR=$(IFS='|'; echo "${WAIT_COMMANDS[*]}")
 
 export RALPH_MODE="$MODE"
@@ -364,7 +364,7 @@ while true; do
             "$CLI" --dangerously-skip-permissions --model "$MODEL" "$(cat "$PROMPT_FILE")"
         fi
     else
-        # Headless mode - capture PID for ralph-format.py to kill if needed
+        # Headless mode - capture PID for loop-format.py to kill if needed
         CLI_PID_FILE="/tmp/ralph_cli_pid_$$"
         if [ "$CLI_TYPE" = "opencode" ]; then
             MAPPED_MODEL=$(map_model_for_opencode "$MODEL")
@@ -372,18 +372,18 @@ while true; do
                 "$CLI" run --format json -m "$MAPPED_MODEL" "$(cat "$PROMPT_FILE")" &
                 echo $! > "$CLI_PID_FILE"
                 wait $!
-            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" ralph-format.py
+            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" loop-format.py
         else
             (
                 "$CLI" -p --dangerously-skip-permissions --output-format=stream-json --model "$MODEL" --verbose < "$PROMPT_FILE" &
                 echo $! > "$CLI_PID_FILE"
                 wait $!
-            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" ralph-format.py
+            ) | RALPH_CLAUDE_PID_FILE="$CLI_PID_FILE" loop-format.py
         fi
         rm -f "$CLI_PID_FILE"
     fi
 
-    # Read settings from ralph-format.py for next iteration
+    # Read settings from loop-format.py for next iteration
     if [ -f "$SETTINGS_FILE" ]; then
         NEW_ITERATIONS=$(grep "^ITERATIONS=" "$SETTINGS_FILE" | cut -d= -f2)
         INTERVENE=$(grep "^INTERVENE=" "$SETTINGS_FILE" | cut -d= -f2)
