@@ -1,0 +1,169 @@
+#!/bin/bash
+
+show_help() {
+    cat <<'EOF'
+bd-loop - Automated Beads Workflow Loop (tmux-based)
+
+SYNOPSIS
+    bd-loop [-i iterations] [-w delay] [-h] <mode> [mode|count...]
+
+DESCRIPTION
+    Runs automated explore/implement loops using beads skills in non-interactive
+    mode via tmux. Watches for "✅ Non-interactive complete." to detect completion.
+
+MODES
+    build       Execute /implement skill (default model: opus)
+    plan        Execute /explore skill (default model: opus)
+
+    Numbers repeat the previous mode: bd-loop build 3 plan build 3
+    - Runs: build x3, plan x1, build x3 (7 total iterations)
+
+OPTIONS
+    -i <num>    Maximum iterations (default: inferred from sequence)
+                Set to 0 for unlimited iterations.
+
+    -p <model>  Model for plan mode: opus, sonnet, haiku (default: opus)
+
+    -b <model>  Model for build mode: opus, sonnet, haiku (default: opus)
+
+    -w <secs>   Delay between iterations (default: 0)
+
+    -a <arg>    Argument to pass to /implement (e.g., issue ID)
+
+    -h          Show this help message
+
+EXAMPLES
+    bd-loop build              # Single build iteration
+    bd-loop -i 5 build         # 5 build iterations
+    bd-loop plan build 3       # Plan once, then build 3x
+    bd-loop -a PROJ-42 build   # Implement specific issue
+
+EOF
+    exit 0
+}
+
+DONE_MARKER="✅ Non-interactive complete."
+
+# Defaults
+MAX_ITERATIONS=""
+PLAN_MODEL="opus"
+BUILD_MODEL="opus"
+DELAY=0
+IMPLEMENT_ARG=""
+
+while getopts "i:p:b:w:a:h" opt; do
+    case $opt in
+        i) MAX_ITERATIONS="$OPTARG" ;;
+        p) PLAN_MODEL="$OPTARG" ;;
+        b) BUILD_MODEL="$OPTARG" ;;
+        w) DELAY="$OPTARG" ;;
+        a) IMPLEMENT_ARG="$OPTARG" ;;
+        h) show_help ;;
+        *) echo "Error: Invalid option. Try 'bd-loop -h'"; exit 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [ $# -eq 0 ]; then
+    echo "Error: At least one mode (build/plan) required"
+    echo "Try 'bd-loop -h' for more information."
+    exit 1
+fi
+
+# Parse mode sequence with repeat counts
+MODE_SEQUENCE=()
+while [ $# -gt 0 ]; do
+    m="$1"
+    if [[ "$m" == "build" || "$m" == "plan" ]]; then
+        MODE_SEQUENCE+=("$m")
+        shift
+    elif [[ "$m" =~ ^[0-9]+$ ]]; then
+        if [ ${#MODE_SEQUENCE[@]} -eq 0 ]; then
+            echo "Error: Number '$m' must follow a mode (build/plan)"
+            exit 1
+        fi
+        repeat_count=$((m - 1))
+        last_mode="${MODE_SEQUENCE[-1]}"
+        for ((r = 0; r < repeat_count; r++)); do
+            MODE_SEQUENCE+=("$last_mode")
+        done
+        shift
+    else
+        echo "Error: Mode must be 'build', 'plan', or a number, got '$m'"
+        exit 1
+    fi
+done
+
+# Set max iterations from sequence if not specified
+if [ -z "$MAX_ITERATIONS" ]; then
+    MAX_ITERATIONS=${#MODE_SEQUENCE[@]}
+fi
+
+# Build model sequence
+MODEL_SEQUENCE=()
+for m in "${MODE_SEQUENCE[@]}"; do
+    if [ "$m" = "plan" ]; then
+        MODEL_SEQUENCE+=("$PLAN_MODEL")
+    else
+        MODEL_SEQUENCE+=("$BUILD_MODEL")
+    fi
+done
+
+ITERATION=1
+SEQ_LEN=${#MODE_SEQUENCE[@]}
+
+while true; do
+    if [ "$MAX_ITERATIONS" -gt 0 ] && [ "$ITERATION" -gt "$MAX_ITERATIONS" ]; then
+        echo "Reached max iterations: $MAX_ITERATIONS"
+        break
+    fi
+
+    # Select mode and model (use last if past sequence)
+    if [ "$ITERATION" -le "$SEQ_LEN" ]; then
+        MODE="${MODE_SEQUENCE[$((ITERATION - 1))]}"
+        MODEL="${MODEL_SEQUENCE[$((ITERATION - 1))]}"
+    else
+        MODE="${MODE_SEQUENCE[$((SEQ_LEN - 1))]}"
+        MODEL="${MODEL_SEQUENCE[$((SEQ_LEN - 1))]}"
+    fi
+
+    echo "[$ITERATION/$MAX_ITERATIONS] $MODE (model: $MODEL)"
+
+    # Create new window for this iteration
+    WINDOW_NAME="[$ITERATION] $MODE"
+    WINDOW=$(tmux new-window -dP -n "$WINDOW_NAME" -F '#{session_name}:#{window_id}')
+
+    # Build the prompt based on mode
+    if [ "$MODE" = "plan" ]; then
+        PROMPT="/explore"
+    else
+        if [ -n "$IMPLEMENT_ARG" ]; then
+            PROMPT="/implement $IMPLEMENT_ARG"
+        else
+            PROMPT="/implement"
+        fi
+    fi
+
+    # Start claude with prompt
+    tmux send-keys -t "$WINDOW" \
+        "CLAUDE_NON_INTERACTIVE=1 claude --dangerously-skip-permissions --model $MODEL '$PROMPT'" Enter
+
+    # Poll for completion marker
+    while true; do
+        if tmux capture-pane -t "$WINDOW" -p | grep -qF "$DONE_MARKER"; then
+            break
+        fi
+        sleep 2
+    done
+
+    # Mark window as done
+    tmux rename-window -t "$WINDOW" "[$ITERATION] $MODE ✓"
+
+    # Delay between iterations
+    if [ "$DELAY" -gt 0 ] && [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; then
+        echo "Waiting ${DELAY}s..."
+        sleep "$DELAY"
+    fi
+
+    ITERATION=$((ITERATION + 1))
+done
