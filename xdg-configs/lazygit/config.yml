@@ -32,3 +32,9 @@ git:
 keybinding:
   universal:
     openFile: O
+customCommands:
+  - key: R
+    description: "Open commit(s) in review.nvim"
+    context: commits
+    command: nvim --server "$NVIM" --remote-send "<C-\\><C-n>:Review commits {{.SelectedCommitRange.From}}^ {{.SelectedCommitRange.To}}<CR>"
+    output: none
