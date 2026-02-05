@@ -1,3 +1,0 @@
-[submodule "xdg-configs/zellij/plugins/zj-sesh"]
-	path = xdg-configs/zellij/plugins/zj-sesh
-	url = https://github.com/luan/zj-sesh
