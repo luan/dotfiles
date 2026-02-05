@@ -68,7 +68,51 @@
       "shift-enter": "workspace::SaveAll",
       "alt-j": "editor::MoveLineDown",
       "alt-k": "editor::MoveLineUp",
-      "x": "editor::SelectLine"
+      "x": "editor::SelectLine",
+      "space e": "project_panel::ToggleFocus",
+      "space w": "workspace::Save",
+      "space q": "pane::CloseActiveItem",
+      "space shift-q": "pane::CloseAllItems",
+      "space b d": "pane::CloseActiveItem",
+      "space b n": "pane::ActivateNextItem",
+      "space b p": "pane::ActivatePreviousItem",
+      "space g g": [
+        "task::Spawn",
+        { "task_name": "lazygit", "reveal_target": "center" }
+      ],
+      "space g shift-g": [
+        "task::Spawn",
+        { "task_name": "lazygit", "reveal_target": "center" }
+      ],
+      "space g l": "editor::ToggleGitBlameInline",
+      "space g d": "editor::GoToHunk",
+      "space g h": "editor::GoToPreviousHunk",
+      "] c": "editor::GoToHunk",
+      "[ c": "editor::GoToPreviousHunk",
+      "space c a": "editor::ToggleCodeActions",
+      "space c d": "diagnostics::Deploy",
+      "space c f": "editor::Format",
+      "space c r": "editor::Rename",
+      "space s f": "pane::DeploySearch",
+      "space s g": "project_search::ToggleFocus",
+      "space s s": "outline::Toggle",
+      "space s r": "editor::FindAllReferences",
+      "space t t": "terminal_panel::ToggleFocus",
+      "space t n": "workspace::NewTerminal",
+      "space x x": "diagnostics::Deploy",
+      "space x d": "editor::GoToDiagnostic",
+      "space space": "file_finder::Toggle",
+      "space :": "command_palette::Toggle",
+      "space /": "workspace::NewSearch",
+      "space ,": "workspace::ActivatePreviousPane",
+      "ctrl-h": "workspace::ActivatePaneLeft",
+      "ctrl-j": "workspace::ActivatePaneDown",
+      "ctrl-k": "workspace::ActivatePaneUp",
+      "ctrl-l": "workspace::ActivatePaneRight",
+      "ctrl-g": [
+        "task::Spawn",
+        { "task_name": "lazygit", "reveal_target": "center" }
+      ]
     },
     "context": "Editor && (vim_mode == normal || vim_mode == helix_normal || vim_mode == visual) && !VimWaiting && !menu"
   },
@@ -119,7 +163,15 @@
   {
     "context": "Workspace",
     "bindings": {
-      "cmd-l": "workspace::ToggleRightDock"
+      "cmd-l": "workspace::ToggleRightDock",
+      "ctrl-h": "workspace::ActivatePaneLeft",
+      "ctrl-j": "workspace::ActivatePaneDown",
+      "ctrl-k": "workspace::ActivatePaneUp",
+      "ctrl-l": "workspace::ActivatePaneRight",
+      "ctrl-g": [
+        "task::Spawn",
+        { "task_name": "lazygit", "reveal_target": "center" }
+      ]
     }
   }
 ]

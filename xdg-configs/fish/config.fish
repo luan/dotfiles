@@ -49,3 +49,8 @@ alias view="nvim -R"
 
 COMPLETE=fish jj | source
 
+# Added by Antigravity
+fish_add_path /Users/luan/.antigravity/antigravity/bin
+
+# opencode
+fish_add_path /Users/luan/.opencode/bin

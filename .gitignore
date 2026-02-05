@@ -20,11 +20,13 @@ ssh/.ssh/authorized_keys
 ssh/.ssh/known_hosts.old
 ssh/.ssh/known_hosts
 bin/__pycache__/
+**/__pycache__/
+**/target/
 
 .tmp*
 **/zed/prompts
 **/zed/conversations
 **/zed/embeddings
-xdg-configs/kitty/logs/
 xdg-configs/fish/fish_variables
 .claude/settings.local.json
+bin/.claude/settings.local.json
