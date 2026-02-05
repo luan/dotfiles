@@ -1,0 +1,62 @@
+#!/bin/bash
+
+set -e
+
+readonly TMUXFILES_REPO_NAME='luan/tmuxfiles'
+readonly TMUXFILES_REPO_URL="https://github.com/${TMUXFILES_REPO_NAME}"
+
+readonly RED='\033[0;31m'
+readonly END_COLOR='\033[0;m'
+
+from_repo() {
+  declare dir=$1
+
+  (
+  [[ -d "${dir}" ]] && cd "${dir}" || return 1
+  [[ -e "${dir}/.git" && "$(git remote -v)" == *"${TMUXFILES_REPO_NAME}"* ]]
+  )
+}
+
+main() {
+  declare script_name=$0
+  local dir
+
+  mkdir -p ~/.tmux/plugins/
+
+  dir="$(cd "$(dirname "${script_name}")" && pwd)"
+  if [[ "$(basename "${dir}")" == "bin" ]]; then
+    dir="$(cd "${dir}"/.. && pwd)"
+  fi
+
+  if [[ -f ~/.tmux.conf && "$(readlink -f ~/.tmux.conf)" != "$dir/tmux.conf" ]]; then
+    echo -n "Existing ~/.tmux.conf found. Overwrite? (y/N) "
+    read -r response
+    if [[ "${response}" == "y" ]]; then
+      rm -f ~/.tmux.conf
+    else
+      echo "${RED}Installation aborted.${END_COLOR}"
+      exit 1
+    fi
+
+  fi
+
+  if ! from_repo "${dir}"; then
+    echo "tmuxfiles repository not yet cloned. Cloning..."
+    dir="$HOME/.tmux/config"
+    git clone "${TMUXFILES_REPO_URL}" "${dir}"
+  fi
+
+  if [[ ! -L ~/.tmux.conf ]]; then
+    ln -s "${dir}/tmux.conf" ~/.tmux.conf
+  fi
+
+  if [[ ! -d ~/.tmux/plugins/tpm ]]; then
+    git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+  fi
+
+  ~/.tmux/plugins/tpm/bin/install_plugins
+  ~/.tmux/plugins/tpm/bin/update_plugins all
+  ~/.tmux/plugins/tpm/bin/clean_plugins
+}
+
+main "$@"
