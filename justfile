@@ -5,17 +5,21 @@ config_dir := env("HOME") / ".config"
 default:
     @just --list
 
-# Link all xdg-configs into ~/.config via stow
+# Link stow configs + create convenience symlinks in dotfiles dir
 link:
     stow -R xdg-configs -t "{{ config_dir }}"
     stow -R bin -t "{{ env("HOME") }}/bin"
+    ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
+    ln -sfn "$HOME/.claude" "{{ dotfiles_dir }}/dot-claude"
 
-# Unlink all stow-managed configs
+# Unlink stow configs + remove convenience symlinks
 unlink:
     stow -D xdg-configs -t "{{ config_dir }}"
     stow -D bin -t "{{ env("HOME") }}/bin"
+    rm -f "{{ dotfiles_dir }}/nvim"
+    rm -f "{{ dotfiles_dir }}/dot-claude"
 
-# Set up external repos (nvim, dot-claude) if not already cloned
+# Clone external repos if not already present
 repos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -33,7 +37,7 @@ repos:
     clone_if_missing "https://github.com/luan/nvim" "{{ config_dir }}/nvim"
     clone_if_missing "https://github.com/luan/dot-claude" "$HOME/.claude"
 
-# Safely pull dotfiles + all external repos (skips repos with uncommitted changes)
+# Safely pull dotfiles + external repos (skips repos with uncommitted changes)
 pull:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -75,50 +79,5 @@ gitconfig:
         echo "✓ gitconfig already configured"
     fi
 
-# Migrate tmux from standalone repo to dotfiles-managed stow config
-migrate-tmux:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    tmux_dir="{{ config_dir }}/tmux"
-
-    if [ -L "$tmux_dir" ] && readlink "$tmux_dir" | grep -q dotfiles; then
-        echo "✓ tmux already managed by dotfiles"
-        exit 0
-    fi
-
-    if [ -d "$tmux_dir/.git" ]; then
-        echo "→ Migrating tmux from standalone repo to dotfiles"
-        # Check for uncommitted changes first
-        if [ -n "$(git -C "$tmux_dir" status --porcelain)" ]; then
-            echo "✗ tmux repo has uncommitted changes — commit or stash first"
-            exit 1
-        fi
-        plugins_backup=""
-        if [ -d "$tmux_dir/plugins" ]; then
-            plugins_backup="$(mktemp -d)"
-            echo "→ Backing up tmux plugins to $plugins_backup"
-            cp -R "$tmux_dir/plugins" "$plugins_backup/"
-        fi
-        echo "→ Removing old tmux repo"
-        rm -rf "$tmux_dir"
-        echo "→ Linking tmux via stow"
-        stow -R xdg-configs -t "{{ config_dir }}"
-        if [ -n "$plugins_backup" ] && [ -d "$plugins_backup/plugins" ]; then
-            echo "→ Restoring tmux plugins"
-            cp -R "$plugins_backup/plugins" "$tmux_dir/"
-            rm -rf "$plugins_backup"
-        fi
-        echo "✓ tmux migrated to dotfiles"
-    elif [ -d "$tmux_dir" ]; then
-        echo "→ tmux dir exists but is not a git repo — removing and linking"
-        rm -rf "$tmux_dir"
-        stow -R xdg-configs -t "{{ config_dir }}"
-        echo "✓ tmux linked via stow"
-    else
-        echo "→ No existing tmux config — linking via stow"
-        stow -R xdg-configs -t "{{ config_dir }}"
-        echo "✓ tmux linked via stow"
-    fi
-
-# Full setup: brew, link, repos, gitconfig
-setup: brew link repos gitconfig
+# Full setup: brew, repos, link, gitconfig
+setup: brew repos link gitconfig
