@@ -11,3 +11,5 @@ xdg-configs/fish/fish_variables
 xdg-configs/tmux/plugins/
 .claude/settings.local.json
 bin/.claude/settings.local.json
+nvim
+dot-claude
