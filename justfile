@@ -79,5 +79,44 @@ gitconfig:
         echo "✓ gitconfig already configured"
     fi
 
-# Full setup: brew, repos, link, gitconfig
-setup: brew repos link gitconfig
+# Install Claude Code plugin marketplaces and plugins
+claude-plugins:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v claude &>/dev/null; then
+        echo "⚠ claude not found, skipping plugin setup"
+        exit 0
+    fi
+
+    marketplaces=(
+        "anthropics/claude-plugins-official"
+        "steveyegge/beads"
+    )
+
+    plugins=(
+        "beads@beads-marketplace"
+        "clangd-lsp@claude-plugins-official"
+        "claude-md-management@claude-plugins-official"
+        "code-simplifier@claude-plugins-official"
+        "context7@claude-plugins-official"
+        "gopls-lsp@claude-plugins-official"
+        "pyright-lsp@claude-plugins-official"
+        "rust-analyzer-lsp@claude-plugins-official"
+        "swift-lsp@claude-plugins-official"
+    )
+
+    for m in "${marketplaces[@]}"; do
+        echo "→ Marketplace: $m"
+        claude plugin marketplace add "$m" 2>/dev/null || true
+    done
+
+    for p in "${plugins[@]}"; do
+        echo "→ Plugin: $p"
+        claude plugin install "$p" 2>/dev/null || true
+    done
+
+    echo "✓ Claude plugins ready"
+
+# Full setup: brew, repos, link, gitconfig, claude-plugins
+setup: brew repos link gitconfig claude-plugins
