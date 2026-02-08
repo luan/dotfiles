@@ -21,7 +21,7 @@ dir_count=$(echo "$dirs" | wc -l | tr -d ' ')
 if [[ "$dir_count" -ne 1 ]]; then
   echo -e "${RED}✗ Windows are in different directories:${RESET}"
   echo "$dirs" | while read -r d; do echo -e "  ${GRAY}$d${RESET}"; done
-  read -p "Press enter to exit..."
+  read -rp "Press enter to exit..."
   exit 1
 fi
 
@@ -31,7 +31,7 @@ echo -e "${GREEN}✓${RESET} All windows in: ${GRAY}${dir/#$HOME/\~}${RESET}"
 # Check if git repo
 if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
   echo -e "${RED}✗ Not a git repository${RESET}"
-  read -p "Press enter to exit..."
+  read -rp "Press enter to exit..."
   exit 1
 fi
 echo -e "${GREEN}✓${RESET} Git repository"
@@ -41,7 +41,7 @@ if ! git -C "$dir" diff --quiet HEAD 2>/dev/null || \
    ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
   echo -e "${RED}✗ Uncommitted changes:${RESET}"
   git -C "$dir" status --short
-  read -p "Press enter to exit..."
+  read -rp "Press enter to exit..."
   exit 1
 fi
 
@@ -63,7 +63,7 @@ if [[ "$branch" != "HEAD" ]]; then
     if [[ -n "$unpushed" ]]; then
       echo -e "${RED}✗ Unpushed commits on $branch:${RESET}"
       echo "$unpushed" | while read -r c; do echo -e "  ${GRAY}$c${RESET}"; done
-      read -p "Press enter to exit..."
+      read -rp "Press enter to exit..."
       exit 1
     fi
   fi
@@ -80,11 +80,23 @@ if [[ -n "$git_common_dir" && "$git_common_dir" != ".git" && "$git_common_dir" !
 fi
 
 if $is_worktree; then
-  if ! gum confirm "Detach HEAD and kill session '$session'?"; then
-    exit 0
+  is_bare=$(git -C "$dir" rev-parse --is-bare-repository 2>/dev/null || echo "false")
+  skip_detach=false
+  if [[ "$is_bare" == "false" && "$branch" == "main" ]]; then
+    skip_detach=true
   fi
-  echo -e "${GREEN}Detaching HEAD...${RESET}"
-  git -C "$dir" checkout --detach 2>/dev/null || true
+
+  if $skip_detach; then
+    if ! gum confirm "Kill session '$session'?"; then
+      exit 0
+    fi
+  else
+    if ! gum confirm "Detach HEAD and kill session '$session'?"; then
+      exit 0
+    fi
+    echo -e "${GREEN}Detaching HEAD...${RESET}"
+    git -C "$dir" checkout --detach 2>/dev/null || true
+  fi
 else
   if ! gum confirm "Kill session '$session'?"; then
     exit 0
