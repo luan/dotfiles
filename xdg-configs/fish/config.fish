@@ -6,6 +6,10 @@ end
 
 # aliases
 alias vim=nvim
+alias ls="eza --icons"
+alias ll="eza --icons -l"
+alias la="eza --icons -la"
+alias lt="eza --icons --tree"
 
 set --export EDITOR vim
 set --export GIT_EDITOR vim
