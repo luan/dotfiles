@@ -55,12 +55,11 @@ else
     exit 1
 fi
 
-# Build gg command: always --no-tmux -q, callers manage their own sessions
-GG_CMD="gg add"
+# Build gg command: --no-tmux and -q are flags on gg itself, not on subcommands
+GG_CMD="gg --no-tmux -q add"
 if [[ -n "$NAME" ]]; then
     GG_CMD="$GG_CMD $NAME"
 fi
-GG_CMD="$GG_CMD --no-tmux -q"
 if [[ -n "$BRANCH" ]]; then
     GG_CMD="$GG_CMD --branch $BRANCH"
 fi
