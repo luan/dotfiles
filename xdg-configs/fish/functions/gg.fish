@@ -60,6 +60,73 @@ function __gg_try_cleanup_locks --argument-names worktree_path git_dir
     test -n "$git_dir"; and __gg_cleanup_stale_lock "$git_dir/index.lock"
 end
 
+function __gg_has_claude_history --argument-names worktree_path
+    # Claude sanitizes project paths: /a/b/c -> -a-b-c
+    set -l sanitized (string replace -a / - $worktree_path)
+    set -l project_dir "$HOME/.claude/projects/$sanitized"
+
+    test -d "$project_dir"; or return 1
+
+    # Check for any .jsonl session files
+    set -l session_files $project_dir/*.jsonl
+    test -n "$session_files"; and test -e "$session_files[1]"
+end
+
+function __gg_claude_cmd --argument-names worktree_path
+    if __gg_has_claude_history "$worktree_path"
+        echo "claude --continue"
+    else
+        echo "claude"
+    end
+end
+
+function __gg_tmux_session --argument-names grove_name worktree_path
+    # Derive session name from repo basename + grove name
+    # e.g., for /Users/me/src/arc.git/wt3, repo is "arc", grove is "wt3" -> "arc/wt3"
+    set -l git_common_dir (git -C "$worktree_path" rev-parse --git-common-dir 2>/dev/null)
+    set -l repo_basename
+    if test -n "$git_common_dir"
+        set repo_basename (basename (path resolve "$git_common_dir") | string replace -r '\.git$' '')
+    else
+        set repo_basename (basename "$worktree_path")
+    end
+
+    set -l session_name "$repo_basename/$grove_name"
+    # tmux session names can't contain dots or colons
+    set session_name (string replace -a '.' '_' "$session_name")
+    set session_name (string replace -a ':' '_' "$session_name")
+
+    # If session exists, just switch to it
+    if tmux has-session -t "$session_name" 2>/dev/null
+        if test -n "$TMUX"
+            tmux switch-client -t "$session_name"
+        else
+            tmux attach -t "$session_name"
+        end
+        return 0
+    end
+
+    # Create session with 3 windows: ai, vi, sh
+    tmux new-session -d -s "$session_name" -n "ai" -c "$worktree_path"
+    tmux new-window -t "$session_name" -n "vi" -c "$worktree_path"
+    tmux new-window -t "$session_name" -n "sh" -c "$worktree_path"
+
+    # Launch claude and nvim via send-keys (matches new-project-session.sh)
+    set -l claude_cmd (__gg_claude_cmd "$worktree_path")
+    tmux send-keys -t "$session_name:ai" "$claude_cmd" Enter
+    tmux send-keys -t "$session_name:vi" "nvim" Enter
+
+    # Focus the ai window
+    tmux select-window -t "$session_name:ai"
+
+    # Switch or attach
+    if test -n "$TMUX"
+        tmux switch-client -t "$session_name"
+    else
+        tmux attach -t "$session_name"
+    end
+end
+
 function gg_generate_name --description "Generate next available grove name"
     set -l repo_info (gg_get_repo_info)
     if test $status -ne 0
@@ -104,6 +171,8 @@ function __gg_help
     echo "  -h, --help                       - Show this help message"
     echo "  -v, --verbose                    - Enable verbose output"
     echo "  -q, --quiet                      - Suppress informational output"
+    echo "  --tmux                           - Create tmux session (auto when in tmux)"
+    echo "  --no-tmux                        - Don't create tmux session"
     echo ""
     echo "EXAMPLES:"
     echo "  gg                               - Select worktree interactively"
@@ -182,7 +251,28 @@ function __gg_go_help
     echo "  Without branch: switches to first detached worktree."
 end
 
-function __gg_interactive --argument-names verbose quiet
+function __gg_worktree_mtime --argument-names path --description "Get directory mtime as epoch seconds"
+    stat -f %m "$path" 2>/dev/null; or echo 0
+end
+
+function __gg_format_relative_time --argument-names epoch --description "Format epoch as relative time string"
+    set -l now (date +%s)
+    set -l diff (math $now - $epoch)
+
+    if test $diff -lt 60
+        echo "just now"
+    else if test $diff -lt 3600
+        echo (math "floor($diff / 60)")"m ago"
+    else if test $diff -lt 86400
+        echo (math "floor($diff / 3600)")"h ago"
+    else if test $diff -lt 604800
+        echo (math "floor($diff / 86400)")"d ago"
+    else
+        echo (math "floor($diff / 604800)")"w ago"
+    end
+end
+
+function __gg_interactive --argument-names verbose quiet use_tmux
     if not command -sq fzf
         echo "Error: fzf is not installed" >&2
         return 1
@@ -197,7 +287,8 @@ function __gg_interactive --argument-names verbose quiet
     set -l grove_worktrees (git worktree list 2>/dev/null)
     test -z "$grove_worktrees"; and echo "Error: No worktrees exist" >&2; and return 1
 
-    set -l grove_items
+    # Build items with mtime prefix for sorting (decorate-sort-undecorate)
+    set -l decorated_items
     for worktree in $grove_worktrees
         set -l path (string split -f1 ' ' $worktree)
         set -l resolved_path (path resolve $path)
@@ -224,28 +315,39 @@ function __gg_interactive --argument-names verbose quiet
             end
         end
 
-        set -a grove_items "$worktree_name|$head_state|$resolved_path"
+        set -l mtime (__gg_worktree_mtime "$resolved_path")
+        set -l relative_time (__gg_format_relative_time $mtime)
+        set -a decorated_items "$mtime|$worktree_name|$head_state|$resolved_path|$relative_time"
+    end
+
+    # Sort by mtime descending, then strip mtime prefix
+    set -l grove_items
+    for item in (printf '%s\n' $decorated_items | sort -t'|' -k1 -nr)
+        set -l fields (string split "|" $item)
+        set -a grove_items "$fields[2]|$fields[3]|$fields[4]|$fields[5]"
     end
 
     set -l selected_item (printf '%s\n' $grove_items | fzf \
         --delimiter='|' \
-        --with-nth=1,2 \
+        --with-nth=1,2,4 \
         --preview-window="right:70%:wrap" \
         --preview='
             set -l parts (string split "|" {})
             set -l grove_name $parts[1]
             set -l head_state $parts[2]
             set -l worktree_path $parts[3]
+            set -l relative_time $parts[4]
 
             echo "Grove: $grove_name"
             echo "State: $head_state"
             echo "Path:  $worktree_path"
+            echo "Last:  $relative_time"
             echo ""
             echo "Changes:"
-            git -C "$worktree_path" status --porcelain 2>/dev/null | head -10
+            GIT_OPTIONAL_LOCKS=0 git -C "$worktree_path" status --porcelain 2>/dev/null | head -10
             echo ""
             echo "Recent Commits:"
-            git -C "$worktree_path" log --oneline -5 2>/dev/null
+            GIT_OPTIONAL_LOCKS=0 git -C "$worktree_path" log --oneline -5 2>/dev/null
         ' \
         --header="Git Grove    ⏎ Select  ^C Cancel" \
         --border=rounded \
@@ -258,9 +360,13 @@ function __gg_interactive --argument-names verbose quiet
         set -l worktree_path $parts[3]
 
         if test -d "$worktree_path"
-            # Clean stale locks before switching (helps Git Town, starship, etc.)
             __gg_try_cleanup_locks "$worktree_path" "$git_dir_resolved"
-            cd "$worktree_path"
+            if test "$use_tmux" = true
+                set -l grove_name (basename "$worktree_path")
+                __gg_tmux_session "$grove_name" "$worktree_path"
+            else
+                cd "$worktree_path"
+            end
             test "$verbose" = true; and echo "Switched to: $worktree_path"
             return 0
         else
@@ -270,7 +376,7 @@ function __gg_interactive --argument-names verbose quiet
     end
 end
 
-function __gg_add --argument-names verbose quiet
+function __gg_add --argument-names verbose quiet use_tmux
     argparse 'from=' 'b/branch=' sync no-hook h/help -- $argv
     or return 1
 
@@ -365,6 +471,10 @@ function __gg_add --argument-names verbose quiet
         source "$repo_root/.gg_hook.fish"
 
         set -e GG_WORKTREE_PATH GG_GROVE_NAME GG_BASE_REF GG_PROJECT_ROOT GG_TIMESTAMP GG_IS_DETACHED
+    end
+
+    if test "$use_tmux" = true
+        __gg_tmux_session "$grove_name" "$worktree_path"
     end
 
     test "$quiet" = false; and echo "[PWD] Now in: $worktree_path"
@@ -481,11 +591,27 @@ function __gg_list --argument-names verbose quiet
     set -l grove_count 0
     set -l detached_count 0
 
+    # Collect worktree data with mtime for sorting
+    set -l decorated_entries
     for worktree in $grove_worktrees
         string match -q "*(bare)" $worktree; and continue
 
         set -l path (string split -f1 ' ' $worktree)
         set -l resolved_path (path resolve $path)
+        set -l mtime (__gg_worktree_mtime "$resolved_path")
+
+        set -a decorated_entries "$mtime\t$worktree\t$resolved_path"
+    end
+
+    # Sort by mtime descending
+    set -l sorted_entries (printf '%s\n' $decorated_entries | sort -t\t -k1 -nr)
+
+    for entry in $sorted_entries
+        set -l entry_parts (string split \t $entry)
+        set -l mtime $entry_parts[1]
+        set -l worktree $entry_parts[2]
+        set -l resolved_path $entry_parts[3]
+
         set -l worktree_name (basename $resolved_path)
         set -l is_grove (__gg_is_grove "$resolved_path" "$git_dir_resolved"; and echo true; or echo false)
 
@@ -503,6 +629,7 @@ function __gg_list --argument-names verbose quiet
         set -l changes (git -C "$resolved_path" status --porcelain 2>/dev/null | wc -l | string trim)
         set -l status_text (test "$changes" = "0"; and echo "clean"; or echo "$changes changes")
         set -l last_commit (git -C "$resolved_path" log -1 --format="%h %s" 2>/dev/null)
+        set -l relative_time (__gg_format_relative_time $mtime)
 
         if test "$is_grove" = true
             echo "Grove: $worktree_name"
@@ -512,7 +639,8 @@ function __gg_list --argument-names verbose quiet
         echo "  State: $head_state"
         echo "  Path: $resolved_path"
         echo "  Status: $status_text"
-        echo "  Last: $last_commit"
+        echo "  Last commit: $last_commit"
+        echo "  Last used: $relative_time"
         echo ""
     end
 
@@ -718,7 +846,7 @@ echo "[OK] Hook completed"' >.gg_hook.fish
     end
 end
 
-function __gg_go --argument-names verbose quiet
+function __gg_go --argument-names verbose quiet use_tmux
     argparse h/help -- $argv
     or return 1
 
@@ -796,12 +924,17 @@ function __gg_go --argument-names verbose quiet
         test -z "$target_worktree"; and echo "Error: No detached worktrees found" >&2; and return 1
     end
 
-    cd "$target_worktree"
+    if test "$use_tmux" = true
+        set -l grove_name (basename "$target_worktree")
+        __gg_tmux_session "$grove_name" "$target_worktree"
+    else
+        cd "$target_worktree"
+    end
     test "$quiet" = false; and echo "Switched to: $target_worktree"
 end
 
 function gg --description "Git Grove - Manage git worktrees"
-    argparse -s h/help v/verbose q/quiet -- $argv
+    argparse -s h/help v/verbose q/quiet tmux no-tmux -- $argv
     or return 1
 
     set -ql _flag_help; and __gg_help; and return 0
@@ -809,14 +942,24 @@ function gg --description "Git Grove - Manage git worktrees"
     set -l verbose (set -ql _flag_verbose; and echo true; or echo false)
     set -l quiet (set -ql _flag_quiet; and echo true; or echo false)
 
+    # Determine tmux mode: explicit flag > auto-detect from $TMUX
+    set -l use_tmux false
+    if set -ql _flag_tmux
+        set use_tmux true
+    else if set -ql _flag_no_tmux
+        set use_tmux false
+    else if test -n "$TMUX"
+        set use_tmux true
+    end
+
     set -l cmd $argv[1]
     set -e argv[1]
 
     switch "$cmd"
         case ""
-            __gg_interactive $verbose $quiet
+            __gg_interactive $verbose $quiet $use_tmux
         case add
-            __gg_add $verbose $quiet $argv
+            __gg_add $verbose $quiet $use_tmux $argv
         case remove rm
             __gg_remove $verbose $quiet $argv
         case list ls
@@ -828,7 +971,7 @@ function gg --description "Git Grove - Manage git worktrees"
         case init
             __gg_init $verbose $quiet $argv
         case go
-            __gg_go $verbose $quiet $argv
+            __gg_go $verbose $quiet $use_tmux $argv
         case help
             __gg_help
         case '*'
