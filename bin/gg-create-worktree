@@ -1,0 +1,101 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: gg-create-worktree --repo <path> [--name <name>] [--branch <branch>]" >&2
+    echo "" >&2
+    echo "Create a git worktree via gg add and print its path on stdout." >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --repo <path>      Git repository path (required)" >&2
+    echo "  --name <name>      Worktree name (auto-generated if omitted)" >&2
+    echo "  --branch <branch>  Create branch instead of detached HEAD" >&2
+    echo "  -h, --help         Show this help" >&2
+    exit 1
+}
+
+REPO=""
+NAME=""
+BRANCH=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --repo)   REPO="$2"; shift 2 ;;
+        --name)   NAME="$2"; shift 2 ;;
+        --branch) BRANCH="$2"; shift 2 ;;
+        -h|--help) usage ;;
+        *) echo "Error: Unknown option '$1'" >&2; usage ;;
+    esac
+done
+
+if [[ -z "$REPO" ]]; then
+    echo "Error: --repo is required" >&2
+    usage
+fi
+
+if [[ ! -d "$REPO" ]]; then
+    echo "Error: Repository path does not exist: $REPO" >&2
+    exit 1
+fi
+
+if ! git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Error: Not a git repository: $REPO" >&2
+    exit 1
+fi
+
+# Resolve fish binary
+FISH=""
+if command -v fish >/dev/null 2>&1; then
+    FISH="fish"
+elif [[ -x /opt/homebrew/bin/fish ]]; then
+    FISH="/opt/homebrew/bin/fish"
+else
+    echo "Error: fish shell not found (tried PATH and /opt/homebrew/bin/fish)" >&2
+    exit 1
+fi
+
+# Build gg command: always --no-tmux -q, callers manage their own sessions
+GG_CMD="gg add"
+if [[ -n "$NAME" ]]; then
+    GG_CMD="$GG_CMD $NAME"
+fi
+GG_CMD="$GG_CMD --no-tmux -q"
+if [[ -n "$BRANCH" ]]; then
+    GG_CMD="$GG_CMD --branch $BRANCH"
+fi
+
+# Execute gg add inside the repo via fish
+# Capture stderr separately so stdout stays clean for the worktree path
+GG_STDERR=$( "$FISH" -c "cd $REPO && $GG_CMD" 2>&1 1>/dev/null )
+GG_EXIT=$?
+
+if [[ $GG_EXIT -ne 0 ]]; then
+    echo "Error: gg add failed (exit $GG_EXIT)" >&2
+    [[ -n "$GG_STDERR" ]] && echo "$GG_STDERR" >&2
+    exit 1
+fi
+
+# Compute worktree path: resolve git common dir, append name
+# For bare repos, worktrees live inside the git dir
+GIT_COMMON_DIR=$(git -C "$REPO" rev-parse --git-common-dir 2>/dev/null)
+GIT_DIR_RESOLVED=$(cd "$REPO" && cd "$GIT_COMMON_DIR" && pwd)
+
+# If name was not provided, we need to figure out what gg generated
+# Query the most recently created worktree that lives under git_dir
+if [[ -z "$NAME" ]]; then
+    NAME=$(ls -1dt "$GIT_DIR_RESOLVED"/wt[0-9]* 2>/dev/null | head -1 | xargs basename)
+    if [[ -z "$NAME" ]]; then
+        echo "Error: Could not determine auto-generated worktree name" >&2
+        exit 1
+    fi
+fi
+
+WORKTREE_PATH="$GIT_DIR_RESOLVED/$NAME"
+
+if [[ ! -d "$WORKTREE_PATH" ]]; then
+    echo "Error: Expected worktree path does not exist: $WORKTREE_PATH" >&2
+    exit 1
+fi
+
+echo "$WORKTREE_PATH"
