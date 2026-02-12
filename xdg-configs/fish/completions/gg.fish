@@ -50,31 +50,64 @@ complete -c gg -n "__fish_seen_subcommand_from pool" -s h -l help -d "Show help 
 complete -c gg -n "__fish_seen_subcommand_from init" -s h -l help -d "Show help for init command"
 
 
-# Helper function to get all grove names
-function __gg_grove_names --description "Get grove names from grove_worktrees directory"
-    # Look for grove worktrees directory and list subdirectories
-    set -l grove_dir "$HOME/grove_worktrees"
-    if test -d "$grove_dir"
-        for dir in "$grove_dir"/*
-            if test -d "$dir"
-                basename "$dir"
+function __gg_grove_names --description "Get grove names from git worktree list"
+    set -l git_dir (git rev-parse --git-common-dir 2>/dev/null)
+    test -z "$git_dir"; and return
+
+    set -l git_dir_resolved (path resolve $git_dir)
+
+    for wt_line in (git worktree list 2>/dev/null)
+        string match -q "*(bare)" $wt_line; and continue
+
+        set -l wt_path (string split -f1 ' ' $wt_line)
+        set -l resolved (path resolve $wt_path)
+
+        if test (dirname $resolved) = "$git_dir_resolved"
+            basename $resolved
+        end
+    end
+end
+
+function __gg_detached_groves --description "Get only detached grove names"
+    set -l git_dir (git rev-parse --git-common-dir 2>/dev/null)
+    test -z "$git_dir"; and return
+
+    set -l git_dir_resolved (path resolve $git_dir)
+
+    for wt_line in (git worktree list 2>/dev/null)
+        string match -q "*(bare)" $wt_line; and continue
+
+        set -l wt_path (string split -f1 ' ' $wt_line)
+        set -l resolved (path resolve $wt_path)
+
+        if test (dirname $resolved) = "$git_dir_resolved"
+            set -l branch (git -C $resolved branch --show-current 2>/dev/null)
+            if test -z "$branch"
+                basename $resolved
             end
         end
     end
 end
 
-# Helper function to get detached grove names only
-function __gg_detached_groves --description "Get only detached grove names for remove/clean"
-    # This would need to check grove status to determine which are detached
-    # For now, return all grove names - the actual implementation would filter
-    __gg_grove_names
-end
+function __gg_attached_groves --description "Get only attached grove names"
+    set -l git_dir (git rev-parse --git-common-dir 2>/dev/null)
+    test -z "$git_dir"; and return
 
-# Helper function to get attached grove names only
-function __gg_attached_groves --description "Get only attached grove names for detach"
-    # This would need to check grove status to determine which are attached
-    # For now, return all grove names - the actual implementation would filter
-    __gg_grove_names
+    set -l git_dir_resolved (path resolve $git_dir)
+
+    for wt_line in (git worktree list 2>/dev/null)
+        string match -q "*(bare)" $wt_line; and continue
+
+        set -l wt_path (string split -f1 ' ' $wt_line)
+        set -l resolved (path resolve $wt_path)
+
+        if test (dirname $resolved) = "$git_dir_resolved"
+            set -l branch (git -C $resolved branch --show-current 2>/dev/null)
+            if test -n "$branch"
+                basename $resolved
+            end
+        end
+    end
 end
 
 # Helper function to get git branch names
