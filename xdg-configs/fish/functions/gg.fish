@@ -19,10 +19,22 @@ function gg_get_repo_info --description "Get repository information for bare and
 end
 
 function __gg_is_grove --argument-names worktree_path git_dir
-    set -l name (basename $worktree_path)
     set -l parent (dirname $worktree_path)
     set -l expected (path resolve $git_dir)
-    string match -q "wt*" $name; and test "$parent" = "$expected"
+
+    # Fast path: parent must be the git common dir
+    test "$parent" = "$expected"; or return 1
+
+    # Verify path is actually a registered worktree (not a random subdir)
+    set -l resolved (path resolve $worktree_path)
+    for wt_line in (git worktree list --porcelain 2>/dev/null)
+        set -l wt_path (string replace -r '^worktree ' '' -- $wt_line)
+        test "$wt_path" = "$wt_line"; and continue
+        if test (path resolve $wt_path) = "$resolved"
+            return 0
+        end
+    end
+    return 1
 end
 
 function __gg_cleanup_stale_lock --argument-names lock_path
@@ -116,15 +128,15 @@ function __gg_add_help
 end
 
 function __gg_remove_help
-    echo "gg remove - Remove detached worktree"
+    echo "gg remove - Remove grove worktree"
     echo ---
     echo ""
     echo "USAGE:"
     echo "  gg remove [<name>] [options]"
     echo ""
-    echo "SAFETY:"
-    echo "  Only detached grove worktrees can be removed."
-    echo "  Use 'gg detach <name>' first if worktree has a branch."
+    echo "BEHAVIOR:"
+    echo "  If the grove is attached to a branch, it will be auto-detached"
+    echo "  before removal. Confirmation prompt shows the branch name."
 end
 
 function __gg_detach_help
@@ -378,25 +390,32 @@ function __gg_remove --argument-names verbose quiet
             return 1
         end
 
-        set -l detached_groves
+        set -l grove_items
         for worktree in (git worktree list 2>/dev/null)
             string match -q "*(bare)" $worktree; and continue
 
-            set -l path (string split ' ' $worktree)[1]
+            set -l path (string split -f1 ' ' $worktree)
             set -l resolved_path (path resolve $path)
 
             if __gg_is_grove "$resolved_path" "$git_dir_resolved"
                 set -l current_branch (git -C "$resolved_path" branch --show-current 2>/dev/null)
-                test -z "$current_branch"; and set -a detached_groves (basename $resolved_path)"|$resolved_path"
+                set -l label (basename $resolved_path)
+                if test -n "$current_branch"
+                    set label "$label (🔗 $current_branch)"
+                else
+                    set label "$label (🔸 detached)"
+                end
+                set -a grove_items "$label|$resolved_path"
             end
         end
 
-        test -z "$detached_groves"; and echo "No detached groves found" >&2; and return 1
+        test -z "$grove_items"; and echo "No groves found" >&2; and return 1
 
-        set -l selected (printf '%s\n' $detached_groves | fzf --delimiter='|' --with-nth=1 --header="Select grove to remove")
+        set -l selected (printf '%s\n' $grove_items | fzf --delimiter='|' --with-nth=1 --header="Select grove to remove")
         test -z "$selected"; and return 0
 
-        set grove_name (string split '|' $selected)[1]
+        set -l selected_path (string split '|' $selected)[2]
+        set grove_name (basename $selected_path)
     end
 
     set -l worktree_path
@@ -417,14 +436,20 @@ function __gg_remove --argument-names verbose quiet
 
     set -l current_branch (git -C "$worktree_path" branch --show-current 2>/dev/null)
     if test -n "$current_branch"
-        echo "Error: Grove '$grove_name' is attached to branch '$current_branch'" >&2
-        echo "Use 'gg detach $grove_name' first" >&2
-        return 1
-    end
+        echo "Remove grove '$grove_name' (branch: $current_branch)?"
+        read -l -P "This will detach from '$current_branch' and remove. Confirm (y/N) " confirm
+        string match -qi y $confirm; or return 0
 
-    echo "Remove grove '$grove_name' at $worktree_path?"
-    read -l -P "Confirm (y/N) " confirm
-    string match -qi y $confirm; or return 0
+        if not git -C "$worktree_path" checkout --detach 2>/dev/null
+            echo "Error: Failed to detach grove '$grove_name' from '$current_branch'" >&2
+            return 1
+        end
+        test "$quiet" = false; and echo "[OK] Detached from '$current_branch'"
+    else
+        echo "Remove grove '$grove_name' at $worktree_path?"
+        read -l -P "Confirm (y/N) " confirm
+        string match -qi y $confirm; or return 0
+    end
 
     if git worktree remove --force "$worktree_path"
         test "$quiet" = false; and echo "[OK] Removed grove '$grove_name'"
