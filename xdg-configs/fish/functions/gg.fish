@@ -480,6 +480,7 @@ function __gg_add --argument-names verbose quiet use_tmux
     end
 
     test "$quiet" = false; and echo "[PWD] Now in: $worktree_path"
+    return 0
 end
 
 function __gg_remove --argument-names verbose quiet
@@ -570,6 +571,7 @@ function __gg_remove --argument-names verbose quiet
         echo "Error: Failed to remove grove" >&2
         return 1
     end
+    return 0
 end
 
 function __gg_list --argument-names verbose quiet
@@ -851,6 +853,7 @@ echo "[OK] Hook completed"' >.gg_hook.fish
         echo ".gg_hook.fish" >.gitignore
         test "$quiet" = false; and echo "[OK] Created .gitignore"
     end
+    return 0
 end
 
 function __gg_go --argument-names verbose quiet use_tmux
@@ -939,6 +942,7 @@ function __gg_go --argument-names verbose quiet use_tmux
         cd "$target_worktree"
     end
     test "$quiet" = false; and echo "Switched to: $target_worktree"
+    return 0
 end
 
 function gg --description "Git Grove - Manage git worktrees"
