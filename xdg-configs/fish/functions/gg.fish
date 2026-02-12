@@ -273,6 +273,7 @@ function __gg_format_relative_time --argument-names epoch --description "Format 
 end
 
 function __gg_interactive --argument-names verbose quiet use_tmux
+    set -e argv[1..3]
     if not command -sq fzf
         echo "Error: fzf is not installed" >&2
         return 1
@@ -377,6 +378,7 @@ function __gg_interactive --argument-names verbose quiet use_tmux
 end
 
 function __gg_add --argument-names verbose quiet use_tmux
+    set -e argv[1..3]
     argparse 'from=' 'b/branch=' sync no-hook h/help -- $argv
     or return 1
 
@@ -481,6 +483,7 @@ function __gg_add --argument-names verbose quiet use_tmux
 end
 
 function __gg_remove --argument-names verbose quiet
+    set -e argv[1..2]
     argparse h/help -- $argv
     or return 1
 
@@ -570,6 +573,7 @@ function __gg_remove --argument-names verbose quiet
 end
 
 function __gg_list --argument-names verbose quiet
+    set -e argv[1..2]
     argparse h/help -- $argv
     or return 1
 
@@ -650,6 +654,7 @@ function __gg_list --argument-names verbose quiet
 end
 
 function __gg_detach --argument-names verbose quiet
+    set -e argv[1..2]
     argparse h/help -- $argv
     or return 1
 
@@ -720,6 +725,7 @@ function __gg_detach --argument-names verbose quiet
 end
 
 function __gg_pool --argument-names verbose quiet
+    set -e argv[1..2]
     argparse h/help -- $argv
     or return 1
 
@@ -784,6 +790,7 @@ function __gg_pool --argument-names verbose quiet
 end
 
 function __gg_init --argument-names verbose quiet
+    set -e argv[1..2]
     argparse h/help -- $argv
     or return 1
 
@@ -847,6 +854,7 @@ echo "[OK] Hook completed"' >.gg_hook.fish
 end
 
 function __gg_go --argument-names verbose quiet use_tmux
+    set -e argv[1..3]
     argparse h/help -- $argv
     or return 1
 
