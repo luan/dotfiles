@@ -65,13 +65,13 @@ if [[ -n "$BRANCH" ]]; then
 fi
 
 # Execute gg add inside the repo via fish
-# Capture stderr separately so stdout stays clean for the worktree path
-GG_STDERR=$( "$FISH" -c "cd $REPO && $GG_CMD" 2>&1 1>/dev/null )
+# Merge stdout+stderr — fish prints errors to stdout, not stderr
+GG_OUTPUT=$( "$FISH" -c "cd $REPO && $GG_CMD" 2>&1 )
 GG_EXIT=$?
 
 if [[ $GG_EXIT -ne 0 ]]; then
     echo "Error: gg add failed (exit $GG_EXIT)" >&2
-    [[ -n "$GG_STDERR" ]] && echo "$GG_STDERR" >&2
+    [[ -n "$GG_OUTPUT" ]] && echo "$GG_OUTPUT" >&2
     exit 1
 fi
 
