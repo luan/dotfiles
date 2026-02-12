@@ -7,6 +7,8 @@ complete -c gg -f
 complete -c gg -s h -l help -d "Show help message"
 complete -c gg -s v -l verbose -d "Enable verbose output"
 complete -c gg -s q -l quiet -d "Suppress informational output"
+complete -c gg -l tmux -d "Create tmux session (auto when in tmux)"
+complete -c gg -l no-tmux -d "Don't create tmux session"
 
 # Subcommands
 complete -c gg -n "__fish_use_subcommand" -a add -d "Add a new grove"
