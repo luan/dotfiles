@@ -182,8 +182,11 @@ model="sonnet"
 if echo "$request" | grep -qiE 'repurpose|reset|overwrite|reuse.*for|replace'; then
   model="opus"
   echo -e "${YELLOW}Using opus for careful worktree repurposing decision...${RESET}"
-fi
+elif echo "$request" | grep -qiE 'new worktree|create worktree|new grove|add worktree'; then
+  model="opus"
+  echo -e "${YELLOW}Using opus for worktree creation decision...${RESET}"
 
+fi
 prompt='You are a git worktree assistant. Parse the user request and decide which worktree to use.
 
 AVAILABLE WORKTREES AND REPOS:
@@ -193,11 +196,12 @@ USER REQUEST: '"$request"'
 
 Respond with ONLY valid JSON (no markdown, no explanation):
 {
-  "action": "use_existing" | "create_branch" | "checkout_branch" | "repurpose",
+  "action": "use_existing" | "create_branch" | "checkout_branch" | "repurpose" | "create_worktree",
   "repo": "repo.git",
   "worktree_path": "/full/path/to/worktree",
   "branch": "existing-branch-name-or-null",
   "new_branch": "new-branch-name-or-null",
+  "grove_name": "worktree-grove-name-or-null",
   "session_name": "one-short-word",
   "actions": {
     "pre": ["shell commands to run before session creation"],
@@ -227,7 +231,13 @@ RULES:
 
 4. REPURPOSE: Only if user explicitly says repurpose/reset. This is destructive.
 
-5. Handle ALL parts of the request - worktree selection AND any requested actions.'
+5. CREATE_WORKTREE: Use when no existing worktree is suitable AND no detached HEAD
+   worktrees are available. Set grove_name to a short descriptive name for the new
+   worktree (e.g., "auth", "refactor"). The repo field must be the bare repo name
+   (e.g., "arc.git"). worktree_path is ignored for this action (set to "/tmp").
+   new_branch is the branch to create in the new worktree (must have "luan/" prefix).
+
+6. Handle ALL parts of the request - worktree selection AND any requested actions.'
 
 echo -e "${GRAY}Asking Claude ($model)...${RESET}"
 echo "=== MODEL: $model ===" >> "$LOG_FILE"
@@ -256,7 +266,7 @@ if [[ -z "$json" ]] || ! echo "$json" | jq . >/dev/null 2>&1; then
   echo -e "${RED}Failed to parse Claude response${RESET}"
   echo "$response"
   echo -e "${GRAY}Log: $LOG_FILE${RESET}"
-  read -p "Press enter to exit..."
+  read -r -p "Press enter to exit..."
   exit 1
 fi
 
@@ -265,6 +275,7 @@ action=$(echo "$json" | jq -r '.action // empty')
 repo=$(echo "$json" | jq -r '.repo // empty')
 worktree_path=$(echo "$json" | jq -r '.worktree_path // empty')
 branch=$(echo "$json" | jq -r '.branch // empty')
+grove_name=$(echo "$json" | jq -r '.grove_name // empty')
 new_branch=$(echo "$json" | jq -r '.new_branch // empty')
 session_name=$(echo "$json" | jq -r '.session_name // empty')
 explanation=$(echo "$json" | jq -r '.explanation // empty')
@@ -281,6 +292,9 @@ echo -e "${GRAY}Action: $action | Worktree: $worktree_path | Session: $session_n
 
 if [[ -n "$new_branch" && "$new_branch" != "null" ]]; then
   echo -e "${GRAY}New branch: $new_branch${RESET}"
+fi
+if [[ -n "$grove_name" && "$grove_name" != "null" ]]; then
+  echo -e "${GRAY}Grove name: $grove_name${RESET}"
 fi
 if [[ -n "$actions_pre" ]]; then
   echo -e "${GRAY}Pre-commands: $(echo "$actions_pre" | tr '\n' '; ')${RESET}"
@@ -335,6 +349,34 @@ case "$action" in
         git checkout "$branch" 2>/dev/null || git checkout -b "$branch" "origin/$branch" 2>/dev/null || true
       fi
     fi
+    ;;
+  create_worktree)
+    repo_path="$HOME/src/$repo"
+    if [[ ! -d "$repo_path" ]]; then
+      echo -e "${RED}Repository not found: $repo_path${RESET}"
+      read -r -p "Press enter to exit..."
+      exit 1
+    fi
+    echo -e "${GREEN}Creating new worktree in $repo_path${RESET}"
+    create_args=("--repo" "$repo_path")
+    if [[ -n "$grove_name" && "$grove_name" != "null" ]]; then
+      create_args+=("--name" "$grove_name")
+    fi
+    if [[ -n "$new_branch" && "$new_branch" != "null" ]]; then
+      create_args+=("--branch" "$new_branch")
+    fi
+    if ! created_path=$("$HOME/bin/gg-create-worktree" "${create_args[@]}" 2>&1); then
+      echo -e "${RED}Failed to create worktree: $created_path${RESET}"
+      read -r -p "Press enter to exit..."
+      exit 1
+    fi
+    if [[ -z "$created_path" ]]; then
+      echo -e "${RED}gg-create-worktree returned empty path${RESET}"
+      read -r -p "Press enter to exit..."
+      exit 1
+    fi
+    final_dir="$created_path"
+    echo -e "${GREEN}Worktree created: $final_dir${RESET}"
     ;;
 esac
 

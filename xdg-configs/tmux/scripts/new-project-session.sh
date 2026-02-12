@@ -20,6 +20,47 @@ ICON_FAV=$'\uf005  '
 ICON_PROJECT=$'\uf07b  '
 ICON_WORKTREE=$'\uf126  '
 ICON_SESSION=$'\uf044  '
+ICON_NEW=$'\uf067  '
+
+# Create a new worktree via gg-create-worktree wrapper
+# Args: $1 = repo path (bare repo or .git parent)
+# Returns: sets global NEW_WT_PATH on success, exits on failure
+create_new_worktree() {
+  local repo_path="$1"
+  local repo_name
+  repo_name=$(basename "$repo_path" | sed 's/\.git$//')
+
+  export GUM_INPUT_PROMPT_FOREGROUND="#f9e2af"
+  export GUM_INPUT_CURSOR_FOREGROUND="#f38ba8"
+
+  echo ""
+  local wt_name
+  wt_name=$(gum input \
+    --prompt="${ICON_NEW}Worktree name: " \
+    --placeholder="$repo_name-feature" \
+    --width=50) || return 1
+
+  [[ -z "$wt_name" ]] && return 1
+
+  echo ""
+  gum style --foreground="#89b4fa" "Creating worktree '$wt_name'..."
+
+  local output
+  if ! output=$("$HOME/bin/gg-create-worktree" --repo "$repo_path" --name "$wt_name" 2>&1); then
+    gum style --foreground="#f38ba8" "Failed to create worktree: $output"
+    sleep 2
+    exit 1
+  fi
+
+  # gg-create-worktree prints the worktree path as last line
+  NEW_WT_PATH=$(echo "$output" | tail -1)
+
+  if [[ ! -d "$NEW_WT_PATH" ]]; then
+    gum style --foreground="#f38ba8" "Worktree path not found: $NEW_WT_PATH"
+    sleep 2
+    exit 1
+  fi
+}
 
 mkdir -p "$STATE_DIR" "$(dirname "$CACHE_FILE")"
 touch "$FAVORITES_FILE"
@@ -159,39 +200,54 @@ if [[ -d "$selected_dir/.git" ]] || $is_bare; then
   worktree_count=$(echo "$worktrees" | grep -c . || echo 0)
 
   if $is_bare || [[ "$worktree_count" -gt 1 ]]; then
-    formatted_worktrees=""
+    # Bare repo with 0 worktrees: skip picker, go straight to create
+    if $is_bare && [[ "$worktree_count" -eq 0 ]]; then
+      create_new_worktree "$selected_dir"
+      final_dir="$NEW_WT_PATH"
+      branch_name=$(get_branch "$final_dir")
+    else
+      # Build formatted list with "+ New worktree" prepended
+      formatted_worktrees="${CYAN}${ICON_NEW}+ New worktree${RESET}"$'\n'
 
-    while IFS= read -r wt; do
-      [[ -z "$wt" ]] && continue
-      wt_path=$(echo "$wt" | awk '{print $1}')
-      wt_name=$(basename "$wt_path")
-      wt_branch=$(get_branch "$wt_path")
-
-      if [[ -n "$wt_branch" ]]; then
-        formatted_worktrees+="$wt_name ${GRAY}← $wt_branch${RESET}"$'\n'
-      else
-        formatted_worktrees+="$wt_name"$'\n'
-      fi
-    done <<< "$worktrees"
-
-    selected_wt=$(echo -e "$formatted_worktrees" | SHELL=/bin/bash fzf \
-      --prompt="${ICON_WORKTREE}Worktree: " \
-      --height=100% \
-      --reverse \
-      --ansi \
-      --color="bg+:#313244,fg+:#cdd6f4,hl:#f9e2af,hl+:#f9e2af,info:#89b4fa,prompt:#f9e2af,pointer:#f38ba8,marker:#a6e3a1,spinner:#f5c2e7,header:#6c7086")
-
-    if [[ -n "$selected_wt" ]]; then
-      wt_name=$(echo "$selected_wt" | awk '{print $1}')
       while IFS= read -r wt; do
         [[ -z "$wt" ]] && continue
         wt_path=$(echo "$wt" | awk '{print $1}')
-        if [[ "$(basename "$wt_path")" == "$wt_name" ]]; then
-          final_dir="$wt_path"
-          branch_name=$(get_branch "$wt_path")
-          break
+        wt_name=$(basename "$wt_path")
+        wt_branch=$(get_branch "$wt_path")
+
+        if [[ -n "$wt_branch" ]]; then
+          formatted_worktrees+="$wt_name ${GRAY}← $wt_branch${RESET}"$'\n'
+        else
+          formatted_worktrees+="$wt_name"$'\n'
         fi
       done <<< "$worktrees"
+
+      selected_wt=$(echo -e "$formatted_worktrees" | SHELL=/bin/bash fzf \
+        --prompt="${ICON_WORKTREE}Worktree: " \
+        --height=100% \
+        --reverse \
+        --ansi \
+        --color="bg+:#313244,fg+:#cdd6f4,hl:#f9e2af,hl+:#f9e2af,info:#89b4fa,prompt:#f9e2af,pointer:#f38ba8,marker:#a6e3a1,spinner:#f5c2e7,header:#6c7086")
+
+      if [[ -n "$selected_wt" ]]; then
+        # Check if "+ New worktree" was selected
+        if [[ "$selected_wt" == *"+ New worktree"* ]]; then
+          create_new_worktree "$selected_dir"
+          final_dir="$NEW_WT_PATH"
+          branch_name=$(get_branch "$final_dir")
+        else
+          wt_name=$(echo "$selected_wt" | awk '{print $1}')
+          while IFS= read -r wt; do
+            [[ -z "$wt" ]] && continue
+            wt_path=$(echo "$wt" | awk '{print $1}')
+            if [[ "$(basename "$wt_path")" == "$wt_name" ]]; then
+              final_dir="$wt_path"
+              branch_name=$(get_branch "$wt_path")
+              break
+            fi
+          done <<< "$worktrees"
+        fi
+      fi
     fi
   else
     branch_name=$(get_branch "$selected_dir")
