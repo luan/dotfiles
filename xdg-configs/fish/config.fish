@@ -25,15 +25,6 @@ fish_add_path $HOME/.emacs.d/bin
 
 set --export XDG_CONFIG_HOME $HOME/.config
 
-# pnpm (must come before npm)
-set -gx PNPM_HOME /Users/luan/Library/pnpm
-if not string match -q -- $PNPM_HOME $PATH
-    set -gx PATH "$PNPM_HOME" $PATH
-end
-
-# npm
-set --export PATH $(npm config get prefix)/bin $PATH
-
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
@@ -53,8 +44,8 @@ alias view="nvim -R"
 
 COMPLETE=fish jj | source
 
-# Added by Antigravity
-fish_add_path /Users/luan/.antigravity/antigravity/bin
+set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
+carapace _carapace | source
 
 # opencode
 fish_add_path /Users/luan/.opencode/bin
