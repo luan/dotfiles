@@ -156,9 +156,6 @@ if [[ ! "$request" =~ [[:space:]] ]]; then
     tmux new-session -d -s "$session_name" -n "ai" -c "$final_dir"
     tmux new-window -t "$session_name" -n "vi" -c "$final_dir"
     tmux new-window -t "$session_name" -n "sh" -c "$final_dir"
-    # Start claude and nvim by default
-    tmux send-keys -t "$session_name:ai" "claude" Enter
-    tmux send-keys -t "$session_name:vi" "nvim" Enter
     tmux select-window -t "$session_name:ai"
     sleep 0.2
     tmux switch-client -t "$session_name"
@@ -194,7 +191,9 @@ AVAILABLE WORKTREES AND REPOS:
 
 USER REQUEST: '"$request"'
 
-Respond with ONLY valid JSON (no markdown, no explanation):
+Respond with ONLY valid JSON (no markdown, no explanation).
+
+SCHEMA OPTION A — Simple (3 fixed windows: ai, vi, sh):
 {
   "action": "use_existing" | "create_branch" | "checkout_branch" | "repurpose" | "create_worktree",
   "repo": "repo.git",
@@ -212,11 +211,110 @@ Respond with ONLY valid JSON (no markdown, no explanation):
   "explanation": "brief explanation of what will happen"
 }
 
+SCHEMA OPTION B — Custom windows (for multi-pane or multi-directory layouts):
+{
+  "action": "use_existing" | "create_branch" | "checkout_branch" | "repurpose" | "create_worktree",
+  "repo": "repo.git",
+  "worktree_path": "/full/path/to/worktree",
+  "branch": "existing-branch-name-or-null",
+  "new_branch": "new-branch-name-or-null",
+  "grove_name": "worktree-grove-name-or-null",
+  "session_name": "one-short-word",
+  "actions": {
+    "pre": ["shell commands to run before session creation"]
+  },
+  "windows": [
+    {
+      "name": "window-name",
+      "layout": "even-horizontal | even-vertical | main-horizontal | main-vertical | tiled | null",
+      "panes": [
+        { "dir": "/working/directory", "cmd": "command to run or null" }
+      ]
+    }
+  ],
+  "focus_window": "window-name-to-focus-or-null",
+  "explanation": "brief explanation of what will happen"
+}
+
+Use Schema B when:
+- User asks for split panes, side-by-side, or tiled layouts
+- User mentions multiple directories or repos in one session
+- User describes specific window/pane arrangements
+
+Use Schema A (default) when:
+- Simple "work on branch X" requests
+- No layout preferences mentioned
+
+EXAMPLES for Schema B:
+
+Example 1 — "split with project X left and project Y right":
+{
+  "action": "use_existing",
+  "repo": "project.git",
+  "worktree_path": "/home/user/src/project.git/wt1",
+  "session_name": "split",
+  "actions": { "pre": [] },
+  "windows": [
+    {
+      "name": "code",
+      "layout": "even-horizontal",
+      "panes": [
+        { "dir": "/home/user/src/projectX", "cmd": "nvim" },
+        { "dir": "/home/user/src/projectY", "cmd": "nvim" }
+      ]
+    },
+    { "name": "ai", "layout": null, "panes": [{ "dir": "/home/user/src/projectX", "cmd": null }] },
+    { "name": "sh", "layout": null, "panes": [{ "dir": "/home/user/src/projectX", "cmd": null }] }
+  ],
+  "focus_window": "code",
+  "explanation": "Side-by-side editors for projectX and projectY"
+}
+
+Example 2 — "three windows for coding, testing, and AI":
+{
+  "action": "use_existing",
+  "repo": "myapp.git",
+  "worktree_path": "/home/user/src/myapp",
+  "session_name": "myapp",
+  "actions": { "pre": [] },
+  "windows": [
+    { "name": "code", "layout": null, "panes": [{ "dir": "/home/user/src/myapp", "cmd": "nvim" }] },
+    { "name": "test", "layout": null, "panes": [{ "dir": "/home/user/src/myapp", "cmd": "npm test -- --watch" }] },
+    { "name": "ai", "layout": null, "panes": [{ "dir": "/home/user/src/myapp", "cmd": null }] }
+  ],
+  "focus_window": "code",
+  "explanation": "Three windows: editor, test watcher, and AI assistant"
+}
+
+Example 3 — "tiled layout watching 4 log files":
+{
+  "action": "use_existing",
+  "repo": "infra.git",
+  "worktree_path": "/home/user/src/infra",
+  "session_name": "logs",
+  "actions": { "pre": [] },
+  "windows": [
+    {
+      "name": "logs",
+      "layout": "tiled",
+      "panes": [
+        { "dir": "/var/log", "cmd": "tail -f /var/log/app1.log" },
+        { "dir": "/var/log", "cmd": "tail -f /var/log/app2.log" },
+        { "dir": "/var/log", "cmd": "tail -f /var/log/app3.log" },
+        { "dir": "/var/log", "cmd": "tail -f /var/log/app4.log" }
+      ]
+    }
+  ],
+  "focus_window": "logs",
+  "explanation": "Tiled 4-pane layout watching log files"
+}
+
 RULES:
 1. WORKTREE SELECTION:
    - If user mentions a branch, find worktree already on that branch (use_existing)
    - If no worktree has the branch, find one at "detached HEAD" to checkout the branch (checkout_branch)
    - For new branches, pick a detached HEAD worktree (create_branch)
+   - When user references multiple directories, use action "use_existing" with Schema B
 
 2. BRANCH NAMING:
    - New branches MUST have "luan/" prefix (e.g., "auth feature" -> "luan/auth")
@@ -237,7 +335,10 @@ RULES:
    (e.g., "arc.git"). worktree_path is ignored for this action (set to "/tmp").
    new_branch is the branch to create in the new worktree (must have "luan/" prefix).
 
-6. Handle ALL parts of the request - worktree selection AND any requested actions.'
+6. Handle ALL parts of the request - worktree selection AND any requested actions.
+
+7. VALID LAYOUTS: even-horizontal, even-vertical, main-horizontal, main-vertical, tiled.
+   Use null for single-pane windows.'
 
 echo -e "${GRAY}Asking Claude ($model)...${RESET}"
 echo "=== MODEL: $model ===" >> "$LOG_FILE"
@@ -299,14 +400,35 @@ fi
 if [[ -n "$actions_pre" ]]; then
   echo -e "${GRAY}Pre-commands: $(echo "$actions_pre" | tr '\n' '; ')${RESET}"
 fi
-if [[ -n "$actions_ai" && "$actions_ai" != "null" ]]; then
-  echo -e "${GRAY}AI window: claude \"$actions_ai\"${RESET}"
-fi
-if [[ -n "$actions_vi" && "$actions_vi" != "null" ]]; then
-  echo -e "${GRAY}VI window: $actions_vi${RESET}"
-fi
-if [[ -n "$actions_sh" && "$actions_sh" != "null" ]]; then
-  echo -e "${GRAY}SH window: $actions_sh${RESET}"
+
+# Display windows layout or legacy actions
+has_windows_display=$(echo "$json" | jq 'if .windows and (.windows | length) > 0 then "yes" else "no" end' -r)
+if [[ "$has_windows_display" == "yes" ]]; then
+  echo -e "${CYAN}Windows:${RESET}"
+  local_win_count=$(echo "$json" | jq '.windows | length')
+  for ((i = 0; i < local_win_count; i++)); do
+    local_wname=$(echo "$json" | jq -r ".windows[$i].name")
+    local_layout=$(echo "$json" | jq -r ".windows[$i].layout // \"default\"")
+    local_pane_count=$(echo "$json" | jq ".windows[$i].panes | length")
+    echo -e "  ${GREEN}$local_wname${RESET} ($local_pane_count pane(s), layout: $local_layout)"
+    for ((j = 0; j < local_pane_count; j++)); do
+      local_pdir=$(echo "$json" | jq -r ".windows[$i].panes[$j].dir // \"(default)\"")
+      local_pcmd=$(echo "$json" | jq -r ".windows[$i].panes[$j].cmd // \"(shell)\"")
+      echo -e "    ${GRAY}pane $j: $local_pdir — $local_pcmd${RESET}"
+    done
+  done
+  local_focus=$(echo "$json" | jq -r '.focus_window // "(first)"')
+  echo -e "  ${GRAY}Focus: $local_focus${RESET}"
+else
+  if [[ -n "$actions_ai" && "$actions_ai" != "null" ]]; then
+    echo -e "${GRAY}AI window: claude \"$actions_ai\"${RESET}"
+  fi
+  if [[ -n "$actions_vi" && "$actions_vi" != "null" ]]; then
+    echo -e "${GRAY}VI window: $actions_vi${RESET}"
+  fi
+  if [[ -n "$actions_sh" && "$actions_sh" != "null" ]]; then
+    echo -e "${GRAY}SH window: $actions_sh${RESET}"
+  fi
 fi
 
 echo -e "${GRAY}Log: $LOG_FILE${RESET}"
@@ -402,32 +524,99 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
   exit 0
 fi
 
-# Create session
-echo -e "${GREEN}Creating session '$session_name' in $final_dir${RESET}"
-tmux new-session -d -s "$session_name" -n "ai" -c "$final_dir"
-tmux new-window -t "$session_name" -n "vi" -c "$final_dir"
-tmux new-window -t "$session_name" -n "sh" -c "$final_dir"
+# Create session from windows array
+create_session_from_windows() {
+  local session="$1"
+  local json="$2"
+  local default_dir="$3"
 
-# Send commands to windows (default to claude and nvim if not specified)
-if [[ -n "$actions_vi" && "$actions_vi" != "null" ]]; then
-  echo -e "${GREEN}VI window: $actions_vi${RESET}"
-  tmux send-keys -t "$session_name:vi" "$actions_vi" Enter
+  local valid_layouts="even-horizontal even-vertical main-horizontal main-vertical tiled"
+  local win_count
+  win_count=$(echo "$json" | jq '.windows | length')
+  local focus_window
+  focus_window=$(echo "$json" | jq -r '.focus_window // empty')
+
+  local first_window_name=""
+
+  for ((w = 0; w < win_count; w++)); do
+    local wname wdir layout pane_count
+    wname=$(echo "$json" | jq -r ".windows[$w].name")
+    wdir=$(echo "$json" | jq -r ".windows[$w].panes[0].dir // empty")
+    [[ -z "$wdir" || "$wdir" == "null" ]] && wdir="$default_dir"
+    layout=$(echo "$json" | jq -r ".windows[$w].layout // empty")
+    pane_count=$(echo "$json" | jq ".windows[$w].panes | length")
+
+    # Track first window name for fallback focus
+    [[ $w -eq 0 ]] && first_window_name="$wname"
+
+    # Create window
+    if [[ $w -eq 0 ]]; then
+      tmux new-session -d -s "$session" -n "$wname" -c "$wdir"
+    else
+      tmux new-window -t "$session" -n "$wname" -c "$wdir"
+    fi
+
+    # Create additional panes (pane 0 already exists from window creation)
+    for ((p = 1; p < pane_count; p++)); do
+      local pdir
+      pdir=$(echo "$json" | jq -r ".windows[$w].panes[$p].dir // empty")
+      [[ -z "$pdir" || "$pdir" == "null" ]] && pdir="$default_dir"
+      tmux split-window -t "$session:$wname" -c "$pdir"
+    done
+
+    # Apply layout if multi-pane and layout specified
+    if [[ $pane_count -gt 1 && -n "$layout" && "$layout" != "null" ]]; then
+      if echo "$valid_layouts" | grep -qw "$layout"; then
+        tmux select-layout -t "$session:$wname" "$layout"
+      else
+        echo -e "${YELLOW}Unknown layout '$layout', skipping${RESET}"
+      fi
+    fi
+
+    # Send commands to each pane
+    for ((p = 0; p < pane_count; p++)); do
+      local cmd
+      cmd=$(echo "$json" | jq -r ".windows[$w].panes[$p].cmd // empty")
+      if [[ -n "$cmd" && "$cmd" != "null" ]]; then
+        tmux send-keys -t "$session:$wname.$p" "$cmd" Enter
+      fi
+    done
+  done
+
+  # Focus the requested window (or first window)
+  local target="${focus_window:-$first_window_name}"
+  tmux select-window -t "$session:$target"
+}
+
+# Create session — choose windows-array or legacy 3-window path
+has_windows=$(echo "$json" | jq 'if .windows and (.windows | length) > 0 then "yes" else "no" end' -r)
+
+if [[ "$has_windows" == "yes" ]]; then
+  echo -e "${GREEN}Creating session '$session_name' with custom windows...${RESET}"
+  create_session_from_windows "$session_name" "$json" "$final_dir"
 else
-  tmux send-keys -t "$session_name:vi" "nvim" Enter
+  echo -e "${GREEN}Creating session '$session_name' in $final_dir${RESET}"
+  tmux new-session -d -s "$session_name" -n "ai" -c "$final_dir"
+  tmux new-window -t "$session_name" -n "vi" -c "$final_dir"
+  tmux new-window -t "$session_name" -n "sh" -c "$final_dir"
+
+  if [[ -n "$actions_vi" && "$actions_vi" != "null" ]]; then
+    echo -e "${GREEN}VI window: $actions_vi${RESET}"
+    tmux send-keys -t "$session_name:vi" "$actions_vi" Enter
+  fi
+
+  if [[ -n "$actions_sh" && "$actions_sh" != "null" ]]; then
+    echo -e "${GREEN}SH window: $actions_sh${RESET}"
+    tmux send-keys -t "$session_name:sh" "$actions_sh" Enter
+  fi
+
+  if [[ -n "$actions_ai" && "$actions_ai" != "null" ]]; then
+    echo -e "${GREEN}AI window: claude \"$actions_ai\"${RESET}"
+    tmux send-keys -t "$session_name:ai" "claude \"$actions_ai\"" Enter
+  fi
+
+  tmux select-window -t "$session_name:ai"
 fi
 
-if [[ -n "$actions_sh" && "$actions_sh" != "null" ]]; then
-  echo -e "${GREEN}SH window: $actions_sh${RESET}"
-  tmux send-keys -t "$session_name:sh" "$actions_sh" Enter
-fi
-
-if [[ -n "$actions_ai" && "$actions_ai" != "null" ]]; then
-  echo -e "${GREEN}AI window: claude \"$actions_ai\"${RESET}"
-  tmux send-keys -t "$session_name:ai" "claude \"$actions_ai\"" Enter
-else
-  tmux send-keys -t "$session_name:ai" "claude" Enter
-fi
-
-tmux select-window -t "$session_name:ai"
 sleep 0.2
 tmux switch-client -t "$session_name"
