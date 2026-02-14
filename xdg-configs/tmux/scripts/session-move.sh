@@ -20,12 +20,12 @@ for i in "${!sessions[@]}"; do
   fi
 done
 
-[ $idx -eq -1 ] && exit 1
+[ "$idx" -eq -1 ] && exit 1
 
 # Calculate new position
-if [ "$direction" = "up" ] && [ $idx -gt 0 ]; then
+if [ "$direction" = "up" ] && [ "$idx" -gt 0 ]; then
   new_idx=$((idx - 1))
-elif [ "$direction" = "down" ] && [ $idx -lt $((${#sessions[@]} - 1)) ]; then
+elif [ "$direction" = "down" ] && [ "$idx" -lt $((${#sessions[@]} - 1)) ]; then
   new_idx=$((idx + 1))
 else
   exit 0
@@ -33,9 +33,9 @@ fi
 
 # Swap
 tmp="${sessions[$idx]}"
-sessions[$idx]="${sessions[$new_idx]}"
-sessions[$new_idx]="$tmp"
+sessions[idx]="${sessions[new_idx]}"
+sessions[new_idx]="$tmp"
 
 # Write back
 printf '%s\n' "${sessions[@]}" > "$ORDER_FILE"
-tmux refresh-client -S
+~/.config/tmux/scripts/update-session-color.sh
