@@ -8,14 +8,15 @@ shell-integration-features = ssh-terminfo
 shell-integration-features = ssh-env
 
 font-family = ""
-font-family = "IosevkaTerm Nerd Font"
+# font-family = "IosevkaTerm Nerd Font"
 # font-family = "JetBrainsMono Nerd Font Mono"
 # font-family = "CaskaydiaMono Nerd Font Mono"
+font-family = "Maple Mono NF"
 
-font-style = "Light"
-font-style-italic = "Light Italic"
-font-style-bold = "SemiBold"
-font-style-bold-italic = "SemiBold Italic"
+# font-style = "Light"
+# font-style-italic = "Light Italic"
+# font-style-bold = "SemiBold"
+# font-style-bold-italic = "SemiBold Italic"
 font-size = 13
 
 adjust-cell-height = 45%
