@@ -1,0 +1,300 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.config/dev-routing"
+SITES_DIR="$CONFIG_DIR/sites"
+PORTS_FILE="$CONFIG_DIR/ports.json"
+CADDYFILE="$CONFIG_DIR/Caddyfile"
+DNSMASQ_CONF="$(brew --prefix)/etc/dnsmasq.conf"
+RESOLVER_FILE="/etc/resolver/localhost"
+SKIP_RELOAD=0
+
+usage() {
+    echo "Usage: dev-routing <command>" >&2
+    echo "" >&2
+    echo "Commands:" >&2
+    echo "  setup       Initialize dev-routing infrastructure (Caddy + dnsmasq)" >&2
+    echo "  register    Register a project for subdomain routing" >&2
+    echo "  unregister  Remove a project from subdomain routing" >&2
+    echo "  scan        Discover projects under ~/src and register them" >&2
+    echo "  status      Show registered projects and their ports" >&2
+    echo "  reload      Reload Caddy configuration" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  -h, --help  Show this help" >&2
+    exit 1
+}
+
+validate_name() {
+    local name="$1"
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "Error: invalid project name '$name'. Only alphanumeric, underscore, and hyphen allowed." >&2
+        exit 1
+    fi
+}
+
+validate_port() {
+    local port="$1"
+    if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+        echo "Error: invalid port '$port'. Must be numeric." >&2
+        exit 1
+    fi
+    if (( port < 1024 || port > 65535 )); then
+        echo "Error: invalid port '$port'. Must be between 1024 and 65535." >&2
+        exit 1
+    fi
+}
+
+update_ports_json() {
+    local tmp
+    tmp=$(mktemp)
+    if "$@" "$PORTS_FILE" > "$tmp"; then
+        mv "$tmp" "$PORTS_FILE"
+    else
+        rm -f "$tmp"
+        echo "Error: failed to update ports.json" >&2
+        exit 1
+    fi
+}
+
+cmd_setup() {
+    echo "Setting up dev-routing infrastructure..."
+
+    # Create directory structure
+    mkdir -p "$SITES_DIR"
+
+    # Initialize ports.json if missing
+    if [[ ! -f "$PORTS_FILE" ]]; then
+        echo '{"nextPort": 5200, "projects": {}}' > "$PORTS_FILE"
+        echo "Created $PORTS_FILE"
+    else
+        echo "ports.json already exists, skipping"
+    fi
+
+    # Create Caddyfile if missing
+    if [[ ! -f "$CADDYFILE" ]]; then
+        echo 'import sites/*.caddy' > "$CADDYFILE"
+        echo "Created $CADDYFILE"
+    else
+        echo "Caddyfile already exists, skipping"
+    fi
+
+    # Test DNS resolution for *.localhost
+    if ping -c 1 -t 1 test.localhost >/dev/null 2>&1; then
+        echo "DNS resolution for *.localhost already working"
+    else
+        echo "Configuring dnsmasq for *.localhost resolution..."
+
+        # Add dnsmasq config if not already present
+        if ! grep -q "address=/.localhost/127.0.0.1" "$DNSMASQ_CONF" 2>/dev/null; then
+            echo "address=/.localhost/127.0.0.1" >> "$DNSMASQ_CONF"
+            echo "Added localhost address to dnsmasq config"
+        fi
+
+        # Create resolver entry
+        sudo mkdir -p /etc/resolver
+        echo "nameserver 127.0.0.1" | sudo tee "$RESOLVER_FILE" >/dev/null
+        echo "Created $RESOLVER_FILE"
+
+        # Start dnsmasq
+        sudo brew services start dnsmasq
+        echo "Started dnsmasq"
+    fi
+
+    # Start Caddy (reload if running, start if not)
+    if pgrep -x caddy >/dev/null 2>&1; then
+        caddy reload --config "$CADDYFILE"
+        echo "Reloaded Caddy with config $CADDYFILE"
+    else
+        caddy start --config "$CADDYFILE"
+        echo "Started Caddy with config $CADDYFILE"
+    fi
+
+    echo "Dev-routing setup complete"
+}
+
+cmd_register() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: dev-routing register <name> [port]" >&2
+        exit 1
+    fi
+
+    local name="$1"
+    local port="${2:-}"
+
+    validate_name "$name"
+
+    if jq -e --arg n "$name" '.projects | has($n)' "$PORTS_FILE" >/dev/null 2>&1; then
+        echo "Error: project '$name' is already registered" >&2
+        exit 1
+    fi
+
+    if [[ -z "$port" ]]; then
+        port=$(jq -r '.nextPort' "$PORTS_FILE")
+        local next_port=$((port + 1))
+        update_ports_json jq --argjson port "$port" --argjson next "$next_port" --arg name "$name" \
+            '.nextPort = $next | .projects[$name] = $port'
+    else
+        validate_port "$port"
+        # Check for duplicate port
+        local duplicate_count
+        duplicate_count=$(jq --argjson p "$port" '[.projects[] | select(. == $p)] | length' "$PORTS_FILE")
+        if (( duplicate_count > 0 )); then
+            echo "Error: port $port is already in use by another project" >&2
+            exit 1
+        fi
+        update_ports_json jq --argjson port "$port" --arg name "$name" \
+            '.projects[$name] = $port'
+    fi
+
+    cat > "$SITES_DIR/$name.caddy" <<EOF
+http://$name.localhost {
+    reverse_proxy localhost:$port
+}
+EOF
+
+    echo "Registered $name on port $port"
+    if [[ "$SKIP_RELOAD" -eq 0 ]]; then
+        cmd_reload
+    fi
+}
+
+cmd_unregister() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: dev-routing unregister <name>" >&2
+        exit 1
+    fi
+
+    local name="$1"
+
+    validate_name "$name"
+
+    if ! jq -e --arg n "$name" '.projects | has($n)' "$PORTS_FILE" >/dev/null 2>&1; then
+        echo "Error: project '$name' is not registered" >&2
+        exit 1
+    fi
+
+    rm -f "$SITES_DIR/$name.caddy"
+
+    update_ports_json jq --arg name "$name" 'del(.projects[$name])'
+
+    echo "Unregistered $name"
+    cmd_reload
+}
+
+cmd_scan() {
+    local src_dir="$HOME/src"
+    if [[ ! -d "$src_dir" ]]; then
+        echo "Error: $src_dir does not exist" >&2
+        exit 1
+    fi
+
+    local found=0
+    SKIP_RELOAD=1
+    for dir in "$src_dir"/*/; do
+        [[ -d "$dir" ]] || continue
+        local name
+        name=$(basename "$dir")
+
+        # Skip already-registered projects
+        if jq -e --arg n "$name" '.projects | has($n)' "$PORTS_FILE" >/dev/null 2>&1; then
+            continue
+        fi
+
+        local port=""
+        local project_type=""
+
+        # Detect Vite projects
+        for config in "$dir/vite.config.ts" "$dir/vite.config.js"; do
+            if [[ -f "$config" ]]; then
+                project_type="vite"
+                # Try to extract server.port
+                local extracted
+                extracted=$(grep -A 10 'server' "$config" | sed -n 's/.*port[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -1) || true
+                if [[ -n "$extracted" ]]; then
+                    port="$extracted"
+                fi
+                break
+            fi
+        done
+
+        # Detect Next.js projects
+        if [[ -z "$project_type" ]]; then
+            for config in "$dir/next.config.js" "$dir/next.config.mjs"; do
+                if [[ -f "$config" ]]; then
+                    project_type="nextjs"
+                    break
+                fi
+            done
+        fi
+
+        if [[ -n "$project_type" ]]; then
+            found=$((found + 1))
+            if [[ -n "$port" ]]; then
+                cmd_register "$name" "$port"
+            else
+                cmd_register "$name"
+            fi
+        fi
+    done
+    SKIP_RELOAD=0
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "No new projects found to register"
+    else
+        echo "Registered $found new project(s)"
+        cmd_reload
+    fi
+}
+
+cmd_status() {
+    # Service health
+    if pgrep -x caddy >/dev/null 2>&1; then
+        echo "Caddy: running"
+    else
+        echo "Caddy: stopped"
+    fi
+
+    if brew services list 2>/dev/null | grep -q "dnsmasq.*started"; then
+        echo "dnsmasq: running"
+    else
+        echo "dnsmasq: stopped"
+    fi
+
+    echo ""
+
+    # Project table
+    local projects
+    projects=$(jq -r '.projects | to_entries[] | "\(.key)\t\(.value)"' "$PORTS_FILE" 2>/dev/null) || true
+
+    if [[ -z "$projects" ]]; then
+        echo "No projects registered"
+        return
+    fi
+
+    printf "%-24s %-8s %s\n" "PROJECT" "PORT" "URL"
+    while IFS=$'\t' read -r name port; do
+        printf "%-24s %-8s %s\n" "$name" "$port" "http://$name.localhost"
+    done <<< "$projects"
+}
+
+cmd_reload() {
+    caddy reload --config "$CADDYFILE"
+    echo "Caddy configuration reloaded"
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+fi
+
+case "$1" in
+    setup)      cmd_setup ;;
+    register)   shift; cmd_register "$@" ;;
+    unregister) shift; cmd_unregister "$@" ;;
+    scan)       shift; cmd_scan "$@" ;;
+    status)     cmd_status ;;
+    reload)     cmd_reload ;;
+    -h|--help)  usage ;;
+    *)          echo "Error: Unknown command '$1'" >&2; usage ;;
+esac
