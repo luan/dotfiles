@@ -118,5 +118,11 @@ claude-plugins:
 
     echo "✓ Claude plugins ready"
 
-# Full setup: brew, repos, link, gitconfig, claude-plugins
-setup: brew repos link gitconfig claude-plugins
+# Set up local dev-routing (Caddy + dnsmasq subdomain routing)
+dev-routing: link
+    #!/usr/bin/env bash
+    set -euo pipefail
+    "$HOME/bin/dev-routing" setup && "$HOME/bin/dev-routing" scan
+
+# Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing
+setup: brew repos link gitconfig claude-plugins dev-routing
