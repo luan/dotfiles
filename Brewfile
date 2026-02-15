@@ -3,11 +3,13 @@ tap "homebrew/bundle"
 
 # CLI tools
 brew "bat"
+brew "caddy"
 brew "cmake"
 brew "coreutils"
 brew "delta"
 brew "deno"
 brew "direnv"
+brew "dnsmasq"
 brew "docker"
 brew "fd"
 brew "ffmpeg"
