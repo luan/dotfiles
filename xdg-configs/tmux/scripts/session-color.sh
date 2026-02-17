@@ -1,8 +1,18 @@
 #!/bin/bash
 # Deterministic hex color for a session name
-# Usage: session-color.sh [--dim] <name>
+# Usage: session-color.sh [--dim] [--pos N --total T] <name>
+# Position-based: evenly spaces hues for dynamic sessions
+# Static sessions (claude, dotfiles) always get their fixed color
 dim=false
-[ "$1" = "--dim" ] && { dim=true; shift; }
+pos="" total=""
+while [ $# -gt 1 ]; do
+  case "$1" in
+    --dim)   dim=true; shift ;;
+    --pos)   pos="$2"; shift 2 ;;
+    --total) total="$2"; shift 2 ;;
+    *)       break ;;
+  esac
+done
 name="$1"
 
 # Static mappings store full-brightness values; dim variant computed below
@@ -23,8 +33,15 @@ if [ -n "$hex" ]; then
   exit
 fi
 
-hash=$(printf '%s' "$name" | cksum | awk '{print $1}')
-hue=$((hash % 360))
+# Position-based hue: evenly space within 60°–360° to avoid red/orange
+# (too close to claude's static #D77757 at ~15°)
+# Falls back to hash-based if position not provided
+if [ -n "$pos" ] && [ -n "$total" ] && [ "$total" -gt 0 ]; then
+  hue=$(( 60 + (pos * 300) / total ))
+else
+  hash=$(printf '%s' "$name" | cksum | awk '{print $1}')
+  hue=$((hash % 360))
+fi
 
 if [ "$dim" = "true" ]; then
   sat=0.2; lit=0.45
