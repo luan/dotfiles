@@ -283,10 +283,6 @@ tmux new-session -d -s "$session_name" -n "ai" -c "$final_dir"
 tmux new-window -t "$session_name" -n "vi" -c "$final_dir"
 tmux new-window -t "$session_name" -n "sh" -c "$final_dir"
 
-# Start claude and nvim by default
-tmux send-keys -t "$session_name:ai" "claude" Enter
-tmux send-keys -t "$session_name:vi" "nvim" Enter
-
 tmux select-window -t "$session_name:ai"
 sleep 0.2
 tmux switch-client -t "$session_name"

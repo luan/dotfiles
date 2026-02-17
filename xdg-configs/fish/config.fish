@@ -14,6 +14,11 @@ alias lt="eza --icons --tree"
 set --export EDITOR vim
 set --export GIT_EDITOR vim
 
+# sccache — compiler cache for C/C++
+set --export CMAKE_C_COMPILER_LAUNCHER sccache
+set --export CMAKE_CXX_COMPILER_LAUNCHER sccache
+
+
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # path
