@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tmux rename-session *)",
+      "Bash(tmux new-window *)",
+      "Bash(tmux send-keys *)",
+      "Bash(tmux select-window *)",
+      "Bash(tmux switch-client *)",
+      "Bash(tmux new-session *)",
+      "Bash(tmux has-session *)",
+      "Bash(tmux list-sessions*)",
+      "Bash(git -C * worktree list*)",
+      "Bash(git -C * status*)",
+      "Bash(git -C * branch --list*)",
+      "Bash(git -C * branch -r*)",
+      "Bash(git -C * branch -a*)",
+      "Bash(git -C * log*)"
+    ],
+    "deny": [
+      "Bash(git checkout*)",
+      "Bash(git -C * checkout*)",
+      "Bash(git branch -D*)",
+      "Bash(git branch -d*)",
+      "Bash(git -C * branch -D*)",
+      "Bash(git -C * branch -d*)",
+      "Bash(git reset*)",
+      "Bash(git -C * reset*)",
+      "Bash(git clean*)",
+      "Bash(git -C * clean*)",
+      "Bash(git push*)",
+      "Bash(git -C * push*)",
+      "Bash(rm *)"
+    ]
+  }
+}
