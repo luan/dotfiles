@@ -57,7 +57,7 @@ complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_f
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from show" -l json -d 'Output as JSON'
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from create" -l description -d 'Task description' -r
-complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from create" -l priority -d 'Priority (1-5)' -r
+complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from create" -l priority -d 'Priority (1-3)' -r
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from create" -l parent -d 'Parent task ID' -r
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from create" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand task; and __fish_seen_subcommand_from edit" -l subject -d 'New subject' -r
@@ -94,7 +94,7 @@ complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from show" -l json -d 'Output as JSON'
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from create" -l description -d 'Task description' -r
-complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from create" -l priority -d 'Priority (1-5)' -r
+complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from create" -l priority -d 'Priority (1-3)' -r
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from create" -l parent -d 'Parent task ID' -r
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from create" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand t; and __fish_seen_subcommand_from edit" -l subject -d 'New subject' -r

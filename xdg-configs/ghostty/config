@@ -1,4 +1,5 @@
 theme = tokyonight
+# theme = Builtin Solarized Light
 
 desktop-notifications = true
 shell-integration-features = ssh-terminfo
