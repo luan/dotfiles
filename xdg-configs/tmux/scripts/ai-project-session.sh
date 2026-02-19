@@ -12,56 +12,6 @@ RESET="\033[0m"
 
 ICON_AI=$'\uf06a4  '  # robot icon
 
-LOG_DIR="$HOME/.local/state/ai-session"
-mkdir -p "$LOG_DIR"
-
-# Gather worktree context for Claude
-gather_worktree_context() {
-  local context=""
-
-  # Scan bare repos with worktrees
-  for repo in ~/src/*.git; do
-    [[ -d "$repo" ]] || continue
-    local repo_name=$(basename "$repo" .git)
-    context+="Repository: $repo_name ($repo)"$'\n'
-
-    # List worktrees
-    while IFS= read -r line; do
-      local wt_path=$(echo "$line" | awk '{print $1}')
-      local wt_name=$(basename "$wt_path")
-
-      [[ "$line" == *"(bare)"* ]] && continue
-
-      local branch=""
-      if [[ "$line" == *"(detached HEAD)"* ]]; then
-        branch="detached HEAD"
-      else
-        branch=$(echo "$line" | sed -n 's/.*\[\([^]]*\)\].*/\1/p')
-      fi
-
-      context+="  Worktree: $wt_name @ $wt_path (branch: $branch)"$'\n'
-    done < <(git -C "$repo" worktree list 2>/dev/null)
-
-    # Include some remote branches for context
-    local remote_branches=$(git -C "$repo" branch -r --list 'origin/*' 2>/dev/null | grep -v HEAD | sed 's|origin/||' | head -20 | tr '\n' ', ' || true)
-    [[ -n "$remote_branches" ]] && context+="  Remote branches: $remote_branches"$'\n'
-    context+=$'\n'
-  done
-
-  # Scan regular repos in ~/src (non-bare)
-  for repo in ~/src/*/; do
-    [[ -d "$repo/.git" ]] || continue
-    local repo_name=$(basename "$repo")
-    local branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)
-    context+="Repository: $repo_name ($repo)"$'\n'
-    context+="  Directory: $repo (branch: $branch)"$'\n'
-    context+=$'\n'
-  done
-
-  echo "$context"
-}
-
-
 export GUM_INPUT_PROMPT_FOREGROUND="#f9e2af"
 export GUM_INPUT_CURSOR_FOREGROUND="#f38ba8"
 
@@ -155,46 +105,27 @@ if [[ ! "$request" =~ [[:space:]] ]]; then
   fi
 fi
 
-worktree_context=$(gather_worktree_context)
-
 # Use a temporary session name; Claude will rename it to something meaningful
 session_name="setup-$$"
 
-# Build system prompt: worktree context + tmux instructions + rename instruction
-system_prompt_file="$LOG_DIR/system-prompt-$$.txt"
-printf '%s' "You are an AI assistant embedded in a tmux session.
+# Sandbox dir: stowed path for the session-setup project
+sandbox_dir="$HOME/.config/tmux/session-setup"
 
-AVAILABLE WORKTREES AND REPOS:
-$worktree_context
-
-YOUR JOB:
-First, rename this session to a short, descriptive name that reflects the user's request:
-  tmux rename-session '<name>'
-
-Then set up the session using these tmux commands:
-- Create windows: tmux new-window -t '<name>' -n <window-name> -c <dir>
-- Send commands: tmux send-keys -t '<name>:<window>' '<cmd>' Enter
-- Select a window: tmux select-window -t '<name>:<window>'
-- Run git operations as needed (checkout, create branches, etc.)
-
-A 'claude' window already exists (this one). Create additional windows as needed for the task (e.g., vi, sh, test).
-
-When you are done setting up the session, tell the user what you did and that they can exit this window (type 'exit') to go to the main working window." > "$system_prompt_file"
-
-# User message: the raw request
-user_msg_file="$LOG_DIR/user-msg-$$.txt"
-printf '%s' "$request" > "$user_msg_file"
-
-# Clean up temp files after Claude has had time to read them
-(sleep 5 && rm -f "$system_prompt_file" "$user_msg_file") &
-
-# Create new session with a claude window
 echo -e "${GREEN}Starting AI session setup...${RESET}"
-tmux new-session -d -s "$session_name" -n "claude" -c "$HOME"
+tmux new-session -d -s "$session_name" -n "claude" -c "$sandbox_dir"
 
-# Start Claude with system prompt + user message as first positional arg.
-# \$(...) expands in the target session's shell, not here.
-tmux send-keys -t "$session_name:claude" "claude --append-system-prompt \"\$(cat '$system_prompt_file')\" \"\$(cat '$user_msg_file')\"" Enter
+# Write request to temp file to avoid shell injection in send-keys
+request_dir="$HOME/.local/state/ai-session"
+mkdir -p "$request_dir"
+# Clean stale request files from previous runs (older than 1 minute)
+find "$request_dir" -name 'request-*.txt' -mmin +1 -delete 2>/dev/null || true
+request_file="$request_dir/request-$$.txt"
+printf '%s' "$request" > "$request_file"
+(sleep 30 && rm -f "$request_file") &
+
+# Start Claude in the sandbox dir with the user's request as the initial message.
+# Claude picks up CLAUDE.md, .claude/settings.json, and skills from the sandbox.
+tmux send-keys -t "$session_name:claude" "claude \"\$(cat '$request_file')\"" Enter
 
 sleep 0.2
 tmux switch-client -t "$session_name"
