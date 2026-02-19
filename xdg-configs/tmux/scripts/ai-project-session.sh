@@ -14,7 +14,6 @@ ICON_AI=$'\uf06a4  '  # robot icon
 
 LOG_DIR="$HOME/.local/state/ai-session"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S).log"
 
 # Gather worktree context for Claude
 gather_worktree_context() {
@@ -158,48 +157,44 @@ fi
 
 worktree_context=$(gather_worktree_context)
 
-# Prompt for session name
-session_name=$(gum input --prompt="Session name: " --placeholder="e.g., myfeature")
+# Use a temporary session name; Claude will rename it to something meaningful
+session_name="setup-$$"
 
-[[ -z "$session_name" ]] && exit 0
-
-# Check if session already exists
-if tmux has-session -t "$session_name" 2>/dev/null; then
-  echo -e "${YELLOW}Session '$session_name' exists, switching...${RESET}"
-  sleep 0.3
-  tmux switch-client -t "$session_name"
-  exit 0
-fi
-
-# Build system prompt for Claude with full context
-system_prompt="You are an AI assistant embedded in a tmux session named '$session_name'.
-
-USER REQUEST: $request
+# Build system prompt: worktree context + tmux instructions + rename instruction
+system_prompt_file="$LOG_DIR/system-prompt-$$.txt"
+printf '%s' "You are an AI assistant embedded in a tmux session.
 
 AVAILABLE WORKTREES AND REPOS:
 $worktree_context
 
 YOUR JOB:
-Set up this tmux session for the user's request using tmux commands. Use these commands to configure the session:
-- Create windows: tmux new-window -t '$session_name' -n <name> -c <dir>
-- Send commands: tmux send-keys -t '$session_name:<window>' '<cmd>' Enter
-- Select a window: tmux select-window -t '$session_name:<window>'
+First, rename this session to a short, descriptive name that reflects the user's request:
+  tmux rename-session '<name>'
+
+Then set up the session using these tmux commands:
+- Create windows: tmux new-window -t '<name>' -n <window-name> -c <dir>
+- Send commands: tmux send-keys -t '<name>:<window>' '<cmd>' Enter
+- Select a window: tmux select-window -t '<name>:<window>'
 - Run git operations as needed (checkout, create branches, etc.)
 
 A 'claude' window already exists (this one). Create additional windows as needed for the task (e.g., vi, sh, test).
 
-When you are done setting up the session, tell the user what you did and that they can exit this window (type 'exit') to go to the main working window."
+When you are done setting up the session, tell the user what you did and that they can exit this window (type 'exit') to go to the main working window." > "$system_prompt_file"
 
-# Write system prompt to temp file so it is not expanded in send-keys
-prompt_file="$LOG_DIR/system-prompt-$$.txt"
-printf '%s' "$system_prompt" > "$prompt_file"
+# User message: the raw request
+user_msg_file="$LOG_DIR/user-msg-$$.txt"
+printf '%s' "$request" > "$user_msg_file"
+
+# Clean up temp files after Claude has had time to read them
+(sleep 5 && rm -f "$system_prompt_file" "$user_msg_file") &
 
 # Create new session with a claude window
-echo -e "${GREEN}Creating session '$session_name'...${RESET}"
+echo -e "${GREEN}Starting AI session setup...${RESET}"
 tmux new-session -d -s "$session_name" -n "claude" -c "$HOME"
 
-# Start Claude with the system prompt (cat runs in the new session's shell, not here)
-tmux send-keys -t "$session_name:claude" "claude --append-system-prompt \"\$(cat '$prompt_file')\"" Enter
+# Start Claude with system prompt + user message as first positional arg.
+# \$(...) expands in the target session's shell, not here.
+tmux send-keys -t "$session_name:claude" "claude --append-system-prompt \"\$(cat '$system_prompt_file')\" \"\$(cat '$user_msg_file')\"" Enter
 
 sleep 0.2
 tmux switch-client -t "$session_name"
