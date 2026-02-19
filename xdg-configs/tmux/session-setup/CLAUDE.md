@@ -58,11 +58,11 @@ You MUST use /find-worktree to discover worktrees. Do NOT run ad-hoc git command
 
 ## Graphite Repos
 
-Before suggesting any branch operation to the user, check if the repo uses Graphite:
+To check if a repo uses Graphite, run from the worktree:
 ```bash
-test -d <repo-path>/.graphite
+git -C <worktree-path> config --get graphite.trunk 2>/dev/null
 ```
-If `.graphite` exists: this repo is Graphite-managed. Branching must use `gt create luan/<name>` via the /gt skill, never `git checkout -b`.
+If this returns a value (e.g. `main`), the repo is Graphite-managed. Note this in the context you pass to the task Claude so it knows to use `gt` for branching.
 
 ## Done Condition
 
