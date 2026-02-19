@@ -61,11 +61,11 @@ tmux select-window -t '<session>:<window>'
 
 Briefly tell the user what was set up (session name, windows, what's running).
 
-Then select the ai window and close the bootstrapper window:
+Then close the bootstrapper window (the first window, named "claude") and leave the user on the ai window:
 
 ```
 tmux select-window -t '<name>:ai'
-tmux kill-pane
+tmux kill-window -t '<name>:claude'
 ```
 
-This closes the bootstrapper and leaves the user in the ai window.
+IMPORTANT: Do NOT use `tmux kill-pane` — after `select-window`, the current pane is the ai window, not the bootstrapper. Use `kill-window -t '<name>:claude'` to target the bootstrapper window by name.
