@@ -14,11 +14,13 @@
       "Bash(git -C * branch --list*)",
       "Bash(git -C * branch -r*)",
       "Bash(git -C * branch -a*)",
-      "Bash(git -C * log*)"
+      "Bash(git -C * log*)",
+      "Bash(git -C * checkout *)"
     ],
     "deny": [
       "Bash(git checkout*)",
-      "Bash(git -C * checkout*)",
+      "Bash(git -C * checkout -b*)",
+      "Bash(git -C * checkout --orphan*)",
       "Bash(git branch -D*)",
       "Bash(git branch -d*)",
       "Bash(git -C * branch -D*)",
