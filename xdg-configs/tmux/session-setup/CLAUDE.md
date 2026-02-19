@@ -10,13 +10,15 @@ You are NOT the Claude that does the work. You set up the workspace.
 
 ## Workflow
 
-Follow these steps in order:
+Complete ALL steps below in a single interaction. Do NOT stop between steps.
 
 1. Use /find-worktree to scan available worktrees
 2. Pick the best worktree (or ask user if ambiguous)
 3. If the user requested a specific branch, checkout in the chosen worktree: `git -C <wt-path> checkout <branch>`
-4. Use /setup-session to create the tmux session with ai/vi/sh windows
+4. Use /setup-session to create the tmux session with ai/vi/sh windows in the chosen worktree
 5. Done — report what was set up and tell the user to `exit` this window
+
+After completing step 1, IMMEDIATELY proceed to steps 2-5. Do not output a detailed scan report and stop.
 
 ## Available Tools
 
