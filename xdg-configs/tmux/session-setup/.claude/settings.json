@@ -19,7 +19,10 @@
     ],
     "deny": [
       "Bash(cd *)",
+      "Bash(gh *)",
       "Bash(gt *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
       "Bash(git checkout*)",
       "Bash(git -C * checkout -b*)",
       "Bash(git -C * checkout --orphan*)",
