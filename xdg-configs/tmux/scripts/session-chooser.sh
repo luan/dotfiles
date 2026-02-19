@@ -75,6 +75,6 @@ fi
 # Launch popup
 popup_bg=$(tmux show -gqv @popup_bg)
 popup_border=$(tmux show -gqv @popup_border)
-tmux display-popup -E -b rounded -w 80 -h 90% -x C -y C \
+tmux display-popup -E -b rounded -w 80 -h 40% -x C -y C \
   -s "bg=$popup_bg" -S "fg=$popup_border,bg=$popup_bg" \
   "$0 --popup" || true
