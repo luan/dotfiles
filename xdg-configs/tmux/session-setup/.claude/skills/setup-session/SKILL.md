@@ -57,11 +57,15 @@ tmux send-keys -t '<session>:<window>' '<cmd>' Enter
 tmux select-window -t '<session>:<window>'
 ```
 
-## Step 3: Report and Exit
+## Step 3: Report and Close
 
-Tell the user what was set up:
-- Session name
-- Windows created and what's running in each
-- Which window is focused
+Briefly tell the user what was set up (session name, windows, what's running).
 
-End with: **"Type `exit` to dismiss this bootstrapper window and go to the ai window."**
+Then select the ai window and close the bootstrapper window:
+
+```
+tmux select-window -t '<name>:ai'
+tmux kill-pane
+```
+
+This closes the bootstrapper and leaves the user in the ai window.
