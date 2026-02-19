@@ -71,6 +71,6 @@ You are done when:
 2. Windows are set up (default: ai/vi/sh in the project directory)
 3. `claude` is running in the ai window with the user's request
 4. You've briefly told the user what you set up
-5. You close this bootstrapper window: `tmux kill-pane`
+5. You close the bootstrapper window: `tmux kill-window -t '<session>:claude'`
 
 You MUST always create a tmux session using /setup-session. NEVER tell the user to run commands manually. If you are blocked from an operation, create the session anyway and pass full context to the task Claude in the ai window — it has full permissions.
