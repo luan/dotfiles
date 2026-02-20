@@ -120,19 +120,30 @@ CADDYEOF
         cmd_migrate
     fi
 
+    # Symlink Caddyfile to brew-expected location so the service finds it
+    local brew_caddyfile
+    brew_caddyfile="$(brew --prefix)/etc/Caddyfile"
+    if [[ -L "$brew_caddyfile" ]]; then
+        echo "Caddyfile symlink already exists at $brew_caddyfile"
+    else
+        rm -f "$brew_caddyfile"
+        ln -s "$CADDYFILE" "$brew_caddyfile"
+        echo "Symlinked $brew_caddyfile → $CADDYFILE"
+    fi
+
     # Validate Caddyfile before applying
     if ! caddy adapt --config "$CADDYFILE" >/dev/null; then
         echo "Error: Caddyfile validation failed" >&2
         exit 1
     fi
 
-    # Start Caddy (reload if running, start if not)
-    if pgrep -x caddy >/dev/null 2>&1; then
+    # Start Caddy via brew services (auto-starts on boot)
+    if brew services list | grep -q "caddy.*started"; then
         caddy reload --config "$CADDYFILE"
-        echo "Reloaded Caddy with config $CADDYFILE"
+        echo "Reloaded Caddy configuration"
     else
-        caddy start --config "$CADDYFILE"
-        echo "Started Caddy with config $CADDYFILE"
+        brew services start caddy 2>/dev/null || brew services restart caddy
+        echo "Started Caddy via brew services (will auto-start on boot)"
     fi
 
     # Install local CA certificate for HTTPS
@@ -304,8 +315,8 @@ cmd_migrate() {
 
 cmd_status() {
     # Service health
-    if pgrep -x caddy >/dev/null 2>&1; then
-        echo "Caddy: running"
+    if brew services list 2>/dev/null | grep -q "caddy.*started"; then
+        echo "Caddy: running (brew service)"
     else
         echo "Caddy: stopped"
     fi
