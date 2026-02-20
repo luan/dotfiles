@@ -1,5 +1,7 @@
 #!/bin/bash
-cur=$(tmux display-message -p '#S')
+# Get the session the user is actually viewing (most recently active client)
+cur=$(tmux list-clients -F '#{client_activity} #{client_session}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+[[ -z "$cur" ]] && cur=$(tmux display-message -p '#S')
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 # Collect session names
@@ -29,19 +31,22 @@ for name in "${sessions[@]}"; do
       dynamic_pos=$((dynamic_pos + 1))
       ;;
   esac
-  input+="${name}	${color}	${dim}"$'\n'
+  attn=$(tmux show-option -t "$name" -qv @attention 2>/dev/null)
+  input+="${name}	${color}	${dim}	${attn}"$'\n'
 done
 
 printf '%s' "$input" | awk -F'\t' -v cur="$cur" '
 {
-  name = $1; color = $2; dim = $3
+  name = $1; color = $2; dim = $3; attn = $4
   if (name == "") next
   idx++
   if (idx > 1) printf " "
   if (name == cur)
-    printf "#[range=user|s%d]#[reverse,fg=%s] %d #[noreverse] #[bold,fg=%s]%s#[nobold]#[norange]", idx, color, idx, color, name
+    printf "#[reverse,fg=%s] %d #[noreverse] #[bold,fg=%s]%s#[nobold]", color, idx, color, name
+  else if (attn == "1")
+    printf "#[bg=#1e1e2e,fg=%s] %d #[bg=default] #[bold,fg=%s]● %s#[nobold]", dim, idx, color, name
   else
-    printf "#[range=user|s%d]#[bg=#1e1e2e,fg=%s] %d #[bg=default] %s#[norange]", idx, dim, idx, name
+    printf "#[bg=#1e1e2e,fg=%s] %d #[bg=default] %s", dim, idx, name
 }
 END { printf "#[default]" }
 '
