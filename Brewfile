@@ -1,5 +1,6 @@
 # Taps
 tap "homebrew/bundle"
+tap "moltenbits/tap"
 
 # CLI tools
 brew "bat"
@@ -19,6 +20,7 @@ brew "git"
 brew "git-lfs"
 brew "go"
 brew "grc"
+brew "growlrrr"
 brew "helix"
 brew "hexedit"
 brew "highlight"
