@@ -132,6 +132,7 @@ complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_f
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from read" -l frontmatter -d 'Output frontmatter as JSON'
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from read" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from latest" -l project -d 'Project path (defaults to git root or cwd)' -r
+complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from latest" -l task-file -d 'Resolve this file directly instead of mtime heuristic' -r
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from latest" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from archive" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand plan; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
@@ -164,6 +165,7 @@ complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from read" -l frontmatter -d 'Output frontmatter as JSON'
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from read" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from latest" -l project -d 'Project path (defaults to git root or cwd)' -r
+complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from latest" -l task-file -d 'Resolve this file directly instead of mtime heuristic' -r
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from latest" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from archive" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand p; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
@@ -194,12 +196,13 @@ complete -c ck -n "__fish_ck_using_subcommand j; and __fish_seen_subcommand_from
 complete -c ck -n "__fish_ck_using_subcommand j; and __fish_seen_subcommand_from help" -f -a "list" -d 'List known projects'
 complete -c ck -n "__fish_ck_using_subcommand j; and __fish_seen_subcommand_from help" -f -a "show" -d 'Show project details'
 complete -c ck -n "__fish_ck_using_subcommand j; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -s h -l help -d 'Print help'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "slug" -d 'Generate URL-safe slug from text'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "phases" -d 'Parse phase markers from plan file'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "completion" -d 'Generate shell completion scripts'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
-complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -s h -l help -d 'Print help'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "slug" -d 'Generate URL-safe slug from text'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "phases" -d 'Parse phase markers from plan file'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "completion" -d 'Generate shell completion scripts'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "cochanges" -d 'Find files frequently changed together with current changes'
+complete -c ck -n "__fish_ck_using_subcommand tool; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from slug" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from phases" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from completion" -s h -l help -d 'Print help'
@@ -209,17 +212,25 @@ json\t''"
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from gitcontext" -l max-total -d 'Max total diff lines before truncation' -r
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from gitcontext" -l max-file -d 'Per-file diff line threshold' -r
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from gitcontext" -s h -l help -d 'Print help'
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -l base -d 'Base branch/ref for changed-file detection' -r
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -l threshold -d 'Min co-change fraction 0.0-1.0' -r
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -l min-commits -d 'Min commits a file must appear in' -r
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -l max-files -d 'Max output files (integer or \'all\')' -r
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -l num-commits -d 'How many recent commits to analyze' -r
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from cochanges" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "slug" -d 'Generate URL-safe slug from text'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "phases" -d 'Parse phase markers from plan file'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "completion" -d 'Generate shell completion scripts'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
+complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "cochanges" -d 'Find files frequently changed together with current changes'
 complete -c ck -n "__fish_ck_using_subcommand tool; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -s h -l help -d 'Print help'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "slug" -d 'Generate URL-safe slug from text'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "phases" -d 'Parse phase markers from plan file'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "completion" -d 'Generate shell completion scripts'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
-complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -s h -l help -d 'Print help'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "slug" -d 'Generate URL-safe slug from text'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "phases" -d 'Parse phase markers from plan file'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "completion" -d 'Generate shell completion scripts'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "cochanges" -d 'Find files frequently changed together with current changes'
+complete -c ck -n "__fish_ck_using_subcommand o; and not __fish_seen_subcommand_from slug phases completion gitcontext cochanges help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from slug" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from phases" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from completion" -s h -l help -d 'Print help'
@@ -229,10 +240,17 @@ json\t''"
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from gitcontext" -l max-total -d 'Max total diff lines before truncation' -r
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from gitcontext" -l max-file -d 'Per-file diff line threshold' -r
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from gitcontext" -s h -l help -d 'Print help'
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -l base -d 'Base branch/ref for changed-file detection' -r
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -l threshold -d 'Min co-change fraction 0.0-1.0' -r
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -l min-commits -d 'Min commits a file must appear in' -r
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -l max-files -d 'Max output files (integer or \'all\')' -r
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -l num-commits -d 'How many recent commits to analyze' -r
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from cochanges" -s h -l help -d 'Print help'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "slug" -d 'Generate URL-safe slug from text'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "phases" -d 'Parse phase markers from plan file'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "completion" -d 'Generate shell completion scripts'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
+complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "cochanges" -d 'Find files frequently changed together with current changes'
 complete -c ck -n "__fish_ck_using_subcommand o; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ck -n "__fish_ck_using_subcommand help; and not __fish_seen_subcommand_from tui task plan project tool help" -f -a "tui" -d 'Launch the interactive TUI'
 complete -c ck -n "__fish_ck_using_subcommand help; and not __fish_seen_subcommand_from tui task plan project tool help" -f -a "task" -d 'Task operations'
@@ -257,3 +275,4 @@ complete -c ck -n "__fish_ck_using_subcommand help; and __fish_seen_subcommand_f
 complete -c ck -n "__fish_ck_using_subcommand help; and __fish_seen_subcommand_from tool" -f -a "phases" -d 'Parse phase markers from plan file'
 complete -c ck -n "__fish_ck_using_subcommand help; and __fish_seen_subcommand_from tool" -f -a "completion" -d 'Generate shell completion scripts'
 complete -c ck -n "__fish_ck_using_subcommand help; and __fish_seen_subcommand_from tool" -f -a "gitcontext" -d 'Gather branch context (diff, log, files) for skills'
+complete -c ck -n "__fish_ck_using_subcommand help; and __fish_seen_subcommand_from tool" -f -a "cochanges" -d 'Find files frequently changed together with current changes'
