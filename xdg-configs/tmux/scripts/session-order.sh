@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Returns sessions in custom order, prepending any new sessions
 # Usage: session-order.sh [--all]
 #   --all: include hidden sessions (default: filter them out)
