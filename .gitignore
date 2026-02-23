@@ -13,3 +13,4 @@ xdg-configs/tmux/plugins/
 bin/.claude/settings.local.json
 nvim
 dot-claude
+xdg-configs/fish/conf.d/bcny.fish

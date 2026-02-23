@@ -31,6 +31,7 @@ for name in "${sessions[@]}"; do
       dynamic_pos=$((dynamic_pos + 1))
       ;;
   esac
+  tmux set-option -t "$name" @session_color "$color" 2>/dev/null
   attn=$(tmux show-option -t "$name" -qv @attention 2>/dev/null)
   input+="${name}	${color}	${dim}	${attn}"$'\n'
 done
