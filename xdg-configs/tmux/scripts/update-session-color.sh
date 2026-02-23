@@ -2,8 +2,9 @@
 # Update session color and status bar immediately
 session=$(tmux display-message -p '#S')
 
-# Clear attention flag on the focused session
+# Clear attention flag and notification on the focused session
 tmux set-option -t "$session" -u @attention 2>/dev/null
+command -v grrr &>/dev/null && grrr clear "claude-$session" &>/dev/null &
 
 # Compute position for dynamic sessions so accent color matches status bar
 case "$session" in
