@@ -44,23 +44,19 @@ keybind = super+6=text:\x006
 keybind = super+7=text:\x007
 keybind = super+8=text:\x008
 keybind = super+9=text:\x009
-keybind = super+0=text:\x000
-# fzf
-keybind = super+shift+p=text:\x00F
+# tmux-fzf (super+shift+f -> prefix+F for tmux)
+keybind = super+shift+f=text:\x00F
+# session prev (super+shift+p)
+keybind = super+shift+p=csi:65~
 # swap window left/right (super+shift+</> -> prefix+</> for tmux)
 keybind = super+shift+comma=text:\x00<
 keybind = super+shift+period=text:\x00>
-# window switching (super+shift+{/} -> prefix+p/n for tmux prev/next window)
-keybind = super+shift+left_bracket=text:\x00p
-keybind = super+shift+right_bracket=text:\x00n
-# new project session (super+shift+n -> M-n for tmux)
-keybind = super+shift+n=esc:n
-# AI-assisted project session (super+shift+a -> prefix+A for tmux)
-keybind = super+shift+a=text:\x00A
-# Ditch session safely (super+shift+x -> prefix+X for tmux)
-keybind = super+shift+x=text:\x00X
-# Session chooser (super+shift+s -> M-s for tmux)
-keybind = super+shift+s=esc:s
+# session next (super+shift+n)
+keybind = super+shift+n=csi:64~
+# AI-assisted project session (super+alt+a -> prefix+A for tmux)
+keybind = super+alt+a=text:\x00A
+# Ditch session safely (super+alt+x -> prefix+X for tmux)
+keybind = super+alt+x=text:\x00X
 # vim stuff
 keybind = super+j=csi:90;1
 keybind = super+s=csi:90;2
@@ -84,6 +80,10 @@ keybind = super+alt+k=csi:90;18
 keybind = super+alt+j=csi:90;19
 keybind = super+alt+shift+k=csi:90;20
 keybind = super+alt+shift+j=csi:90;21
+# session toggle relay (ctrl+tab)
+keybind = ctrl+tab=csi:60~
+# attention session relay (super+;)
+keybind = super+semicolon=csi:61~
 # }}}
 
 # # {{{ final bindings
@@ -170,7 +170,11 @@ keybind = super+alt+shift+j=csi:90;21
 # keybind = alt+shift+r=reload_config
 # # }}} tmux emulation
 
-keybind = super+n=new_window
+# new project session (super+n)
+keybind = super+n=csi:62~
+keybind = super+alt+n=new_window
+# session chooser (super+p)
+keybind = super+p=csi:63~
 keybind = super+shift+w=close_window
 keybind = super+w=close_surface
 keybind = super+q=quit
