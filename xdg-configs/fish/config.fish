@@ -54,3 +54,4 @@ carapace _carapace | source
 
 # opencode
 fish_add_path /Users/luan/.opencode/bin
+
