@@ -5,6 +5,7 @@ tap "moltenbits/tap"
 # CLI tools
 brew "bat"
 brew "caddy"
+brew "cargo-binstall"
 brew "cmake"
 brew "coreutils"
 brew "delta"

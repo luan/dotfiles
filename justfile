@@ -118,11 +118,43 @@ claude-plugins:
 
     echo "✓ Claude plugins ready"
 
+# Install cargo binaries via cargo-binstall
+cargo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v cargo-binstall &>/dev/null; then
+        echo "⚠ cargo-binstall not found, run 'just brew' first"
+        exit 1
+    fi
+
+    crates=(
+        "ck-search"
+    )
+
+    for crate in "${crates[@]}"; do
+        echo "→ $crate"
+        cargo binstall "$crate" --no-confirm --quiet 2>/dev/null || echo "✗ $crate install failed"
+    done
+
+    echo "✓ Cargo binaries ready"
+
 # Set up local dev-routing (Caddy + dnsmasq subdomain routing)
 dev-routing: link
     #!/usr/bin/env bash
     set -euo pipefail
     "$HOME/bin/dev-routing" setup && "$HOME/bin/dev-routing" scan
 
-# Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing
-setup: brew repos link gitconfig claude-plugins dev-routing
+# Run dot-claude setup (ct tool + completions)
+dot-claude:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f "$HOME/.claude/justfile" ]; then
+        echo "→ Running dot-claude setup"
+        just -f "$HOME/.claude/justfile" setup
+    else
+        echo "⚠ dot-claude justfile not found, skipping"
+    fi
+
+# Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude
+setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude
