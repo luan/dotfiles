@@ -71,7 +71,7 @@
 [core]
   autocrlf = false
   editor = vim
-  excludesfile = ~/luan/.gitignore_global
+  excludesfile = ~/dotfiles/gitignore.global
   pager = delta
 
 [interactive]
