@@ -36,10 +36,10 @@ while read -r s; do
   [ -n "$s" ] && [ -z "${in_order[$s]}" ] && new_sessions="$new_sessions$s"$'\n'
 done <<< "$current"
 
-# Prepend new sessions to order file
+# Prepend new sessions to order file (dedup to handle concurrent writes)
 if [ -n "$new_sessions" ]; then
   tmp=$(mktemp)
-  printf '%s' "$new_sessions" | cat - "$ORDER_FILE" > "$tmp" && mv "$tmp" "$ORDER_FILE"
+  printf '%s' "$new_sessions" | cat - "$ORDER_FILE" | awk '!seen[$0]++' > "$tmp" && mv "$tmp" "$ORDER_FILE"
 fi
 
 # Output: new sessions first, then ordered (alive + visible only)
@@ -51,6 +51,8 @@ if [ -n "$new_sessions" ]; then
 fi
 while read -r s; do
   [ -z "$s" ] && continue
+  # Skip new sessions (already output above) — in_order was built before prepend
+  [ -z "${in_order[$s]}" ] && continue
   [ -n "${alive[$s]}" ] && [ -z "${hidden[$s]}" ] && result="$result$s"$'\n'
 done < "$ORDER_FILE"
 

@@ -3,3 +3,4 @@
 # Single tmux call, no file I/O
 target=$(tmux list-sessions -F '#{@attention} #S' | awk '$1 == "1" { print $2; exit }')
 [ -n "$target" ] && tmux switch-client -t "$target"
+exit 0
