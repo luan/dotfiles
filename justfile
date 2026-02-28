@@ -95,10 +95,7 @@ claude-plugins:
     )
 
     plugins=(
-        "beads@beads-marketplace"
         "clangd-lsp@claude-plugins-official"
-        "claude-md-management@claude-plugins-official"
-        "code-simplifier@claude-plugins-official"
         "context7@claude-plugins-official"
         "gopls-lsp@claude-plugins-official"
         "pyright-lsp@claude-plugins-official"
