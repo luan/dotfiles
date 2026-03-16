@@ -53,8 +53,6 @@ keybind = super+shift+comma=text:\x00<
 keybind = super+shift+period=text:\x00>
 # session next (super+shift+n)
 keybind = super+shift+n=csi:64~
-# AI-assisted project session (super+alt+a -> prefix+A for tmux)
-keybind = super+alt+a=text:\x00A
 # Ditch session safely (super+alt+x -> prefix+X for tmux)
 keybind = super+alt+x=text:\x00X
 # vim stuff
