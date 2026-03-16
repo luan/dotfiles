@@ -218,6 +218,25 @@ impl SessionStore {
         }
     }
 
+    /// Move an entire group entry up or down. Returns true if moved.
+    pub fn move_group(&mut self, group_name: &str, direction: &str) -> bool {
+        let Some(entry_idx) = self.entries.iter().position(|e| e.name == group_name) else {
+            return false;
+        };
+        let n = self.entries.len();
+        match direction {
+            "up" if entry_idx > 0 => {
+                self.entries.swap(entry_idx, entry_idx - 1);
+                true
+            }
+            "down" if entry_idx < n - 1 => {
+                self.entries.swap(entry_idx, entry_idx + 1);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn find_session(&self, name: &str) -> Option<(usize, usize)> {
         for (ei, entry) in self.entries.iter().enumerate() {
             for (si, s) in entry.sessions.iter().enumerate() {

@@ -343,6 +343,7 @@ fn phase_directory_picker() -> Option<PathBuf> {
                 "ctrl-f \u{f005} \u{2502} 1 ~ \u{2502} 2 ~/.config \u{2502} 3 ~/src \u{2502} 0 all"
                     .to_string(),
             placeholder: "filter...".to_string(),
+            initial_id: None,
         };
 
         let mut custom_keys = HashMap::new();
@@ -456,6 +457,7 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
     let config = PickerConfig {
         prompt: "Worktree".to_string(),
         footer: String::new(),
+        initial_id: None,
         placeholder: "filter...".to_string(),
     };
 
