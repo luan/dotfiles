@@ -32,7 +32,10 @@ fn cmd_order(args: &[String]) {
 fn cmd_update_with_args(args: &[String]) {
     let st = query_state();
     // Use explicit session name if provided (from hook), otherwise fall back to query
-    let current = args.first().filter(|s| !s.is_empty()).map_or(&st.current, |s| s);
+    let current = args
+        .first()
+        .filter(|s| !s.is_empty())
+        .map_or(&st.current, |s| s);
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
     let (status, colors) = render_status(&sessions, current, &meta, &st.attn);

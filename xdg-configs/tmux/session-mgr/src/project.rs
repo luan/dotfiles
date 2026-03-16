@@ -132,6 +132,8 @@ fn build_project_items(filter: &str) -> Vec<PickerItem> {
             display: format!("\u{f005}  ~{display}"),
             style: Style::default().fg(YELLOW),
             selectable: true,
+            color: Some(YELLOW),
+            right_label: String::new(),
         });
     }
 
@@ -148,6 +150,8 @@ fn build_project_items(filter: &str) -> Vec<PickerItem> {
             display: format!("   ~{display}"),
             style: Style::default().fg(TEXT),
             selectable: true,
+            color: None,
+            right_label: String::new(),
         });
     }
 
@@ -262,7 +266,7 @@ pub fn cmd_new_session() {
 
     // Phase 3: Session name input
     let session_name = match run_text_input(TextInputConfig {
-        prompt: "\u{f044}  Session: ".to_string(),
+        prompt: "\u{f044}  Session".to_string(),
         initial: default_name.clone(),
     }) {
         TextInputAction::Confirmed(s) => {
@@ -334,8 +338,11 @@ fn phase_directory_picker() -> Option<PathBuf> {
         let items = build_project_items(&current_filter);
 
         let config = PickerConfig {
-            prompt: "\u{f07b}  Project: ".to_string(),
-            header: "ctrl-f: toggle \u{f005} │ 1: ~ │ 2: ~/.config │ 3: ~/src │ 0: all".to_string(),
+            prompt: "Project".to_string(),
+            footer:
+                "ctrl-f \u{f005} \u{2502} 1 ~ \u{2502} 2 ~/.config \u{2502} 3 ~/src \u{2502} 0 all"
+                    .to_string(),
+            placeholder: "filter...".to_string(),
         };
 
         let mut custom_keys = HashMap::new();
@@ -421,6 +428,8 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
         display: "+ New worktree".to_string(),
         style: Style::default().fg(CYAN),
         selectable: true,
+        color: Some(CYAN),
+        right_label: String::new(),
     });
 
     for wt in &worktrees {
@@ -439,19 +448,22 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
             display,
             style: Style::default().fg(TEXT),
             selectable: true,
+            color: None,
+            right_label: String::new(),
         });
     }
 
     let config = PickerConfig {
-        prompt: "\u{f126}  Worktree: ".to_string(),
-        header: String::new(),
+        prompt: "Worktree".to_string(),
+        footer: String::new(),
+        placeholder: "filter...".to_string(),
     };
 
     match run_picker(items, config, HashMap::new()) {
         PickerAction::Selected(id) => {
             if id == "__new__" {
                 match run_text_input(TextInputConfig {
-                    prompt: "\u{f067}  Worktree name: ".to_string(),
+                    prompt: "\u{f067}  Worktree".to_string(),
                     initial: String::new(),
                 }) {
                     TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {

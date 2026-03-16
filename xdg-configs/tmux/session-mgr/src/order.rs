@@ -185,7 +185,10 @@ impl SessionStore {
                 let prev = entry_idx - 1;
                 let prev_group = &self.entries[prev].name;
                 // Don't let an orphan enter a group
-                if group.is_empty() && !prev_group.is_empty() && self.entries[prev].sessions.len() > 1 {
+                if group.is_empty()
+                    && !prev_group.is_empty()
+                    && self.entries[prev].sessions.len() > 1
+                {
                     if prev == 0 {
                         return false;
                     }
@@ -198,7 +201,10 @@ impl SessionStore {
             "down" if entry_idx < n - 1 => {
                 let next = entry_idx + 1;
                 let next_group = &self.entries[next].name;
-                if group.is_empty() && !next_group.is_empty() && self.entries[next].sessions.len() > 1 {
+                if group.is_empty()
+                    && !next_group.is_empty()
+                    && self.entries[next].sessions.len() > 1
+                {
                     if next >= n - 1 {
                         return false;
                     }
