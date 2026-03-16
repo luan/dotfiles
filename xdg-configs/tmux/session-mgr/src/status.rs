@@ -4,30 +4,74 @@ use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 
 const NUM_SELECTED: &[char] = &[
-    '\u{F0CA0}', '\u{F0CA2}', '\u{F0CA4}', '\u{F0CA6}', '\u{F0CA8}',
-    '\u{F0CAA}', '\u{F0CAC}', '\u{F0CAE}', '\u{F0CB0}', '\u{F0FEC}',
+    '\u{F0CA0}',
+    '\u{F0CA2}',
+    '\u{F0CA4}',
+    '\u{F0CA6}',
+    '\u{F0CA8}',
+    '\u{F0CAA}',
+    '\u{F0CAC}',
+    '\u{F0CAE}',
+    '\u{F0CB0}',
+    '\u{F0FEC}',
 ];
 const NUM_UNSELECTED: &[char] = &[
-    '\u{F0CA1}', '\u{F0CA3}', '\u{F0CA5}', '\u{F0CA7}', '\u{F0CA9}',
-    '\u{F0CAB}', '\u{F0CAD}', '\u{F0CAF}', '\u{F0CB1}', '\u{F0FED}',
+    '\u{F0CA1}',
+    '\u{F0CA3}',
+    '\u{F0CA5}',
+    '\u{F0CA7}',
+    '\u{F0CA9}',
+    '\u{F0CAB}',
+    '\u{F0CAD}',
+    '\u{F0CAF}',
+    '\u{F0CB1}',
+    '\u{F0FED}',
 ];
 
 const GROUP_SELECTED: &[char] = &[
-    '\u{F0F0F}', '\u{F0F10}', '\u{F0F11}', '\u{F0F12}', '\u{F0F13}',
-    '\u{F0F14}', '\u{F0F15}', '\u{F0F16}', '\u{F0F17}', '\u{F0FEA}',
+    '\u{F0F0F}',
+    '\u{F0F10}',
+    '\u{F0F11}',
+    '\u{F0F12}',
+    '\u{F0F13}',
+    '\u{F0F14}',
+    '\u{F0F15}',
+    '\u{F0F16}',
+    '\u{F0F17}',
+    '\u{F0FEA}',
 ];
 const GROUP_UNSELECTED: &[char] = &[
-    '\u{F03A5}', '\u{F03A8}', '\u{F03AB}', '\u{F03B2}', '\u{F03AF}',
-    '\u{F03B4}', '\u{F03B7}', '\u{F03BA}', '\u{F03BD}', '\u{F03C0}',
+    '\u{F03A5}',
+    '\u{F03A8}',
+    '\u{F03AB}',
+    '\u{F03B2}',
+    '\u{F03AF}',
+    '\u{F03B4}',
+    '\u{F03B7}',
+    '\u{F03BA}',
+    '\u{F03BD}',
+    '\u{F03C0}',
 ];
 
 fn num_glyph(idx: usize, selected: bool) -> char {
-    let table = if selected { NUM_SELECTED } else { NUM_UNSELECTED };
-    if idx < table.len() { table[idx] } else { table[table.len() - 1] }
+    let table = if selected {
+        NUM_SELECTED
+    } else {
+        NUM_UNSELECTED
+    };
+    if idx < table.len() {
+        table[idx]
+    } else {
+        table[table.len() - 1]
+    }
 }
 
 fn group_glyph(count: usize, selected: bool) -> char {
-    let table = if selected { GROUP_SELECTED } else { GROUP_UNSELECTED };
+    let table = if selected {
+        GROUP_SELECTED
+    } else {
+        GROUP_UNSELECTED
+    };
     let idx = count.clamp(1, table.len()) - 1;
     table[idx]
 }
@@ -142,17 +186,13 @@ pub fn render_status(
         let glyph = num_glyph(idx, name == cur);
 
         if name == cur {
-            out.push_str(&format!(
-                "#[fg={color}]{glyph} #[bold]{display}#[nobold]"
-            ));
+            out.push_str(&format!("#[fg={color}]{glyph} #[bold]{display}#[nobold]"));
         } else if a == "1" {
             out.push_str(&format!(
                 "#[fg={dim_c}]{glyph} #[bold,fg={color}]● {display}#[nobold]"
             ));
         } else {
-            out.push_str(&format!(
-                "#[fg={dim_c}]{glyph} {display}"
-            ));
+            out.push_str(&format!("#[fg={dim_c}]{glyph} {display}"));
         }
     }
 

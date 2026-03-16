@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -6,27 +6,34 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use nucleo_matcher::pattern::{Atom, CaseMatching, Normalization};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Clear, List, ListItem, Paragraph};
+use ratatui::widgets::{
+    Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 
 // Catppuccin Mocha
 const BASE: Color = Color::Rgb(0x1e, 0x1e, 0x2e);
 const SURFACE0: Color = Color::Rgb(0x31, 0x32, 0x44);
-const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
+const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
+const OVERLAY1: Color = Color::Rgb(0x7f, 0x84, 0x9c);
+const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
+const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
 
 pub struct PickerItem {
     pub id: String,
     pub display: String,
     pub style: Style,
     pub selectable: bool,
+    pub color: Option<Color>,
+    pub right_label: String,
 }
 
 #[derive(Clone)]
 pub struct PickerConfig {
     pub prompt: String,
-    pub header: String,
+    pub footer: String,
+    pub placeholder: String,
 }
 
 pub enum PickerAction {
@@ -223,8 +230,6 @@ fn refilter(items: &[PickerItem], state: &mut PickerState) {
         let needle = atom.needle_text();
         for (i, item) in items.iter().enumerate() {
             if !item.selectable {
-                // Keep headers if any of their group items match
-                // We'll handle this in a second pass
                 continue;
             }
             let haystack = Utf32Str::new(&item.display, &mut buf);
@@ -238,29 +243,25 @@ fn refilter(items: &[PickerItem], state: &mut PickerState) {
             }
             buf.clear();
         }
-        // Sort by score descending, then by original order
         state
             .filtered
             .sort_by(|a, b| b.score.cmp(&a.score).then(a.idx.cmp(&b.idx)));
 
         // Re-insert headers: a header is shown if any item directly after it (before next header) is in the filtered set
-        let filtered_indices: std::collections::HashSet<usize> =
-            state.filtered.iter().map(|f| f.idx).collect();
-        let mut headers_to_insert: Vec<(usize, usize)> = Vec::new(); // (insert_pos_in_filtered, item_idx)
+        let filtered_indices: HashSet<usize> = state.filtered.iter().map(|f| f.idx).collect();
+        let mut headers_to_insert: Vec<(usize, usize)> = Vec::new();
         for fi_pos in 0..state.filtered.len() {
             let item_idx = state.filtered[fi_pos].idx;
-            // Look backwards from this item to find its header
             if item_idx > 0 {
                 let prev_idx = item_idx - 1;
-                if !items[prev_idx].selectable && !filtered_indices.contains(&prev_idx) {
-                    // Check we haven't already inserted this header
-                    if !headers_to_insert.iter().any(|(_, hi)| *hi == prev_idx) {
-                        headers_to_insert.push((fi_pos, prev_idx));
-                    }
+                if !items[prev_idx].selectable
+                    && !filtered_indices.contains(&prev_idx)
+                    && !headers_to_insert.iter().any(|(_, hi)| *hi == prev_idx)
+                {
+                    headers_to_insert.push((fi_pos, prev_idx));
                 }
             }
         }
-        // Insert headers in reverse order so positions don't shift
         for (pos, header_idx) in headers_to_insert.into_iter().rev() {
             state.filtered.insert(
                 pos,
@@ -287,7 +288,6 @@ fn snap_to_first_selectable(items: &[PickerItem], state: &mut PickerState) {
     {
         return;
     }
-    // Find first selectable
     for (i, fi) in state.filtered.iter().enumerate() {
         if items[fi.idx].selectable {
             state.selected = i;
@@ -326,51 +326,76 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
-    // Layout: prompt (1) + header (1) + separator (1) + list (rest)
-    let header_lines = if config.header.is_empty() { 0 } else { 1 };
-    let chunks = Layout::vertical([
-        Constraint::Length(1),            // prompt
-        Constraint::Length(header_lines), // header
-        Constraint::Length(1),            // separator
-        Constraint::Min(1),               // list
-    ])
-    .split(area);
-
-    // Prompt line
-    let prompt_text = Line::from(vec![
-        Span::styled(&config.prompt, Style::default().fg(YELLOW).bold()),
-        Span::styled(&state.input, Style::default().fg(TEXT)),
-    ]);
-    f.render_widget(
-        Paragraph::new(prompt_text).style(Style::default().bg(BASE)),
-        chunks[0],
-    );
-
-    // Cursor
-    let cursor_x = chunks[0].x + config.prompt.chars().count() as u16 + state.cursor as u16;
-    f.set_cursor_position((cursor_x, chunks[0].y));
-
-    // Header
-    if !config.header.is_empty() {
-        let header = Paragraph::new(Line::from(Span::styled(
-            &config.header,
-            Style::default().fg(OVERLAY0),
+    // Outer border with rounded corners
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .border_style(Style::default().fg(SURFACE1))
+        .title(Line::from(Span::styled(
+            format!(" {} ", config.prompt.trim()),
+            Style::default().fg(YELLOW).bold(),
         )))
         .style(Style::default().bg(BASE));
-        f.render_widget(header, chunks[1]);
+
+    let inner = outer_block.inner(area);
+    f.render_widget(outer_block, area);
+
+    // Layout inside the border: padding(1) + search(1) + sep(1) + list(rest) + sep(1) + footer(1)
+    let has_footer = !config.footer.is_empty();
+    let footer_height = if has_footer { 2 } else { 0 }; // separator + footer line
+
+    let padded = Rect {
+        x: inner.x + 1,
+        y: inner.y,
+        width: inner.width.saturating_sub(2),
+        height: inner.height,
+    };
+
+    let chunks = Layout::vertical([
+        Constraint::Length(1),             // search input
+        Constraint::Length(1),             // separator
+        Constraint::Min(1),                // list
+        Constraint::Length(footer_height), // footer area
+    ])
+    .split(padded);
+
+    // Search input
+    let search_area = chunks[0];
+    if state.input.is_empty() {
+        let placeholder = Line::from(Span::styled(
+            &config.placeholder,
+            Style::default().fg(OVERLAY0).italic(),
+        ));
+        f.render_widget(
+            Paragraph::new(placeholder).style(Style::default().bg(BASE)),
+            search_area,
+        );
+    } else {
+        let input_line = Line::from(Span::styled(&state.input, Style::default().fg(TEXT)));
+        f.render_widget(
+            Paragraph::new(input_line).style(Style::default().bg(BASE)),
+            search_area,
+        );
     }
 
-    // Separator
+    // Cursor
+    let cursor_x = search_area.x + state.cursor as u16;
+    f.set_cursor_position((cursor_x, search_area.y));
+
+    // Separator between search and list
+    let sep_width = chunks[1].width as usize;
     let sep = Paragraph::new(Line::from(Span::styled(
-        "─".repeat(area.width as usize),
-        Style::default().fg(OVERLAY0),
+        "─".repeat(sep_width),
+        Style::default().fg(SURFACE1),
     )))
     .style(Style::default().bg(BASE));
-    f.render_widget(sep, chunks[2]);
+    f.render_widget(sep, chunks[1]);
 
-    // List
-    let list_area = chunks[3];
+    // List area — reserve 1 col on right for scrollbar
+    let list_area = chunks[2];
+    let content_width = list_area.width.saturating_sub(1); // leave room for scrollbar
     let visible_height = list_area.height as usize;
+    let total_items = state.filtered.len();
 
     // Adjust offset for scrolling
     if state.selected < state.offset {
@@ -380,52 +405,143 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
         state.offset = state.selected - visible_height + 1;
     }
 
-    let list_items: Vec<ListItem> = state
+    // Build visible lines
+    let visible: Vec<(usize, &FilteredItem)> = state
         .filtered
         .iter()
+        .enumerate()
         .skip(state.offset)
         .take(visible_height)
-        .enumerate()
-        .map(|(vi, fi)| {
-            let item = &items[fi.idx];
-            let is_selected = vi + state.offset == state.selected;
+        .collect();
+
+    for (abs_idx, fi) in &visible {
+        let item = &items[fi.idx];
+        let is_selected = *abs_idx == state.selected;
+        let row_y = list_area.y + (*abs_idx - state.offset) as u16;
+        let row_area = Rect {
+            x: list_area.x,
+            y: row_y,
+            width: content_width,
+            height: 1,
+        };
+
+        if !item.selectable {
+            // Group header: dim, no pointer, subtle indent
+            let header_line = Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(&item.display, Style::default().fg(OVERLAY0)),
+            ]);
+            let bg = Style::default().bg(BASE);
+            f.render_widget(Paragraph::new(header_line).style(bg), row_area);
+        } else {
+            // Selectable item
+            let bg_color = if is_selected { SURFACE0 } else { BASE };
+            let accent = item.color.unwrap_or(BLUE);
 
             let mut spans = Vec::new();
-            if is_selected && item.selectable {
-                spans.push(Span::styled("❯ ", Style::default().fg(RED)));
+
+            // Left bar for selected item
+            if is_selected {
+                spans.push(Span::styled("▎ ", Style::default().fg(accent).bg(bg_color)));
             } else {
-                spans.push(Span::raw("  "));
+                spans.push(Span::styled("  ", Style::default().bg(bg_color)));
             }
 
-            // Build display with highlighted match characters
+            // Build display text with match highlighting
+            let text_style = if is_selected {
+                item.style.bg(bg_color)
+            } else {
+                Style::default().fg(OVERLAY1).bg(bg_color)
+            };
+
             if !fi.indices.is_empty() && !state.input.is_empty() {
-                let match_set: std::collections::HashSet<u32> =
-                    fi.indices.iter().copied().collect();
+                let match_set: HashSet<u32> = fi.indices.iter().copied().collect();
                 for (ci, ch) in item.display.chars().enumerate() {
                     if match_set.contains(&(ci as u32)) {
                         spans.push(Span::styled(
                             ch.to_string(),
-                            item.style.fg(YELLOW).underlined(),
+                            text_style.fg(YELLOW).underlined(),
                         ));
                     } else {
-                        spans.push(Span::styled(ch.to_string(), item.style));
+                        spans.push(Span::styled(ch.to_string(), text_style));
                     }
                 }
             } else {
-                spans.push(Span::styled(&item.display, item.style));
+                spans.push(Span::styled(&item.display, text_style));
             }
 
-            let bg = if is_selected && item.selectable {
-                SURFACE0
-            } else {
-                BASE
-            };
-            ListItem::new(Line::from(spans)).style(Style::default().bg(bg))
-        })
-        .collect();
+            // Right-aligned label
+            if !item.right_label.is_empty() {
+                let used: usize = spans.iter().map(|s| s.width()).sum();
+                let label_width = item.right_label.chars().count();
+                let available = content_width as usize;
+                if used + label_width + 1 < available {
+                    let padding = available - used - label_width;
+                    spans.push(Span::styled(
+                        " ".repeat(padding),
+                        Style::default().bg(bg_color),
+                    ));
+                    spans.push(Span::styled(
+                        &item.right_label,
+                        Style::default().fg(OVERLAY0).bg(bg_color),
+                    ));
+                }
+            }
 
-    let list = List::new(list_items).style(Style::default().bg(BASE));
-    f.render_widget(list, list_area);
+            let line = Line::from(spans);
+            f.render_widget(
+                Paragraph::new(line).style(Style::default().bg(bg_color)),
+                row_area,
+            );
+        }
+    }
+
+    // Scrollbar
+    if total_items > visible_height {
+        let scrollbar_area = Rect {
+            x: list_area.x + content_width,
+            y: list_area.y,
+            width: 1,
+            height: list_area.height,
+        };
+        let mut scrollbar_state =
+            ScrollbarState::new(total_items.saturating_sub(visible_height)).position(state.offset);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None)
+                .track_symbol(Some(" "))
+                .track_style(Style::default().bg(BASE))
+                .thumb_style(Style::default().fg(SURFACE1)),
+            scrollbar_area,
+            &mut scrollbar_state,
+        );
+    }
+
+    // Footer
+    if has_footer {
+        let footer_area = chunks[3];
+        let footer_chunks = Layout::vertical([
+            Constraint::Length(1), // separator
+            Constraint::Length(1), // text
+        ])
+        .split(footer_area);
+
+        let fsep_width = footer_chunks[0].width as usize;
+        let footer_sep = Paragraph::new(Line::from(Span::styled(
+            "─".repeat(fsep_width),
+            Style::default().fg(SURFACE1),
+        )))
+        .style(Style::default().bg(BASE));
+        f.render_widget(footer_sep, footer_chunks[0]);
+
+        let footer_text = Paragraph::new(Line::from(Span::styled(
+            &config.footer,
+            Style::default().fg(OVERLAY0),
+        )))
+        .style(Style::default().bg(BASE));
+        f.render_widget(footer_text, footer_chunks[1]);
+    }
 }
 
 // Text input widget for session name / worktree name
@@ -456,19 +572,36 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 f.render_widget(Clear, area);
                 f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
-                let chunks =
-                    Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+                let outer_block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .border_style(Style::default().fg(SURFACE1))
+                    .title(Line::from(Span::styled(
+                        format!(" {} ", config.prompt.trim()),
+                        Style::default().fg(YELLOW).bold(),
+                    )))
+                    .style(Style::default().bg(BASE));
 
-                let line = Line::from(vec![
-                    Span::styled(&config.prompt, Style::default().fg(YELLOW).bold()),
-                    Span::styled(&input, Style::default().fg(TEXT)),
-                ]);
+                let inner = outer_block.inner(area);
+                f.render_widget(outer_block, area);
+
+                let padded = Rect {
+                    x: inner.x + 1,
+                    y: inner.y,
+                    width: inner.width.saturating_sub(2),
+                    height: inner.height,
+                };
+
+                let chunks =
+                    Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(padded);
+
+                let line = Line::from(Span::styled(&input, Style::default().fg(TEXT)));
                 f.render_widget(
                     Paragraph::new(line).style(Style::default().bg(BASE)),
                     chunks[0],
                 );
 
-                let cx = chunks[0].x + config.prompt.chars().count() as u16 + cursor as u16;
+                let cx = chunks[0].x + cursor as u16;
                 f.set_cursor_position((cx, chunks[0].y));
             })
             .ok();

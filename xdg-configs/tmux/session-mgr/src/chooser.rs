@@ -4,6 +4,7 @@ use std::process::Command;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::prelude::*;
 
+use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::order::{compute_order, hidden_file, load_lines};
 use crate::picker::{PickerAction, PickerConfig, PickerItem, run_picker};
@@ -14,8 +15,79 @@ const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 
+// Nerd Font circled number glyphs (matching status.rs)
+const NUM_GLYPHS: &[char] = &[
+    '\u{F0CA1}',
+    '\u{F0CA3}',
+    '\u{F0CA5}',
+    '\u{F0CA7}',
+    '\u{F0CA9}',
+    '\u{F0CAB}',
+    '\u{F0CAD}',
+    '\u{F0CAF}',
+    '\u{F0CB1}',
+    '\u{F0FED}',
+];
+
+fn num_glyph(idx: usize) -> char {
+    if idx < NUM_GLYPHS.len() {
+        NUM_GLYPHS[idx]
+    } else {
+        NUM_GLYPHS[NUM_GLYPHS.len() - 1]
+    }
+}
+
+fn hex_to_color(hex: &str) -> Color {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() >= 6 {
+        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
+        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
+        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
+        Color::Rgb(r, g, b)
+    } else {
+        Color::Rgb(0x89, 0xb4, 0xfa) // fallback blue
+    }
+}
+
 fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<PickerItem> {
     let meta = GroupMeta::new(sessions);
+
+    // Compute colors for each session (same logic as status.rs)
+    let mut gpos_counter: HashMap<&str, usize> = HashMap::new();
+    let mut orphan_idx = 0usize;
+    let mut session_colors: HashMap<&str, Color> = HashMap::new();
+
+    for name in sessions {
+        let group = session_group(name);
+        let gtotal = if group.is_empty() {
+            0
+        } else {
+            *meta.counts.get(group).unwrap_or(&0)
+        };
+
+        let (color_hex, _) = if is_static(name) {
+            compute_color(name, 0, 0, 0, 0)
+        } else if !group.is_empty() {
+            let gpos = *gpos_counter.get(group).unwrap_or(&0);
+            let gidx = *meta.group_idx.get(group).unwrap_or(&0);
+            let r = compute_color(name, gidx, meta.dynamic_total, gpos, gtotal);
+            *gpos_counter.entry(group).or_default() += 1;
+            r
+        } else {
+            let r = compute_color(
+                name,
+                meta.dynamic_groups + orphan_idx,
+                meta.dynamic_total,
+                0,
+                0,
+            );
+            orphan_idx += 1;
+            r
+        };
+
+        session_colors.insert(name, hex_to_color(&color_hex));
+    }
+
     let mut items = Vec::new();
     let mut idx = 0usize;
     let mut last_group = String::new();
@@ -29,6 +101,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
         };
         let is_hidden = hidden.contains(name);
         let is_current = name == cur;
+        let color = session_colors.get(name.as_str()).copied();
 
         if !group.is_empty() && gtotal > 1 {
             if group != last_group {
@@ -37,27 +110,33 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
                     display: group.to_string(),
                     style: Style::default().fg(OVERLAY0),
                     selectable: false,
+                    color: None,
+                    right_label: String::new(),
                 });
             }
+            let glyph = num_glyph(idx);
             idx += 1;
             let suffix = session_suffix(name);
-            let display = if is_hidden {
-                format!("  {idx}: {suffix} \u{f0513}")
-            } else if is_current {
-                format!("  {idx}: {suffix} \u{2190}")
+            let (display, style) = if is_hidden {
+                (
+                    format!("{glyph} {suffix} \u{f0513}"),
+                    Style::default().fg(YELLOW),
+                )
             } else {
-                format!("  {idx}: {suffix}")
+                (format!("{glyph} {suffix}"), Style::default().fg(TEXT))
             };
-            let style = if is_hidden {
-                Style::default().fg(YELLOW)
+            let right_label = if is_current {
+                "\u{2190}".to_string()
             } else {
-                Style::default().fg(TEXT)
+                String::new()
             };
             items.push(PickerItem {
                 id: name.clone(),
                 display,
                 style,
                 selectable: true,
+                color,
+                right_label,
             });
         } else {
             let flat = if !group.is_empty() {
@@ -65,24 +144,28 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             } else {
                 name.as_str()
             };
+            let glyph = num_glyph(idx);
             idx += 1;
-            let display = if is_hidden {
-                format!("{idx}: {flat} \u{f0513}")
-            } else if is_current {
-                format!("{idx}: {flat} \u{2190}")
+            let (display, style) = if is_hidden {
+                (
+                    format!("{glyph} {flat} \u{f0513}"),
+                    Style::default().fg(YELLOW),
+                )
             } else {
-                format!("{idx}: {flat}")
+                (format!("{glyph} {flat}"), Style::default().fg(TEXT))
             };
-            let style = if is_hidden {
-                Style::default().fg(YELLOW)
+            let right_label = if is_current {
+                "\u{2190}".to_string()
             } else {
-                Style::default().fg(TEXT)
+                String::new()
             };
             items.push(PickerItem {
                 id: name.clone(),
                 display,
                 style,
                 selectable: true,
+                color,
+                right_label,
             });
         }
         last_group = group.to_string();
@@ -172,8 +255,9 @@ pub fn cmd_chooser() {
     let items = build_items(&sessions, &hidden, &cur);
 
     let config = PickerConfig {
-        prompt: " Session: ".to_string(),
-        header: "alt-h: hidden │ alt-j/k: move".to_string(),
+        prompt: "Session".to_string(),
+        footer: "alt-h hide \u{2502} alt-j/k move".to_string(),
+        placeholder: "filter...".to_string(),
     };
 
     let mut custom_keys = HashMap::new();
