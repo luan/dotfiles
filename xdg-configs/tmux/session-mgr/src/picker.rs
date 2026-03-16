@@ -34,6 +34,7 @@ pub struct PickerConfig {
     pub prompt: String,
     pub footer: String,
     pub placeholder: String,
+    pub initial_id: Option<String>,
 }
 
 pub enum PickerAction {
@@ -69,7 +70,20 @@ pub fn run_picker(
         filtered: Vec::new(),
     };
     refilter(&items, &mut state);
-    snap_to_first_selectable(&items, &mut state);
+    // Restore cursor to initial_id if provided, otherwise first selectable
+    if let Some(ref id) = config.initial_id {
+        let found = state
+            .filtered
+            .iter()
+            .position(|fi| items[fi.idx].id == *id);
+        if let Some(pos) = found {
+            state.selected = pos;
+        } else {
+            snap_to_first_selectable(&items, &mut state);
+        }
+    } else {
+        snap_to_first_selectable(&items, &mut state);
+    }
 
     terminal::enable_raw_mode().expect("enable raw mode");
     let mut stdout = io::stdout();

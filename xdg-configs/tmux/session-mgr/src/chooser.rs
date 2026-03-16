@@ -118,11 +118,11 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             if group != last_group {
                 let gg = group_glyph(gtotal);
                 items.push(PickerItem {
-                    id: String::new(),
+                    id: format!("__group__{group}"),
                     display: format!("{gg} {group}"),
                     style: Style::default().fg(OVERLAY0),
-                    selectable: false,
-                    color: None,
+                    selectable: true,
+                    color,
                     right_label: String::new(),
                 });
             }
@@ -266,33 +266,30 @@ pub fn cmd_chooser() {
     let hidden: HashSet<String> = load_lines(&hidden_file()).into_iter().collect();
     let items = build_items(&sessions, &hidden, &cur);
 
-    let config = PickerConfig {
-        prompt: "Session".to_string(),
-        footer: "alt-h hide \u{2502} alt-j/k move".to_string(),
-        placeholder: "filter...".to_string(),
+    let custom_keys = {
+        let mut m = HashMap::new();
+        m.insert((KeyCode::Char('h'), KeyModifiers::ALT), "toggle-hidden".to_string());
+        m.insert((KeyCode::Char('j'), KeyModifiers::ALT), "move-down".to_string());
+        m.insert((KeyCode::Char('k'), KeyModifiers::ALT), "move-up".to_string());
+        m
     };
 
-    let mut custom_keys = HashMap::new();
-    custom_keys.insert(
-        (KeyCode::Char('h'), KeyModifiers::ALT),
-        "toggle-hidden".to_string(),
-    );
-    custom_keys.insert(
-        (KeyCode::Char('j'), KeyModifiers::ALT),
-        "move-down".to_string(),
-    );
-    custom_keys.insert(
-        (KeyCode::Char('k'), KeyModifiers::ALT),
-        "move-up".to_string(),
-    );
-
     let mut current_items = items;
+    let mut restore_id: Option<String> = None;
 
     loop {
-        let action = run_picker(current_items, config.clone(), custom_keys.clone());
+        let config = PickerConfig {
+            prompt: "Session".to_string(),
+            footer: "alt-h hide \u{2502} alt-j/k move".to_string(),
+            placeholder: "filter...".to_string(),
+            initial_id: restore_id.take(),
+        };
+
+        let action = run_picker(current_items, config, custom_keys.clone());
         match action {
             PickerAction::Selected(id) => {
-                if !id.is_empty() {
+                // Group headers aren't switchable
+                if !id.is_empty() && !id.starts_with("__group__") {
                     tmux(&["switch-client", "-t", &id]);
                 }
                 break;
@@ -300,20 +297,41 @@ pub fn cmd_chooser() {
             PickerAction::Cancelled => break,
             PickerAction::Custom(action_name, id) => {
                 if !id.is_empty() {
+                    let is_group = id.starts_with("__group__");
+                    let group_name = id.strip_prefix("__group__").unwrap_or("");
+
                     match action_name.as_str() {
-                        "toggle-hidden" => {
+                        "toggle-hidden" if !is_group => {
                             let _ = Command::new("bash").args([&hide_script, &id]).output();
                         }
                         "move-down" => {
-                            let _ = Command::new(&self_path)
-                                .args(["move", "down", &id])
-                                .output();
+                            if is_group {
+                                let mut store = crate::order::SessionStore::load();
+                                if store.move_group(group_name, "down") {
+                                    store.save();
+                                }
+                            } else {
+                                let _ = Command::new(&self_path)
+                                    .args(["move", "down", &id])
+                                    .output();
+                            }
                         }
                         "move-up" => {
-                            let _ = Command::new(&self_path).args(["move", "up", &id]).output();
+                            if is_group {
+                                let mut store = crate::order::SessionStore::load();
+                                if store.move_group(group_name, "up") {
+                                    store.save();
+                                }
+                            } else {
+                                let _ = Command::new(&self_path)
+                                    .args(["move", "up", &id])
+                                    .output();
+                            }
                         }
                         _ => {}
                     }
+                    // Restore cursor to the same item after rebuild
+                    restore_id = Some(id);
                 }
                 // Rebuild state after mutation
                 let cur = tmux(&["display-message", "-p", "#S"]);
