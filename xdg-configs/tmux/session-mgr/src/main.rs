@@ -1,0 +1,191 @@
+use std::collections::HashSet;
+use std::env;
+use std::process::{Command, Stdio};
+
+mod chooser;
+mod color;
+mod group;
+mod order;
+mod picker;
+mod project;
+mod status;
+mod tmux;
+
+use color::compute_color;
+use group::GroupMeta;
+use order::compute_order;
+use status::render_status;
+use tmux::{query_state, tmux as tmux_cmd};
+
+fn cmd_order(args: &[String]) {
+    let include_all = args.iter().any(|a| a == "--all");
+    let alive: HashSet<String> = tmux_cmd(&["list-sessions", "-F", "#S"])
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    for s in compute_order(&alive, include_all) {
+        println!("{s}");
+    }
+}
+
+fn cmd_update_with_args(args: &[String]) {
+    let st = query_state();
+    // Use explicit session name if provided (from hook), otherwise fall back to query
+    let current = args.first().filter(|s| !s.is_empty()).map_or(&st.current, |s| s);
+    let sessions = compute_order(&st.alive, false);
+    let meta = GroupMeta::new(&sessions);
+    let (status, colors) = render_status(&sessions, current, &meta, &st.attn);
+    let cur_color = colors
+        .iter()
+        .find(|(n, _)| n == current)
+        .map_or("#FFFFFF", |(_, c)| c.as_str());
+
+    let mut tmux_args: Vec<String> = vec![
+        "set-option".into(),
+        "-t".into(),
+        current.clone(),
+        "-u".into(),
+        "@attention".into(),
+    ];
+    for (name, color) in &colors {
+        tmux_args.extend([
+            ";".into(),
+            "set-option".into(),
+            "-t".into(),
+            name.clone(),
+            "@session_color".into(),
+            color.clone(),
+        ]);
+    }
+    tmux_args.extend([
+        ";".into(),
+        "set".into(),
+        "-t".into(),
+        current.clone(),
+        "@session_color".into(),
+        cur_color.into(),
+    ]);
+    tmux_args.extend([
+        ";".into(),
+        "set".into(),
+        "-g".into(),
+        "status-left".into(),
+        format!(" {status} "),
+    ]);
+    tmux_args.extend([";".into(), "refresh-client".into(), "-S".into()]);
+
+    let refs: Vec<&str> = tmux_args.iter().map(String::as_str).collect();
+    tmux_cmd(&refs);
+
+    let _ = Command::new("grrr")
+        .args(["clear", &format!("claude-{current}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
+fn cmd_list() {
+    let st = query_state();
+    let sessions = compute_order(&st.alive, false);
+    let meta = GroupMeta::new(&sessions);
+    let (status, colors) = render_status(&sessions, &st.current, &meta, &st.attn);
+    print!("{status}");
+
+    if !colors.is_empty() {
+        let mut args: Vec<String> = Vec::new();
+        for (i, (name, color)) in colors.iter().enumerate() {
+            if i > 0 {
+                args.push(";".into());
+            }
+            args.extend([
+                "set-option".into(),
+                "-t".into(),
+                name.clone(),
+                "@session_color".into(),
+                color.clone(),
+            ]);
+        }
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        tmux_cmd(&refs);
+    }
+}
+
+fn cmd_color(args: &[String]) {
+    let mut mode = "color";
+    let (mut pos, mut total, mut gpos, mut gtotal) = (0, 0, 0, 0);
+    let mut i = 0;
+    while i < args.len().saturating_sub(1) {
+        match args[i].as_str() {
+            "--dim" => {
+                mode = "dim";
+                i += 1;
+            }
+            "--both" => {
+                mode = "both";
+                i += 1;
+            }
+            "--pos" => {
+                pos = args[i + 1].parse().unwrap_or(0);
+                i += 2;
+            }
+            "--total" => {
+                total = args[i + 1].parse().unwrap_or(0);
+                i += 2;
+            }
+            "--group-pos" => {
+                gpos = args[i + 1].parse().unwrap_or(0);
+                i += 2;
+            }
+            "--group-total" => {
+                gtotal = args[i + 1].parse().unwrap_or(0);
+                i += 2;
+            }
+            _ => break,
+        }
+    }
+    let name = args.last().map_or("", String::as_str);
+    let (c, d) = compute_color(name, pos, total, gpos, gtotal);
+    match mode {
+        "dim" => println!("{d}"),
+        "both" => println!("{c}\t{d}"),
+        _ => println!("{c}"),
+    }
+}
+
+fn cmd_move(args: &[String]) {
+    let direction = args.first().map_or("", String::as_str);
+    let current = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        tmux_cmd(&["display-message", "-p", "#S"])
+    };
+
+    let mut store = order::SessionStore::load();
+    if store.move_session(&current, direction) {
+        store.save();
+    }
+    cmd_update_with_args(&[]);
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let cmd = args.get(1).map_or("list", String::as_str);
+    let rest: Vec<String> = args.iter().skip(2).cloned().collect();
+    match cmd {
+        "order" => cmd_order(&rest),
+        "list" => cmd_list(),
+        "color" => cmd_color(&rest),
+        "move" => cmd_move(&rest),
+        "chooser-list" => chooser::cmd_chooser_list(),
+        "chooser" => chooser::cmd_chooser(),
+        "project-list" => project::cmd_project_list(&rest),
+        "toggle-favorite" => project::cmd_toggle_favorite(&rest),
+        "new-session" => project::cmd_new_session(),
+        "update" => cmd_update_with_args(&rest),
+        _ => {
+            eprintln!("Unknown: {cmd}");
+            std::process::exit(1);
+        }
+    }
+}

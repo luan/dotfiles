@@ -256,9 +256,24 @@ else
   branch_name=$(get_branch "$selected_dir")
 fi
 
-# Determine default session name (prefer branch, then directory)
-default_name=$(basename "$final_dir" | sed 's/\.git$//')
-[[ -n "$branch_name" ]] && default_name="$branch_name"
+# Derive repo name for session prefix
+if $is_bare; then
+  repo_name=$(basename "$selected_dir" | sed 's/\.git$//')
+elif git -C "$final_dir" rev-parse --show-toplevel &>/dev/null; then
+  repo_name=$(basename "$(git -C "$final_dir" rev-parse --show-toplevel)")
+else
+  repo_name=""
+fi
+
+# Determine default session name with repo prefix
+suffix=$(basename "$final_dir" | sed 's/\.git$//')
+[[ -n "$branch_name" ]] && suffix="$branch_name"
+
+if [[ -n "$repo_name" && "$repo_name" != "$suffix" ]]; then
+  default_name="$repo_name/$suffix"
+else
+  default_name="${repo_name:-$suffix}"
+fi
 
 # Gum colors to match tokyonight/catppuccin
 export GUM_INPUT_PROMPT_FOREGROUND="#f9e2af"

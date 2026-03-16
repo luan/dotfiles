@@ -9,8 +9,10 @@ secrets
 **/zed/embeddings
 xdg-configs/fish/fish_variables
 xdg-configs/tmux/plugins/
+xdg-configs/tmux/scripts/tmux-session
 .claude/settings.local.json
 bin/.claude/settings.local.json
 nvim
 dot-claude
 xdg-configs/fish/conf.d/bcny.fish
+xdg-configs/tmux/session-order.json

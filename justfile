@@ -153,5 +153,11 @@ dot-claude:
         echo "⚠ dot-claude justfile not found, skipping"
     fi
 
-# Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude
-setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude
+# Build tmux-session binary (Rust)
+tmux-session:
+    cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/session-mgr/Cargo.toml"
+    cp "{{ dotfiles_dir }}/xdg-configs/tmux/session-mgr/target/release/tmux-session" "{{ config_dir }}/tmux/scripts/tmux-session"
+    @echo "✓ tmux-session built"
+
+# Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, tmux-session
+setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude tmux-session
