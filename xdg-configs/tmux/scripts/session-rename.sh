@@ -23,5 +23,6 @@ tmux rename-session -t "=$old_name" "$new_name"
 
 # Patch order file in-place so position is preserved
 if [[ -f "$ORDER_FILE" ]]; then
-  sed -i '' "s/^${old_name}$/${new_name}/" "$ORDER_FILE"
+  awk -v old="$old_name" -v new="$new_name" '{print ($0 == old ? new : $0)}' \
+    "$ORDER_FILE" > "$ORDER_FILE.tmp" && mv "$ORDER_FILE.tmp" "$ORDER_FILE"
 fi
