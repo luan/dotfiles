@@ -119,11 +119,11 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             let suffix = session_suffix(name);
             let (display, style) = if is_hidden {
                 (
-                    format!("{glyph} {suffix} \u{f0513}"),
+                    format!("  {glyph} {suffix} \u{f0513}"),
                     Style::default().fg(YELLOW),
                 )
             } else {
-                (format!("{glyph} {suffix}"), Style::default().fg(TEXT))
+                (format!("  {glyph} {suffix}"), Style::default().fg(TEXT))
             };
             let right_label = if is_current {
                 "\u{2190}".to_string()
