@@ -11,13 +11,14 @@ alias ll="eza --icons -l"
 alias la="eza --icons -la"
 alias lt="eza --icons --tree"
 
-set --export EDITOR vim
-set --export GIT_EDITOR vim
+set --export EDITOR nvim
+set --export GIT_EDITOR nvim
 
 # sccache — compiler cache for C/C++
-set --export CMAKE_C_COMPILER_LAUNCHER sccache
-set --export CMAKE_CXX_COMPILER_LAUNCHER sccache
-
+if not test -f ~/.config/fish/.no-sccache
+    set --export CMAKE_C_COMPILER_LAUNCHER sccache
+    set --export CMAKE_CXX_COMPILER_LAUNCHER sccache
+end
 
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
@@ -54,4 +55,3 @@ carapace _carapace | source
 
 # opencode
 fish_add_path /Users/luan/.opencode/bin
-
