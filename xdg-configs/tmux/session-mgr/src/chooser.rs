@@ -15,6 +15,17 @@ const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 
+// Nerd Font group count glyphs (box-style, unselected)
+const GROUP_GLYPHS: &[char] = &[
+    '\u{F03A5}', '\u{F03A8}', '\u{F03AB}', '\u{F03B2}', '\u{F03AF}',
+    '\u{F03B4}', '\u{F03B7}', '\u{F03BA}', '\u{F03BD}', '\u{F03C0}',
+];
+
+fn group_glyph(count: usize) -> char {
+    let idx = count.clamp(1, GROUP_GLYPHS.len()) - 1;
+    GROUP_GLYPHS[idx]
+}
+
 // Nerd Font circled number glyphs (matching status.rs)
 const NUM_GLYPHS: &[char] = &[
     '\u{F0CA1}',
@@ -105,9 +116,10 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
 
         if !group.is_empty() && gtotal > 1 {
             if group != last_group {
+                let gg = group_glyph(gtotal);
                 items.push(PickerItem {
                     id: String::new(),
-                    display: group.to_string(),
+                    display: format!("{gg} {group}"),
                     style: Style::default().fg(OVERLAY0),
                     selectable: false,
                     color: None,
