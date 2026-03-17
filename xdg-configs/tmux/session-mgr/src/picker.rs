@@ -26,6 +26,7 @@ pub struct PickerItem {
     pub style: Style,
     pub selectable: bool,
     pub color: Option<Color>,
+    pub dim_color: Option<Color>,
     pub right_label: String,
 }
 
@@ -456,16 +457,17 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
 
             // Left bar for selected item
             if is_selected {
-                spans.push(Span::styled("▎ ", Style::default().fg(accent).bg(bg_color)));
+                spans.push(Span::styled("▌ ", Style::default().fg(accent).bg(bg_color)));
             } else {
                 spans.push(Span::styled("  ", Style::default().bg(bg_color)));
             }
 
             // Build display text with match highlighting
+            let dim = item.dim_color.unwrap_or(OVERLAY1);
             let text_style = if is_selected {
-                item.style.bg(bg_color)
+                item.style.fg(accent).bg(bg_color)
             } else {
-                Style::default().fg(OVERLAY1).bg(bg_color)
+                Style::default().fg(dim).bg(bg_color)
             };
 
             if !fi.indices.is_empty() && !state.input.is_empty() {
