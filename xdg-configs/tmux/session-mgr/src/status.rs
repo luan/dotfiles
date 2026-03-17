@@ -189,7 +189,7 @@ pub fn render_status(
             out.push_str(&format!("#[fg={color}]{glyph} #[bold]{display}#[nobold]"));
         } else if a == "1" {
             out.push_str(&format!(
-                "#[fg={dim_c}]{glyph} #[bold,fg={color}]● {display}#[nobold]"
+                "#[fg={dim_c}]{glyph} #[bold,fg={color}]●#[nobold] #[underscore,fg={dim_c}]{display}#[nounderscore]"
             ));
         } else {
             out.push_str(&format!("#[fg={dim_c}]{glyph} {display}"));
