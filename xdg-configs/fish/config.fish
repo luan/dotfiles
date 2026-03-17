@@ -54,4 +54,4 @@ set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
 carapace _carapace | source
 
 # opencode
-fish_add_path /Users/luan/.opencode/bin
+fish_add_path $HOME/.opencode/bin
