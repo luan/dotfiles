@@ -26,18 +26,18 @@ fn group_glyph(count: usize) -> char {
     GROUP_GLYPHS[idx]
 }
 
-// Nerd Font circled number glyphs (matching status.rs)
+// Nerd Font box-outline number glyphs (matching status.rs NUM_UNSELECTED)
 const NUM_GLYPHS: &[char] = &[
-    '\u{F0CA1}',
-    '\u{F0CA3}',
-    '\u{F0CA5}',
-    '\u{F0CA7}',
-    '\u{F0CA9}',
-    '\u{F0CAB}',
-    '\u{F0CAD}',
-    '\u{F0CAF}',
-    '\u{F0CB1}',
-    '\u{F0FED}',
+    '\u{F03A3}',
+    '\u{F03A6}',
+    '\u{F03A9}',
+    '\u{F03AC}',
+    '\u{F03AE}',
+    '\u{F03B0}',
+    '\u{F03B5}',
+    '\u{F03B8}',
+    '\u{F03BB}',
+    '\u{F03BE}',
 ];
 
 fn num_glyph(idx: usize) -> char {
