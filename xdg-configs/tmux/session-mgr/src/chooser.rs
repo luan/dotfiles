@@ -66,7 +66,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
     // Compute colors for each session (same logic as status.rs)
     let mut gpos_counter: HashMap<&str, usize> = HashMap::new();
     let mut orphan_idx = 0usize;
-    let mut session_colors: HashMap<&str, Color> = HashMap::new();
+    let mut session_colors: HashMap<&str, (Color, Color)> = HashMap::new();
 
     for name in sessions {
         let group = session_group(name);
@@ -76,7 +76,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             *meta.counts.get(group).unwrap_or(&0)
         };
 
-        let (color_hex, _) = if is_static(name) {
+        let (color_hex, dim_hex) = if is_static(name) {
             compute_color(name, 0, 0, 0, 0)
         } else if !group.is_empty() {
             let gpos = *gpos_counter.get(group).unwrap_or(&0);
@@ -96,7 +96,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             r
         };
 
-        session_colors.insert(name, hex_to_color(&color_hex));
+        session_colors.insert(name, (hex_to_color(&color_hex), hex_to_color(&dim_hex)));
     }
 
     let mut items = Vec::new();
@@ -112,7 +112,9 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
         };
         let is_hidden = hidden.contains(name);
         let is_current = name == cur;
-        let color = session_colors.get(name.as_str()).copied();
+        let (color, dim_color) = session_colors
+            .get(name.as_str())
+            .map_or((None, None), |(c, d)| (Some(*c), Some(*d)));
 
         if !group.is_empty() && gtotal > 1 {
             if group != last_group {
@@ -123,6 +125,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
                     style: Style::default().fg(OVERLAY0),
                     selectable: true,
                     color,
+                    dim_color,
                     right_label: String::new(),
                 });
             }
@@ -148,6 +151,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
                 style,
                 selectable: true,
                 color,
+                dim_color,
                 right_label,
             });
         } else {
@@ -177,6 +181,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
                 style,
                 selectable: true,
                 color,
+                dim_color,
                 right_label,
             });
         }

@@ -91,15 +91,15 @@ pub fn render_status(
     // Pre-check: does the current session belong to any group?
     let cur_group_name = session_group(cur);
 
-    // Pre-compute current session's color for group icon
-    let cur_color_hex = {
+    // Pre-compute current session's dim color for group icon
+    let cur_dim_hex = {
         let mut oi = 0usize;
         let mut gpc: HashMap<&str, usize> = HashMap::new();
         let mut found = String::new();
         for s in sessions {
             let g = session_group(s);
             if s == cur {
-                let (c, _) = if is_static(s) {
+                let (_, d) = if is_static(s) {
                     compute_color(s, 0, 0, 0, 0)
                 } else if !g.is_empty() {
                     let gp = *gpc.get(g).unwrap_or(&0);
@@ -109,7 +109,7 @@ pub fn render_status(
                 } else {
                     compute_color(s, meta.dynamic_groups + oi, meta.dynamic_total, 0, 0)
                 };
-                found = c;
+                found = d;
                 break;
             }
             if !g.is_empty() {
@@ -176,7 +176,7 @@ pub fn render_status(
             let group_selected = cur_group_name == group;
             let gg = group_glyph(gtotal, group_selected);
             if group_selected {
-                out.push_str(&format!("#[fg={cur_color_hex}]{gg}#[fg=default] "));
+                out.push_str(&format!("#[fg={cur_dim_hex}]{gg}#[fg=default] "));
             } else {
                 out.push_str(&format!("#[fg=#585b70]{gg}#[fg=default] "));
             }

@@ -133,6 +133,7 @@ fn build_project_items(filter: &str) -> Vec<PickerItem> {
             style: Style::default().fg(YELLOW),
             selectable: true,
             color: Some(YELLOW),
+            dim_color: None,
             right_label: String::new(),
         });
     }
@@ -151,6 +152,7 @@ fn build_project_items(filter: &str) -> Vec<PickerItem> {
             style: Style::default().fg(TEXT),
             selectable: true,
             color: None,
+            dim_color: None,
             right_label: String::new(),
         });
     }
@@ -430,6 +432,7 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
         style: Style::default().fg(CYAN),
         selectable: true,
         color: Some(CYAN),
+        dim_color: None,
         right_label: String::new(),
     });
 
@@ -450,6 +453,7 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
             style: Style::default().fg(TEXT),
             selectable: true,
             color: None,
+            dim_color: None,
             right_label: String::new(),
         });
     }
