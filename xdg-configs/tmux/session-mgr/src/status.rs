@@ -4,28 +4,28 @@ use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 
 const NUM_SELECTED: &[char] = &[
-    '\u{F03A1}',
-    '\u{F03A4}',
-    '\u{F03A7}',
-    '\u{F03AA}',
-    '\u{F03AD}',
-    '\u{F03B1}',
-    '\u{F03B3}',
-    '\u{F03B6}',
-    '\u{F03B9}',
-    '\u{F03BC}',
+    '\u{F03A4}', // 1
+    '\u{F03A7}', // 2
+    '\u{F03AA}', // 3
+    '\u{F03AD}', // 4
+    '\u{F03B1}', // 5
+    '\u{F03B3}', // 6
+    '\u{F03B6}', // 7
+    '\u{F03B9}', // 8
+    '\u{F03BC}', // 9
+    '\u{F03BF}', // 9+
 ];
 const NUM_UNSELECTED: &[char] = &[
-    '\u{F03A3}',
-    '\u{F03A6}',
-    '\u{F03A9}',
-    '\u{F03AC}',
-    '\u{F03AE}',
-    '\u{F03B0}',
-    '\u{F03B5}',
-    '\u{F03B8}',
-    '\u{F03BB}',
-    '\u{F03BE}',
+    '\u{F03A6}', // 1
+    '\u{F03A9}', // 2
+    '\u{F03AC}', // 3
+    '\u{F03AE}', // 4
+    '\u{F03B0}', // 5
+    '\u{F03B5}', // 6
+    '\u{F03B8}', // 7
+    '\u{F03BB}', // 8
+    '\u{F03BE}', // 9
+    '\u{F03C1}', // 9+
 ];
 
 const GROUP_SELECTED: &[char] = &[
