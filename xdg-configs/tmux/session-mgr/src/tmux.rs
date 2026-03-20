@@ -56,14 +56,6 @@ pub fn query_state() -> TmuxState {
     }
 }
 
-pub fn git_branch(dir: &str) -> String {
-    Command::new("git")
-        .args(["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
-}
-
 pub fn git_toplevel(dir: &str) -> Option<String> {
     Command::new("git")
         .args(["-C", dir, "rev-parse", "--show-toplevel"])

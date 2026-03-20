@@ -11,7 +11,7 @@ use crate::picker::{
     PickerAction, PickerConfig, PickerItem, TextInputAction, TextInputConfig, run_picker,
     run_text_input,
 };
-use crate::tmux::{git_branch, git_toplevel, home, tmux};
+use crate::tmux::{git_toplevel, home, tmux};
 
 // Catppuccin Mocha colors
 const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
@@ -208,8 +208,9 @@ pub fn cmd_toggle_favorite(args: &[String]) {
 
 pub fn cmd_new_session() {
     // Phase 1: Directory picker
-    let selected_dir = match phase_directory_picker() {
-        Some(d) => d,
+    let (selected_dir, auto_worktree) = match phase_directory_picker() {
+        Some(DirectoryPickerResult::Normal(d)) => (d, false),
+        Some(DirectoryPickerResult::AutoWorktree(d)) => (d, true),
         None => return,
     };
 
@@ -220,18 +221,24 @@ pub fn cmd_new_session() {
     let is_bare = selected_dir.extension().is_some_and(|e| e == "git") && selected_dir.is_dir();
     let has_git = selected_dir.join(".git").exists();
     let mut final_dir = selected_dir.clone();
-    let mut branch_name = String::new();
 
     if has_git || is_bare {
-        match phase_worktree_picker(&selected_dir, is_bare) {
-            WorktreeResult::Selected(dir, branch) => {
-                final_dir = dir;
-                branch_name = branch;
+        if auto_worktree {
+            if let Some(wt_dir) = find_detached_worktree(&selected_dir) {
+                final_dir = wt_dir;
+            } else {
+                match phase_worktree_picker(&selected_dir) {
+                    WorktreeResult::Selected(dir) => final_dir = dir,
+                    WorktreeResult::NoWorktrees => {}
+                    WorktreeResult::Cancelled => return,
+                }
             }
-            WorktreeResult::NoWorktrees => {
-                branch_name = git_branch(selected_dir.to_str().unwrap_or(""));
+        } else {
+            match phase_worktree_picker(&selected_dir) {
+                WorktreeResult::Selected(dir) => final_dir = dir,
+                WorktreeResult::NoWorktrees => {}
+                WorktreeResult::Cancelled => return,
             }
-            WorktreeResult::Cancelled => return,
         }
     }
 
@@ -250,13 +257,9 @@ pub fn cmd_new_session() {
             .unwrap_or_default()
     };
 
-    let suffix = if !branch_name.is_empty() {
-        branch_name.clone()
-    } else {
-        final_dir
-            .file_name()
-            .map_or(String::new(), |n| n.to_string_lossy().replace(".git", ""))
-    };
+    let suffix = final_dir
+        .file_name()
+        .map_or(String::new(), |n| n.to_string_lossy().replace(".git", ""));
 
     let default_name = if !repo_name.is_empty() && repo_name != suffix {
         format!("{repo_name}/{suffix}")
@@ -330,7 +333,7 @@ pub fn cmd_new_session() {
     ]);
 }
 
-fn phase_directory_picker() -> Option<PathBuf> {
+fn phase_directory_picker() -> Option<DirectoryPickerResult> {
     let self_bin =
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("tmux-session"));
     let self_path = self_bin.to_string_lossy().to_string();
@@ -342,7 +345,7 @@ fn phase_directory_picker() -> Option<PathBuf> {
         let config = PickerConfig {
             prompt: "Project".to_string(),
             footer:
-                "ctrl-f \u{f005} \u{2502} 1 ~ \u{2502} 2 ~/.config \u{2502} 3 ~/src \u{2502} 0 all"
+                "ctrl-f \u{f005} \u{2502} 1 ~ \u{2502} 2 ~/.config \u{2502} 3 ~/src \u{2502} 0 all \u{2502} alt-enter worktree"
                     .to_string(),
             placeholder: "filter...".to_string(),
             initial_id: None,
@@ -369,13 +372,17 @@ fn phase_directory_picker() -> Option<PathBuf> {
             (KeyCode::Char('0'), KeyModifiers::NONE),
             "filter-all".to_string(),
         );
+        custom_keys.insert(
+            (KeyCode::Enter, KeyModifiers::ALT),
+            "auto-worktree".to_string(),
+        );
 
         match run_picker(items, config, custom_keys) {
             PickerAction::Selected(id) => {
                 if id.is_empty() {
                     return None;
                 }
-                return Some(PathBuf::from(id));
+                return Some(DirectoryPickerResult::Normal(PathBuf::from(id)));
             }
             PickerAction::Cancelled => return None,
             PickerAction::Custom(action, id) => match action.as_str() {
@@ -384,6 +391,11 @@ fn phase_directory_picker() -> Option<PathBuf> {
                         let _ = Command::new(&self_path)
                             .args(["toggle-favorite", &id])
                             .output();
+                    }
+                }
+                "auto-worktree" => {
+                    if !id.is_empty() {
+                        return Some(DirectoryPickerResult::AutoWorktree(PathBuf::from(id)));
                     }
                 }
                 "filter-home" => current_filter = "home".to_string(),
@@ -396,32 +408,76 @@ fn phase_directory_picker() -> Option<PathBuf> {
     }
 }
 
+enum DirectoryPickerResult {
+    Normal(PathBuf),
+    AutoWorktree(PathBuf),
+}
+
 enum WorktreeResult {
-    Selected(PathBuf, String),
+    Selected(PathBuf),
     NoWorktrees,
     Cancelled,
 }
 
-fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
-    let wt_output = Command::new("git")
-        .args([
-            "-C",
-            selected_dir.to_str().unwrap_or("."),
-            "worktree",
-            "list",
-        ])
-        .output();
-    let worktrees: Vec<String> = wt_output
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter(|l| !l.is_empty() && (!is_bare || !l.contains("(bare)")))
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
+// --- wt (worktrunk) integration ---
 
-    if (!is_bare && worktrees.len() <= 1) || worktrees.is_empty() {
+#[derive(serde::Deserialize)]
+struct WtEntry {
+    branch: Option<String>,
+    path: Option<String>,
+    working_tree: Option<WtWorkingTree>,
+    worktree: Option<WtWorktreeInfo>,
+}
+
+#[derive(serde::Deserialize)]
+struct WtWorkingTree {
+    staged: Option<bool>,
+    modified: Option<bool>,
+    untracked: Option<bool>,
+}
+
+#[derive(serde::Deserialize)]
+struct WtWorktreeInfo {
+    detached: Option<bool>,
+}
+
+fn wt_list(dir: &Path) -> Vec<WtEntry> {
+    Command::new("wt")
+        .args(["list", "--format=json", "-C", dir.to_str().unwrap_or(".")])
+        .output()
+        .ok()
+        .and_then(|o| serde_json::from_slice(&o.stdout).ok())
+        .unwrap_or_default()
+}
+
+fn find_detached_worktree(dir: &Path) -> Option<PathBuf> {
+    let entries = wt_list(dir);
+    let detached: Vec<&WtEntry> = entries
+        .iter()
+        .filter(|e| e.path.is_some())
+        .filter(|e| {
+            e.worktree
+                .as_ref()
+                .is_some_and(|w| w.detached.unwrap_or(false))
+        })
+        .collect();
+
+    // Prefer clean (no staged/modified/untracked) detached worktrees
+    let clean = detached.iter().find(|e| {
+        e.working_tree.as_ref().is_some_and(|wt| {
+            !wt.staged.unwrap_or(false)
+                && !wt.modified.unwrap_or(false)
+                && !wt.untracked.unwrap_or(false)
+        })
+    });
+    let entry = clean.copied().or(detached.first().copied())?;
+    let path = PathBuf::from(entry.path.as_ref()?);
+    path.is_dir().then_some(path)
+}
+
+fn phase_worktree_picker(selected_dir: &Path) -> WorktreeResult {
+    let entries = wt_list(selected_dir);
+    if entries.is_empty() {
         return WorktreeResult::NoWorktrees;
     }
 
@@ -436,19 +492,27 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
         right_label: String::new(),
     });
 
-    for wt in &worktrees {
-        let wt_path = wt.split_whitespace().next().unwrap_or("");
-        let wt_name = PathBuf::from(wt_path)
+    for entry in &entries {
+        let path = entry.path.as_deref().unwrap_or("");
+        let name = PathBuf::from(path)
             .file_name()
             .map_or(String::new(), |n| n.to_string_lossy().to_string());
-        let br = git_branch(wt_path);
-        let display = if br.is_empty() {
-            wt_name.clone()
+        let detached = entry
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.detached.unwrap_or(false));
+        let branch = entry.branch.as_deref().unwrap_or("");
+
+        let display = if detached {
+            format!("{name} (detached)")
+        } else if !branch.is_empty() {
+            format!("{name} \u{2190} {branch}")
         } else {
-            format!("{wt_name} \u{2190} {br}")
+            name
         };
+
         items.push(PickerItem {
-            id: wt_path.to_string(),
+            id: path.to_string(),
             display,
             style: Style::default().fg(TEXT),
             selectable: true,
@@ -473,29 +537,28 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
                     initial: String::new(),
                 }) {
                     TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {
-                        let gg = home().join("bin/gg-create-worktree");
-                        let result = Command::new(gg)
+                        let result = Command::new("wt")
                             .args([
-                                "--repo",
-                                selected_dir.to_str().unwrap_or("."),
-                                "--name",
+                                "switch",
+                                "--create",
                                 &wt_name,
+                                "--no-cd",
+                                "-y",
+                                "-C",
+                                selected_dir.to_str().unwrap_or("."),
                             ])
                             .output();
                         match result {
                             Ok(o) if o.status.success() => {
-                                let p = String::from_utf8_lossy(&o.stdout)
-                                    .lines()
-                                    .last()
-                                    .unwrap_or("")
-                                    .trim()
-                                    .to_string();
-                                if !p.is_empty() && PathBuf::from(&p).is_dir() {
-                                    let branch = git_branch(&p);
-                                    WorktreeResult::Selected(PathBuf::from(p), branch)
-                                } else {
-                                    WorktreeResult::Cancelled
-                                }
+                                // Find the new worktree's path via wt list
+                                let new_entries = wt_list(selected_dir);
+                                new_entries
+                                    .iter()
+                                    .find(|e| e.branch.as_deref() == Some(&wt_name))
+                                    .and_then(|e| e.path.as_ref())
+                                    .map(PathBuf::from)
+                                    .filter(|p| p.is_dir())
+                                    .map_or(WorktreeResult::Cancelled, WorktreeResult::Selected)
                             }
                             _ => WorktreeResult::Cancelled,
                         }
@@ -503,8 +566,7 @@ fn phase_worktree_picker(selected_dir: &Path, is_bare: bool) -> WorktreeResult {
                     _ => WorktreeResult::Cancelled,
                 }
             } else {
-                let branch = git_branch(&id);
-                WorktreeResult::Selected(PathBuf::from(id), branch)
+                WorktreeResult::Selected(PathBuf::from(id))
             }
         }
         PickerAction::Cancelled => WorktreeResult::Cancelled,
