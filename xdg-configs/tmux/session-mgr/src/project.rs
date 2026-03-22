@@ -67,9 +67,11 @@ fn collect_dirs(filter: &str) -> Vec<PathBuf> {
     match filter {
         "home" => {
             dirs.push(h.clone());
-            let d = h.join("dotfiles");
-            if d.is_dir() {
-                dirs.push(d);
+            for name in ["dotfiles", ".claude"] {
+                let d = h.join(name);
+                if d.is_dir() {
+                    dirs.push(d);
+                }
             }
         }
         "config" => {
@@ -94,9 +96,11 @@ fn collect_dirs(filter: &str) -> Vec<PathBuf> {
         }
         _ => {
             dirs.push(h.clone());
-            let d = h.join("dotfiles");
-            if d.is_dir() {
-                dirs.push(d);
+            for name in ["dotfiles", ".claude"] {
+                let d = h.join(name);
+                if d.is_dir() {
+                    dirs.push(d);
+                }
             }
             for parent in ["src", ".config"] {
                 if let Ok(entries) = fs::read_dir(h.join(parent)) {
@@ -246,20 +250,30 @@ pub fn cmd_new_session() {
     let repo_name = if is_bare {
         selected_dir
             .file_name()
-            .map_or(String::new(), |n| n.to_string_lossy().replace(".git", ""))
+            .map_or(String::new(), |n| {
+                n.to_string_lossy()
+                    .replace(".git", "")
+                    .trim_start_matches('.')
+                    .to_string()
+            })
     } else {
         git_toplevel(final_dir.to_str().unwrap_or(""))
             .and_then(|tl| {
                 PathBuf::from(tl)
                     .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
+                    .map(|n| n.to_string_lossy().trim_start_matches('.').to_string())
             })
             .unwrap_or_default()
     };
 
     let suffix = final_dir
         .file_name()
-        .map_or(String::new(), |n| n.to_string_lossy().replace(".git", ""));
+        .map_or(String::new(), |n| {
+            n.to_string_lossy()
+                .replace(".git", "")
+                .trim_start_matches('.')
+                .to_string()
+        });
 
     let default_name = if !repo_name.is_empty() && repo_name != suffix {
         format!("{repo_name}/{suffix}")
