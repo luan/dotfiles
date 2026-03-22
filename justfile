@@ -91,7 +91,6 @@ claude-plugins:
 
     marketplaces=(
         "anthropics/claude-plugins-official"
-        "steveyegge/beads"
     )
 
     plugins=(
