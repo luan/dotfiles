@@ -17,8 +17,16 @@ const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 
 // Nerd Font group count glyphs (box-style, unselected)
 const GROUP_GLYPHS: &[char] = &[
-    '\u{F03A5}', '\u{F03A8}', '\u{F03AB}', '\u{F03B2}', '\u{F03AF}',
-    '\u{F03B4}', '\u{F03B7}', '\u{F03BA}', '\u{F03BD}', '\u{F03C0}',
+    '\u{F03A5}',
+    '\u{F03A8}',
+    '\u{F03AB}',
+    '\u{F03B2}',
+    '\u{F03AF}',
+    '\u{F03B4}',
+    '\u{F03B7}',
+    '\u{F03BA}',
+    '\u{F03BD}',
+    '\u{F03C0}',
 ];
 
 fn group_glyph(count: usize) -> char {
@@ -273,9 +281,18 @@ pub fn cmd_chooser() {
 
     let custom_keys = {
         let mut m = HashMap::new();
-        m.insert((KeyCode::Char('h'), KeyModifiers::ALT), "toggle-hidden".to_string());
-        m.insert((KeyCode::Char('j'), KeyModifiers::ALT), "move-down".to_string());
-        m.insert((KeyCode::Char('k'), KeyModifiers::ALT), "move-up".to_string());
+        m.insert(
+            (KeyCode::Char('h'), KeyModifiers::ALT),
+            "toggle-hidden".to_string(),
+        );
+        m.insert(
+            (KeyCode::Char('j'), KeyModifiers::ALT),
+            "move-down".to_string(),
+        );
+        m.insert(
+            (KeyCode::Char('k'), KeyModifiers::ALT),
+            "move-up".to_string(),
+        );
         m
     };
 
@@ -328,9 +345,7 @@ pub fn cmd_chooser() {
                                     store.save();
                                 }
                             } else {
-                                let _ = Command::new(&self_path)
-                                    .args(["move", "up", &id])
-                                    .output();
+                                let _ = Command::new(&self_path).args(["move", "up", &id]).output();
                             }
                         }
                         _ => {}

@@ -73,10 +73,7 @@ pub fn run_picker(
     refilter(&items, &mut state);
     // Restore cursor to initial_id if provided, otherwise first selectable
     if let Some(ref id) = config.initial_id {
-        let found = state
-            .filtered
-            .iter()
-            .position(|fi| items[fi.idx].id == *id);
+        let found = state.filtered.iter().position(|fi| items[fi.idx].id == *id);
         if let Some(pos) = found {
             state.selected = pos;
         } else {
