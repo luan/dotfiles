@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::prelude::*;
@@ -227,18 +228,19 @@ pub fn cmd_new_session() {
     let mut final_dir = selected_dir.clone();
 
     if has_git || is_bare {
+        let entries = list_worktrees(&selected_dir);
         if auto_worktree {
-            if let Some(wt_dir) = find_detached_worktree(&selected_dir) {
+            if let Some(wt_dir) = find_detached_worktree(&entries) {
                 final_dir = wt_dir;
             } else {
-                match phase_worktree_picker(&selected_dir) {
+                match phase_worktree_picker(&selected_dir, entries) {
                     WorktreeResult::Selected(dir) => final_dir = dir,
                     WorktreeResult::NoWorktrees => {}
                     WorktreeResult::Cancelled => return,
                 }
             }
         } else {
-            match phase_worktree_picker(&selected_dir) {
+            match phase_worktree_picker(&selected_dir, entries) {
                 WorktreeResult::Selected(dir) => final_dir = dir,
                 WorktreeResult::NoWorktrees => {}
                 WorktreeResult::Cancelled => return,
@@ -248,14 +250,12 @@ pub fn cmd_new_session() {
 
     // Compute session name
     let repo_name = if is_bare {
-        selected_dir
-            .file_name()
-            .map_or(String::new(), |n| {
-                n.to_string_lossy()
-                    .replace(".git", "")
-                    .trim_start_matches('.')
-                    .to_string()
-            })
+        selected_dir.file_name().map_or(String::new(), |n| {
+            n.to_string_lossy()
+                .replace(".git", "")
+                .trim_start_matches('.')
+                .to_string()
+        })
     } else {
         git_toplevel(final_dir.to_str().unwrap_or(""))
             .and_then(|tl| {
@@ -266,14 +266,12 @@ pub fn cmd_new_session() {
             .unwrap_or_default()
     };
 
-    let suffix = final_dir
-        .file_name()
-        .map_or(String::new(), |n| {
-            n.to_string_lossy()
-                .replace(".git", "")
-                .trim_start_matches('.')
-                .to_string()
-        });
+    let suffix = final_dir.file_name().map_or(String::new(), |n| {
+        n.to_string_lossy()
+            .replace(".git", "")
+            .trim_start_matches('.')
+            .to_string()
+    });
 
     let default_name = if !repo_name.is_empty() && repo_name != suffix {
         format!("{repo_name}/{suffix}")
@@ -433,64 +431,100 @@ enum WorktreeResult {
     Cancelled,
 }
 
-// --- wt (worktrunk) integration ---
+// --- git worktree integration ---
 
-#[derive(serde::Deserialize)]
 struct WtEntry {
+    path: String,
     branch: Option<String>,
-    path: Option<String>,
-    working_tree: Option<WtWorkingTree>,
-    worktree: Option<WtWorktreeInfo>,
+    detached: bool,
 }
 
-#[derive(serde::Deserialize)]
-struct WtWorkingTree {
-    staged: Option<bool>,
-    modified: Option<bool>,
-    untracked: Option<bool>,
+fn git_output(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    let mut child = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                let out = child.wait_with_output().ok()?;
+                return out.status.success().then_some(out.stdout);
+            }
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
+            Err(_) => return None,
+        }
+    }
 }
 
-#[derive(serde::Deserialize)]
-struct WtWorktreeInfo {
-    detached: Option<bool>,
+fn list_worktrees(dir: &Path) -> Vec<WtEntry> {
+    let Some(stdout) = git_output(dir, &["worktree", "list", "--porcelain"]) else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&stdout);
+
+    let mut entries = Vec::new();
+    let mut path: Option<String> = None;
+    let mut branch: Option<String> = None;
+    let mut detached = false;
+    let mut bare = false;
+
+    for line in text.lines() {
+        if line.is_empty() {
+            if let Some(p) = path.take() {
+                if !bare {
+                    entries.push(WtEntry {
+                        path: p,
+                        branch: branch.take(),
+                        detached,
+                    });
+                } else {
+                    branch = None;
+                }
+                detached = false;
+                bare = false;
+            }
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            path = Some(rest.to_string());
+        } else if let Some(rest) = line.strip_prefix("branch ") {
+            branch = Some(rest.strip_prefix("refs/heads/").unwrap_or(rest).to_string());
+        } else if line == "detached" {
+            detached = true;
+        } else if line == "bare" {
+            bare = true;
+        }
+    }
+    // Handle last entry (no trailing blank line)
+    if let Some(p) = path.filter(|_| !bare) {
+        entries.push(WtEntry {
+            path: p,
+            branch,
+            detached,
+        });
+    }
+    entries
 }
 
-fn wt_list(dir: &Path) -> Vec<WtEntry> {
-    Command::new("wt")
-        .args(["list", "--format=json", "-C", dir.to_str().unwrap_or(".")])
-        .output()
-        .ok()
-        .and_then(|o| serde_json::from_slice(&o.stdout).ok())
-        .unwrap_or_default()
-}
-
-fn find_detached_worktree(dir: &Path) -> Option<PathBuf> {
-    let entries = wt_list(dir);
-    let detached: Vec<&WtEntry> = entries
+fn find_detached_worktree(entries: &[WtEntry]) -> Option<PathBuf> {
+    entries
         .iter()
-        .filter(|e| e.path.is_some())
-        .filter(|e| {
-            e.worktree
-                .as_ref()
-                .is_some_and(|w| w.detached.unwrap_or(false))
-        })
-        .collect();
-
-    // Prefer clean (no staged/modified/untracked) detached worktrees
-    let clean = detached.iter().find(|e| {
-        e.working_tree.as_ref().is_some_and(|wt| {
-            !wt.staged.unwrap_or(false)
-                && !wt.modified.unwrap_or(false)
-                && !wt.untracked.unwrap_or(false)
-        })
-    });
-    let entry = clean.copied().or(detached.first().copied())?;
-    let path = PathBuf::from(entry.path.as_ref()?);
-    path.is_dir().then_some(path)
+        .find(|e| e.detached)
+        .map(|e| PathBuf::from(&e.path))
+        .filter(|p| p.is_dir())
 }
 
-fn phase_worktree_picker(selected_dir: &Path) -> WorktreeResult {
-    let entries = wt_list(selected_dir);
+fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> WorktreeResult {
     if entries.is_empty() {
         return WorktreeResult::NoWorktrees;
     }
@@ -507,17 +541,12 @@ fn phase_worktree_picker(selected_dir: &Path) -> WorktreeResult {
     });
 
     for entry in &entries {
-        let path = entry.path.as_deref().unwrap_or("");
-        let name = PathBuf::from(path)
+        let name = PathBuf::from(&entry.path)
             .file_name()
             .map_or(String::new(), |n| n.to_string_lossy().to_string());
-        let detached = entry
-            .worktree
-            .as_ref()
-            .is_some_and(|w| w.detached.unwrap_or(false));
         let branch = entry.branch.as_deref().unwrap_or("");
 
-        let display = if detached {
+        let display = if entry.detached {
             format!("{name} (detached)")
         } else if !branch.is_empty() {
             format!("{name} \u{2190} {branch}")
@@ -526,7 +555,7 @@ fn phase_worktree_picker(selected_dir: &Path) -> WorktreeResult {
         };
 
         items.push(PickerItem {
-            id: path.to_string(),
+            id: entry.path.clone(),
             display,
             style: Style::default().fg(TEXT),
             selectable: true,
@@ -564,13 +593,11 @@ fn phase_worktree_picker(selected_dir: &Path) -> WorktreeResult {
                             .output();
                         match result {
                             Ok(o) if o.status.success() => {
-                                // Find the new worktree's path via wt list
-                                let new_entries = wt_list(selected_dir);
+                                let new_entries = list_worktrees(selected_dir);
                                 new_entries
                                     .iter()
                                     .find(|e| e.branch.as_deref() == Some(&wt_name))
-                                    .and_then(|e| e.path.as_ref())
-                                    .map(PathBuf::from)
+                                    .map(|e| PathBuf::from(&e.path))
                                     .filter(|p| p.is_dir())
                                     .map_or(WorktreeResult::Cancelled, WorktreeResult::Selected)
                             }
