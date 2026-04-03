@@ -140,6 +140,14 @@ impl SessionStore {
         }
     }
 
+    /// Remove dead sessions from the store, dropping empty groups.
+    pub fn prune(&mut self, alive: &HashSet<String>) {
+        for entry in &mut self.entries {
+            entry.sessions.retain(|s| alive.contains(s));
+        }
+        self.entries.retain(|e| !e.sessions.is_empty());
+    }
+
     pub fn contains(&self, name: &str) -> bool {
         self.entries
             .iter()
@@ -275,6 +283,9 @@ pub fn compute_order(alive: &HashSet<String>, include_hidden: bool) -> Vec<Strin
     for s in alive {
         store.insert(s);
     }
+
+    // Prune dead sessions
+    store.prune(alive);
 
     store.save();
 
