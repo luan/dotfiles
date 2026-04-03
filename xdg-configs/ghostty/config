@@ -48,9 +48,9 @@ keybind = super+9=text:\x009
 keybind = super+shift+f=text:\x00F
 # session prev (super+shift+p)
 keybind = super+shift+p=csi:65~
-# swap window left/right (super+shift+</> -> prefix+</> for tmux)
-keybind = super+shift+comma=text:\x00<
-keybind = super+shift+period=text:\x00>
+# session move up/down (super+shift+</> via CSI relay)
+keybind = super+shift+comma=csi:66~
+keybind = super+shift+period=csi:67~
 # session next (super+shift+n)
 keybind = super+shift+n=csi:64~
 # Ditch session safely (super+alt+x -> prefix+X for tmux)
