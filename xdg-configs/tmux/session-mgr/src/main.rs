@@ -156,19 +156,45 @@ fn cmd_color(args: &[String]) {
     }
 }
 
+fn cmd_switch(args: &[String]) {
+    let direction = args.first().map_or("next", String::as_str);
+    let st = query_state();
+    let sessions = compute_order(&st.alive, false);
+    if sessions.is_empty() {
+        return;
+    }
+    let idx = sessions.iter().position(|s| s == &st.current);
+    let target = match (idx, direction) {
+        (Some(i), "prev") => &sessions[(i + sessions.len() - 1) % sessions.len()],
+        (Some(i), _) => &sessions[(i + 1) % sessions.len()],
+        (None, "prev") => sessions.last().unwrap(),
+        (None, _) => &sessions[0],
+    };
+    tmux_cmd(&["switch-client", "-t", target]);
+}
+
 fn cmd_move(args: &[String]) {
     let direction = args.first().map_or("", String::as_str);
+    let st = query_state();
     let current = if args.len() > 1 {
         args[1].clone()
     } else {
-        tmux_cmd(&["display-message", "-p", "#S"])
+        st.current.clone()
     };
 
     let mut store = order::SessionStore::load();
+    store.prune(&st.alive);
     if store.move_session(&current, direction) {
         store.save();
     }
-    cmd_update_with_args(&[]);
+    // Fork the status-bar refresh into background so tmux unblocks immediately
+    // (allows rapid repeated moves without losing keypresses to serialization)
+    let exe = env::current_exe().unwrap_or_else(|_| "tmux-session".into());
+    let _ = Command::new(exe)
+        .args(["update"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
 }
 
 fn main() {
@@ -179,6 +205,7 @@ fn main() {
         "order" => cmd_order(&rest),
         "list" => cmd_list(),
         "color" => cmd_color(&rest),
+        "switch" => cmd_switch(&rest),
         "move" => cmd_move(&rest),
         "chooser-list" => chooser::cmd_chooser_list(),
         "chooser" => chooser::cmd_chooser(),
