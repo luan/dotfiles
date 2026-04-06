@@ -212,6 +212,7 @@ fn main() {
         "project-list" => project::cmd_project_list(&rest),
         "toggle-favorite" => project::cmd_toggle_favorite(&rest),
         "new-session" => project::cmd_new_session(),
+        "new-worktree" => project::cmd_new_worktree(),
         "update" => cmd_update_with_args(&rest),
         _ => {
             eprintln!("Unknown: {cmd}");

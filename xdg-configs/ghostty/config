@@ -170,6 +170,8 @@ keybind = super+semicolon=csi:61~
 
 # new project session (super+n)
 keybind = super+n=csi:62~
+# new worktree in current repo (super+ctrl+n)
+keybind = super+ctrl+n=csi:68~
 keybind = super+alt+n=new_window
 # session chooser (super+p)
 keybind = super+p=csi:63~

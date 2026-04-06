@@ -561,6 +561,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
 pub struct TextInputConfig {
     pub prompt: String,
     pub initial: String,
+    pub placeholder: String,
 }
 
 pub enum TextInputAction {
@@ -585,6 +586,15 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 f.render_widget(Clear, area);
                 f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
+                // Compact box: 3 rows (top border + input + bottom border)
+                let box_height = 3u16;
+                let box_area = Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: box_height.min(area.height),
+                };
+
                 let outer_block = Block::default()
                     .borders(Borders::ALL)
                     .border_type(ratatui::widgets::BorderType::Rounded)
@@ -595,8 +605,8 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                     )))
                     .style(Style::default().bg(BASE));
 
-                let inner = outer_block.inner(area);
-                f.render_widget(outer_block, area);
+                let inner = outer_block.inner(box_area);
+                f.render_widget(outer_block, box_area);
 
                 let padded = Rect {
                     x: inner.x + 1,
@@ -605,17 +615,18 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                     height: inner.height,
                 };
 
-                let chunks =
-                    Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(padded);
-
-                let line = Line::from(Span::styled(&input, Style::default().fg(TEXT)));
+                let line = if input.is_empty() {
+                    Line::from(Span::styled(&config.placeholder, Style::default().fg(OVERLAY0)))
+                } else {
+                    Line::from(Span::styled(&input, Style::default().fg(TEXT)))
+                };
                 f.render_widget(
                     Paragraph::new(line).style(Style::default().bg(BASE)),
-                    chunks[0],
+                    padded,
                 );
 
-                let cx = chunks[0].x + cursor as u16;
-                f.set_cursor_position((cx, chunks[0].y));
+                let cx = padded.x + cursor as u16;
+                f.set_cursor_position((cx, padded.y));
             })
             .ok();
 
@@ -673,6 +684,50 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
     };
 
     terminal::disable_raw_mode().expect("disable raw mode");
+    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen).expect("leave alt screen");
+
+    result
+}
+
+/// Show a styled status message in the alternate screen while `f` runs.
+pub fn run_with_status<T, F: FnOnce() -> T>(message: &str, f: F) -> T {
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, EnterAlternateScreen).expect("enter alt screen");
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).expect("create terminal");
+
+    terminal
+        .draw(|frame| {
+            let area = frame.area();
+            frame.render_widget(Clear, area);
+            frame.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
+                .border_style(Style::default().fg(SURFACE1))
+                .style(Style::default().bg(BASE));
+
+            let inner = block.inner(area);
+            frame.render_widget(block, area);
+
+            let padded = Rect {
+                x: inner.x + 1,
+                y: inner.y,
+                width: inner.width.saturating_sub(2),
+                height: inner.height,
+            };
+
+            let line = Line::from(Span::styled(message, Style::default().fg(OVERLAY1)));
+            frame.render_widget(
+                Paragraph::new(line).style(Style::default().bg(BASE)),
+                padded,
+            );
+        })
+        .ok();
+
+    let result = f();
+
     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen).expect("leave alt screen");
 
     result

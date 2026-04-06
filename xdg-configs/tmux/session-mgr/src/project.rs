@@ -10,7 +10,7 @@ use ratatui::prelude::*;
 use crate::order::{load_lines, save_lines};
 use crate::picker::{
     PickerAction, PickerConfig, PickerItem, TextInputAction, TextInputConfig, run_picker,
-    run_text_input,
+    run_text_input, run_with_status,
 };
 use crate::tmux::{git_toplevel, home, tmux};
 
@@ -68,7 +68,7 @@ fn collect_dirs(filter: &str) -> Vec<PathBuf> {
     match filter {
         "home" => {
             dirs.push(h.clone());
-            for name in ["dotfiles", ".claude"] {
+            for name in ["dotfiles", ".claude", "blueprints"] {
                 let d = h.join(name);
                 if d.is_dir() {
                     dirs.push(d);
@@ -97,7 +97,7 @@ fn collect_dirs(filter: &str) -> Vec<PathBuf> {
         }
         _ => {
             dirs.push(h.clone());
-            for name in ["dotfiles", ".claude"] {
+            for name in ["dotfiles", ".claude", "blueprints"] {
                 let d = h.join(name);
                 if d.is_dir() {
                     dirs.push(d);
@@ -285,6 +285,7 @@ pub fn cmd_new_session() {
     let session_name = match run_text_input(TextInputConfig {
         prompt: "\u{f044}  Session".to_string(),
         initial: default_name.clone(),
+        placeholder: "session name...".to_string(),
     }) {
         TextInputAction::Confirmed(s) => {
             if s.is_empty() {
@@ -342,6 +343,122 @@ pub fn cmd_new_session() {
         "switch-client",
         "-t",
         &session_name,
+    ]);
+}
+
+pub fn cmd_new_worktree() {
+    // Get current pane path
+    let pane_path = tmux(&["display-message", "-p", "#{pane_current_path}"]);
+    if pane_path.is_empty() {
+        return;
+    }
+
+    // Find the bare repo root: git-common-dir returns the shared .git dir
+    let common_dir = Command::new("git")
+        .args(["-C", &pane_path, "rev-parse", "--git-common-dir"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    let Some(common) = common_dir else { return };
+
+    // Resolve to absolute path
+    let repo_dir = if Path::new(&common).is_absolute() {
+        PathBuf::from(&common)
+    } else {
+        PathBuf::from(&pane_path).join(&common)
+    };
+
+    // For bare repos, git-common-dir is the repo root itself.
+    // For non-bare repos, git-common-dir is ".git" — parent is the repo root.
+    let is_bare = Command::new("git")
+        .args(["-C", &pane_path, "rev-parse", "--is-bare-repository"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "true");
+
+    let selected_dir = if is_bare {
+        repo_dir
+    } else {
+        repo_dir.parent().map(Path::to_path_buf).unwrap_or(repo_dir)
+    };
+
+    let entries = list_worktrees(&selected_dir);
+    let final_dir = match phase_worktree_picker(&selected_dir, entries) {
+        WorktreeResult::Selected(dir) => dir,
+        WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
+    };
+
+    // Compute session name: repo_name is fixed prefix, suffix from worktree
+    let repo_name = if is_bare {
+        selected_dir.file_name().map_or(String::new(), |n| {
+            n.to_string_lossy()
+                .replace(".git", "")
+                .trim_start_matches('.')
+                .to_string()
+        })
+    } else {
+        selected_dir
+            .file_name()
+            .map_or(String::new(), |n| {
+                n.to_string_lossy().trim_start_matches('.').to_string()
+            })
+    };
+
+    let suffix = final_dir.file_name().map_or(String::new(), |n| {
+        n.to_string_lossy()
+            .replace(".git", "")
+            .trim_start_matches('.')
+            .to_string()
+    });
+
+    let default_suffix = if !repo_name.is_empty() && repo_name != suffix {
+        suffix
+    } else {
+        String::new()
+    };
+
+    // Session name input — only the suffix is editable, prefix is static
+    let session_name = if repo_name.is_empty() {
+        match run_text_input(TextInputConfig {
+            prompt: "\u{f044}  Session".to_string(),
+            initial: default_suffix,
+            placeholder: "session name...".to_string(),
+        }) {
+            TextInputAction::Confirmed(s) if !s.is_empty() => s,
+            _ => return,
+        }
+    } else {
+        match run_text_input(TextInputConfig {
+            prompt: format!("\u{f044}  {repo_name}/"),
+            initial: default_suffix,
+            placeholder: "branch name...".to_string(),
+        }) {
+            TextInputAction::Confirmed(s) if !s.is_empty() => format!("{repo_name}/{s}"),
+            _ => return,
+        }
+    };
+
+    // Check collision
+    if Command::new("tmux")
+        .args(["has-session", "-t", &format!("={session_name}")])
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        tmux(&["switch-client", "-t", &session_name]);
+        return;
+    }
+
+    // Create session with 3 windows
+    let dir_str = final_dir.to_str().unwrap_or(".");
+    tmux(&[
+        "new-session", "-d", "-s", &session_name, "-n", "ai", "-c", dir_str,
+        ";", "new-window", "-t", &session_name, "-n", "vi", "-c", dir_str,
+        ";", "new-window", "-t", &session_name, "-n", "sh", "-c", dir_str,
+        ";", "select-window", "-t", &format!("{session_name}:ai"),
+        ";", "switch-client", "-t", &session_name,
     ]);
 }
 
@@ -578,30 +695,41 @@ fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> Worktree
                 match run_text_input(TextInputConfig {
                     prompt: "\u{f067}  Worktree".to_string(),
                     initial: String::new(),
+                    placeholder: "branch name...".to_string(),
                 }) {
                     TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {
-                        let result = Command::new("wt")
-                            .args([
-                                "switch",
-                                "--create",
-                                &wt_name,
-                                "--no-cd",
-                                "-y",
-                                "-C",
-                                selected_dir.to_str().unwrap_or("."),
-                            ])
-                            .output();
-                        match result {
-                            Ok(o) if o.status.success() => {
-                                let new_entries = list_worktrees(selected_dir);
-                                new_entries
-                                    .iter()
-                                    .find(|e| e.branch.as_deref() == Some(&wt_name))
-                                    .map(|e| PathBuf::from(&e.path))
-                                    .filter(|p| p.is_dir())
-                                    .map_or(WorktreeResult::Cancelled, WorktreeResult::Selected)
-                            }
-                            _ => WorktreeResult::Cancelled,
+                        let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
+                        let branch = wt_name.clone();
+                        let ok = run_with_status(
+                            &format!("Creating worktree {wt_name}..."),
+                            || {
+                                Command::new("wt")
+                                    .args([
+                                        "switch",
+                                        "--create",
+                                        &branch,
+                                        "--no-cd",
+                                        "-y",
+                                        "-C",
+                                        &dir_arg,
+                                    ])
+                                    .stdin(Stdio::null())
+                                    .stdout(Stdio::null())
+                                    .stderr(Stdio::null())
+                                    .status()
+                                    .is_ok_and(|s| s.success())
+                            },
+                        );
+                        if ok {
+                            let new_entries = list_worktrees(selected_dir);
+                            new_entries
+                                .iter()
+                                .find(|e| e.branch.as_deref() == Some(&wt_name))
+                                .map(|e| PathBuf::from(&e.path))
+                                .filter(|p| p.is_dir())
+                                .map_or(WorktreeResult::Cancelled, WorktreeResult::Selected)
+                        } else {
+                            WorktreeResult::Cancelled
                         }
                     }
                     _ => WorktreeResult::Cancelled,
