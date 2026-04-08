@@ -8,7 +8,7 @@ use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::order::{compute_order, hidden_file, load_lines};
 use crate::picker::{PickerAction, PickerConfig, PickerItem, run_picker};
-use crate::tmux::{home, tmux};
+use crate::tmux::tmux;
 
 // Catppuccin Mocha colors
 const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
@@ -264,11 +264,6 @@ pub fn cmd_chooser_list() {
 }
 
 pub fn cmd_chooser() {
-    let scripts = home().join(".config/tmux/scripts");
-    let hide_script = scripts
-        .join("session-hide-toggle.sh")
-        .to_string_lossy()
-        .to_string();
     let self_bin =
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("tmux-session"));
     let self_path = self_bin.to_string_lossy().to_string();
@@ -328,7 +323,7 @@ pub fn cmd_chooser() {
 
                     match action_name.as_str() {
                         "toggle-hidden" if !is_group => {
-                            let _ = Command::new("bash").args([&hide_script, &id]).output();
+                            let _ = Command::new(&self_path).args(["hide-toggle", &id]).output();
                         }
                         "move-down" => {
                             if is_group {
