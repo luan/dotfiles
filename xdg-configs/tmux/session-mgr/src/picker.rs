@@ -616,7 +616,10 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 };
 
                 let line = if input.is_empty() {
-                    Line::from(Span::styled(&config.placeholder, Style::default().fg(OVERLAY0)))
+                    Line::from(Span::styled(
+                        &config.placeholder,
+                        Style::default().fg(OVERLAY0),
+                    ))
                 } else {
                     Line::from(Span::styled(&input, Style::default().fg(TEXT)))
                 };
@@ -679,6 +682,134 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 input.clear();
                 cursor = 0;
             }
+            _ => {}
+        }
+    };
+
+    terminal::disable_raw_mode().expect("disable raw mode");
+    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen).expect("leave alt screen");
+
+    result
+}
+
+// ── Confirm dialog ──────────────────────────────────────────────────
+
+pub struct ConfirmConfig {
+    /// Lines to display above the prompt (checklist items, warnings, etc.)
+    pub body: Vec<ConfirmLine>,
+    /// The question to ask (e.g., "Remove worktree and kill session?")
+    pub prompt: String,
+}
+
+pub enum ConfirmLine {
+    Ok(String),
+    Warn(String),
+    Error(String),
+    Info(String),
+}
+
+/// Render a confirmation dialog with body lines and a y/n prompt.
+/// Returns `true` if the user pressed Enter/y, `false` on Esc/n.
+pub fn run_confirm(config: ConfirmConfig) -> bool {
+    terminal::enable_raw_mode().expect("enable raw mode");
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, EnterAlternateScreen).expect("enter alt screen");
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).expect("create terminal");
+
+    let result = loop {
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                f.render_widget(Clear, area);
+                f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+
+                // body lines + blank + prompt + hint + border (2)
+                let box_height = (config.body.len() as u16 + 5).min(area.height);
+                let box_area = Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: box_height,
+                };
+
+                let outer_block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .border_style(Style::default().fg(SURFACE1))
+                    .style(Style::default().bg(BASE));
+
+                let inner = outer_block.inner(box_area);
+                f.render_widget(outer_block, box_area);
+
+                let padded = Rect {
+                    x: inner.x + 1,
+                    y: inner.y,
+                    width: inner.width.saturating_sub(2),
+                    height: inner.height,
+                };
+
+                let green = Color::Rgb(0xa6, 0xe3, 0xa1);
+                let yellow = Color::Rgb(0xf9, 0xe2, 0xaf);
+                let red = Color::Rgb(0xf3, 0x8b, 0xa8);
+                let overlay = OVERLAY1;
+
+                let mut lines: Vec<Line> = config
+                    .body
+                    .iter()
+                    .map(|item| match item {
+                        ConfirmLine::Ok(msg) => Line::from(vec![
+                            Span::styled("✓ ", Style::default().fg(green)),
+                            Span::styled(msg.as_str(), Style::default().fg(TEXT)),
+                        ]),
+                        ConfirmLine::Warn(msg) => Line::from(vec![
+                            Span::styled("! ", Style::default().fg(yellow)),
+                            Span::styled(msg.as_str(), Style::default().fg(yellow)),
+                        ]),
+                        ConfirmLine::Error(msg) => Line::from(vec![
+                            Span::styled("✗ ", Style::default().fg(red)),
+                            Span::styled(msg.as_str(), Style::default().fg(red)),
+                        ]),
+                        ConfirmLine::Info(msg) => Line::from(vec![
+                            Span::styled("  ", Style::default()),
+                            Span::styled(msg.as_str(), Style::default().fg(overlay)),
+                        ]),
+                    })
+                    .collect();
+
+                lines.push(Line::default());
+                lines.push(Line::from(Span::styled(
+                    &config.prompt,
+                    Style::default().fg(YELLOW).bold(),
+                )));
+                lines.push(Line::from(Span::styled(
+                    "enter/esc",
+                    Style::default().fg(OVERLAY0),
+                )));
+
+                f.render_widget(
+                    Paragraph::new(lines)
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .style(Style::default().bg(BASE)),
+                    padded,
+                );
+            })
+            .ok();
+
+        let Ok(ev) = event::read() else {
+            continue;
+        };
+        let Event::Key(key) = ev else {
+            continue;
+        };
+        if key.kind != KeyEventKind::Press {
+            continue;
+        }
+        match (key.code, key.modifiers) {
+            (KeyCode::Enter, _) | (KeyCode::Char('y'), _) => break true,
+            (KeyCode::Esc, _)
+            | (KeyCode::Char('n'), _)
+            | (KeyCode::Char('c'), KeyModifiers::CONTROL) => break false,
             _ => {}
         }
     };

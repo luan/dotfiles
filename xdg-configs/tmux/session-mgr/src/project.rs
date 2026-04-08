@@ -9,8 +9,8 @@ use ratatui::prelude::*;
 
 use crate::order::{load_lines, save_lines};
 use crate::picker::{
-    PickerAction, PickerConfig, PickerItem, TextInputAction, TextInputConfig, run_picker,
-    run_text_input, run_with_status,
+    ConfirmConfig, ConfirmLine, PickerAction, PickerConfig, PickerItem, TextInputAction,
+    TextInputConfig, run_confirm, run_picker, run_text_input, run_with_status,
 };
 use crate::tmux::{git_toplevel, home, tmux};
 
@@ -234,14 +234,14 @@ pub fn cmd_new_session() {
                 final_dir = wt_dir;
             } else {
                 match phase_worktree_picker(&selected_dir, entries) {
-                    WorktreeResult::Selected(dir) => final_dir = dir,
+                    WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
                     WorktreeResult::NoWorktrees => {}
                     WorktreeResult::Cancelled => return,
                 }
             }
         } else {
             match phase_worktree_picker(&selected_dir, entries) {
-                WorktreeResult::Selected(dir) => final_dir = dir,
+                WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
                 WorktreeResult::NoWorktrees => {}
                 WorktreeResult::Cancelled => return,
             }
@@ -386,39 +386,23 @@ pub fn cmd_new_worktree() {
     };
 
     let entries = list_worktrees(&selected_dir);
-    let final_dir = match phase_worktree_picker(&selected_dir, entries) {
-        WorktreeResult::Selected(dir) => dir,
+    let (final_dir, wt_branch) = match phase_worktree_picker(&selected_dir, entries) {
+        WorktreeResult::Selected { path, branch } => (path, branch),
         WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
     };
 
-    // Compute session name: repo_name is fixed prefix, suffix from worktree
-    let repo_name = if is_bare {
-        selected_dir.file_name().map_or(String::new(), |n| {
-            n.to_string_lossy()
-                .replace(".git", "")
-                .trim_start_matches('.')
-                .to_string()
-        })
-    } else {
-        selected_dir
-            .file_name()
-            .map_or(String::new(), |n| {
-                n.to_string_lossy().trim_start_matches('.').to_string()
-            })
-    };
-
-    let suffix = final_dir.file_name().map_or(String::new(), |n| {
+    // Compute session name: repo_name is fixed prefix, suffix from branch
+    let repo_name = selected_dir.file_name().map_or(String::new(), |n| {
         n.to_string_lossy()
             .replace(".git", "")
             .trim_start_matches('.')
             .to_string()
     });
 
-    let default_suffix = if !repo_name.is_empty() && repo_name != suffix {
-        suffix
-    } else {
-        String::new()
-    };
+    // Prefer branch name for suffix (avoids path-based names like "dotfiles.idk")
+    let default_suffix = wt_branch
+        .filter(|b| !b.is_empty() && *b != repo_name)
+        .unwrap_or_default();
 
     // Session name input — only the suffix is editable, prefix is static
     let session_name = if repo_name.is_empty() {
@@ -451,16 +435,260 @@ pub fn cmd_new_worktree() {
         return;
     }
 
-    // Create session with 3 windows
+    // Create session with 3 windows: ai, vi, sh
+    // Use "=" prefix on -t to force exact session name match — without it,
+    // tmux parses "/" in the name as a session/window separator.
     let dir_str = final_dir.to_str().unwrap_or(".");
+    let exact = format!("={session_name}");
     tmux(&[
-        "new-session", "-d", "-s", &session_name, "-n", "ai", "-c", dir_str,
-        ";", "new-window", "-t", &session_name, "-n", "vi", "-c", dir_str,
-        ";", "new-window", "-t", &session_name, "-n", "sh", "-c", dir_str,
-        ";", "select-window", "-t", &format!("{session_name}:ai"),
-        ";", "switch-client", "-t", &session_name,
+        "new-session",
+        "-d",
+        "-s",
+        &session_name,
+        "-n",
+        "ai",
+        "-c",
+        dir_str,
+        ";",
+        "new-window",
+        "-t",
+        &exact,
+        "-n",
+        "vi",
+        "-c",
+        dir_str,
+        ";",
+        "new-window",
+        "-t",
+        &exact,
+        "-n",
+        "sh",
+        "-c",
+        dir_str,
+        ";",
+        "select-window",
+        "-t",
+        &format!("={session_name}:ai"),
+        ";",
+        "switch-client",
+        "-t",
+        &exact,
     ]);
 }
+
+// ── Ditch session ───────────────────────────────────────────────────
+
+fn git_str(dir: &Path, args: &[&str]) -> Option<String> {
+    Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+fn git_ok(dir: &Path, args: &[&str]) -> bool {
+    Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+pub fn cmd_ditch() {
+    let session = tmux(&["display-message", "-p", "#S"]);
+    if session.is_empty() {
+        return;
+    }
+
+    let mut body: Vec<ConfirmLine> = Vec::new();
+
+    // All pane dirs must be the same
+    let raw_dirs = tmux(&[
+        "list-panes",
+        "-s",
+        "-t",
+        &session,
+        "-F",
+        "#{pane_current_path}",
+    ]);
+    let dirs: Vec<&str> = raw_dirs
+        .lines()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    if dirs.len() != 1 {
+        body.push(ConfirmLine::Error(
+            "Windows are in different directories".into(),
+        ));
+        for d in &dirs {
+            body.push(ConfirmLine::Info(
+                d.strip_prefix(&home().to_string_lossy().to_string())
+                    .map(|rest| format!("~{rest}"))
+                    .unwrap_or_else(|| d.to_string()),
+            ));
+        }
+        run_confirm(ConfirmConfig {
+            body,
+            prompt: "Cannot ditch — press any key".into(),
+        });
+        return;
+    }
+
+    let dir = PathBuf::from(dirs[0]);
+    let home_str = home().to_string_lossy().to_string();
+    let short_dir = dir
+        .to_string_lossy()
+        .strip_prefix(&home_str)
+        .map(|rest| format!("~{rest}"))
+        .unwrap_or_else(|| dir.to_string_lossy().to_string());
+    body.push(ConfirmLine::Ok(format!("All windows in: {short_dir}")));
+
+    // Must be a git repo
+    if !git_ok(&dir, &["rev-parse", "--git-dir"]) {
+        body.push(ConfirmLine::Error("Not a git repository".into()));
+        run_confirm(ConfirmConfig {
+            body,
+            prompt: "Cannot ditch — press any key".into(),
+        });
+        return;
+    }
+    body.push(ConfirmLine::Ok("Git repository".into()));
+
+    // Check uncommitted changes
+    let has_staged = !git_ok(&dir, &["diff", "--cached", "--quiet"]);
+    let has_unstaged = !git_ok(&dir, &["diff", "--quiet", "HEAD"]);
+    if has_staged || has_unstaged {
+        body.push(ConfirmLine::Error("Uncommitted changes".into()));
+        if let Some(status) = git_str(&dir, &["status", "--short"]) {
+            for line in status.lines().take(5) {
+                body.push(ConfirmLine::Info(line.to_string()));
+            }
+        }
+        run_confirm(ConfirmConfig {
+            body,
+            prompt: "Cannot ditch — press any key".into(),
+        });
+        return;
+    }
+    // Warn about untracked files (non-blocking)
+    if let Some(untracked) =
+        git_str(&dir, &["ls-files", "--others", "--exclude-standard"]).filter(|s| !s.is_empty())
+    {
+        body.push(ConfirmLine::Warn("Untracked files (will be kept)".into()));
+        for line in untracked.lines().take(5) {
+            body.push(ConfirmLine::Info(line.to_string()));
+        }
+    }
+
+    body.push(ConfirmLine::Ok("No uncommitted changes".into()));
+
+    // Check unpushed commits
+    let branch = git_str(&dir, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+    if branch != "HEAD"
+        && let Some(upstream) = git_str(&dir, &["rev-parse", "--abbrev-ref", "@{upstream}"])
+        && let Some(unpushed) = git_str(&dir, &["log", "--oneline", &format!("{upstream}..HEAD")])
+        && !unpushed.is_empty()
+    {
+        body.push(ConfirmLine::Error(format!("Unpushed commits on {branch}")));
+        for line in unpushed.lines().take(5) {
+            body.push(ConfirmLine::Info(line.to_string()));
+        }
+        run_confirm(ConfirmConfig {
+            body,
+            prompt: "Cannot ditch — press any key".into(),
+        });
+        return;
+    }
+    body.push(ConfirmLine::Ok("No unpushed changes".into()));
+
+    // Detect worktree
+    let common_dir = git_str(&dir, &["rev-parse", "--git-common-dir"]);
+    let is_worktree = common_dir
+        .as_deref()
+        .is_some_and(|c| c != ".git" && c != format!("{}/.git", dir.display()));
+
+    if is_worktree {
+        let is_bare =
+            git_str(&dir, &["rev-parse", "--is-bare-repository"]).as_deref() == Some("true");
+
+        // Detect default branch
+        let default_branch = git_str(&dir, &["symbolic-ref", "refs/remotes/origin/HEAD"])
+            .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(String::from))
+            .unwrap_or_else(|| "main".into());
+
+        // Check if branch is merged / adds nothing
+        let branch_merged = branch != "HEAD"
+            && branch != default_branch
+            && git_ok(
+                &dir,
+                &["diff", "--quiet", &format!("{default_branch}...HEAD")],
+            );
+
+        if branch_merged {
+            body.push(ConfirmLine::Ok(format!(
+                "Branch adds nothing over {default_branch} — safe to remove"
+            )));
+            if !run_confirm(ConfirmConfig {
+                body,
+                prompt: format!("Remove worktree '{branch}' and kill session '{session}'?"),
+            }) {
+                return;
+            }
+            // wt remove handles worktree + branch cleanup
+            let _ = Command::new("wt")
+                .args([
+                    "remove",
+                    &branch,
+                    "-y",
+                    "--force",
+                    "--foreground",
+                    "-C",
+                    dir.to_str().unwrap_or("."),
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        } else {
+            let skip_detach = !is_bare && branch == "main";
+            if skip_detach {
+                if !run_confirm(ConfirmConfig {
+                    body,
+                    prompt: format!("Kill session '{session}'?"),
+                }) {
+                    return;
+                }
+            } else {
+                if !run_confirm(ConfirmConfig {
+                    body,
+                    prompt: format!("Detach HEAD and kill session '{session}'?"),
+                }) {
+                    return;
+                }
+                let _ = Command::new("git")
+                    .args(["-C", dir.to_str().unwrap_or("."), "checkout", "--detach"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
+    } else if !run_confirm(ConfirmConfig {
+        body,
+        prompt: format!("Kill session '{session}'?"),
+    }) {
+        return;
+    }
+
+    tmux(&["kill-session", "-t", &format!("={session}")]);
+}
+
+// ── Directory picker ────────────────────────────────────────────────
 
 fn phase_directory_picker() -> Option<DirectoryPickerResult> {
     let self_bin =
@@ -543,7 +771,10 @@ enum DirectoryPickerResult {
 }
 
 enum WorktreeResult {
-    Selected(PathBuf),
+    Selected {
+        path: PathBuf,
+        branch: Option<String>,
+    },
     NoWorktrees,
     Cancelled,
 }
@@ -700,42 +931,74 @@ fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> Worktree
                     TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {
                         let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
                         let branch = wt_name.clone();
-                        let ok = run_with_status(
-                            &format!("Creating worktree {wt_name}..."),
-                            || {
-                                Command::new("wt")
+                        let result: Result<(), String> =
+                            run_with_status(&format!("Creating worktree {wt_name}..."), || {
+                                let output = Command::new("wt")
                                     .args([
-                                        "switch",
-                                        "--create",
-                                        &branch,
-                                        "--no-cd",
-                                        "-y",
-                                        "-C",
+                                        "switch", "--create", &branch, "--no-cd", "-y", "-C",
                                         &dir_arg,
                                     ])
                                     .stdin(Stdio::null())
                                     .stdout(Stdio::null())
-                                    .stderr(Stdio::null())
-                                    .status()
-                                    .is_ok_and(|s| s.success())
-                            },
-                        );
-                        if ok {
-                            let new_entries = list_worktrees(selected_dir);
-                            new_entries
-                                .iter()
-                                .find(|e| e.branch.as_deref() == Some(&wt_name))
-                                .map(|e| PathBuf::from(&e.path))
-                                .filter(|p| p.is_dir())
-                                .map_or(WorktreeResult::Cancelled, WorktreeResult::Selected)
-                        } else {
-                            WorktreeResult::Cancelled
+                                    .output();
+                                match output {
+                                    Ok(o) if o.status.success() => Ok(()),
+                                    Ok(o) => {
+                                        let msg =
+                                            String::from_utf8_lossy(&o.stderr).trim().to_string();
+                                        Err(if msg.is_empty() {
+                                            format!("wt exited with {}", o.status)
+                                        } else {
+                                            msg
+                                        })
+                                    }
+                                    Err(e) => Err(format!("failed to run wt: {e}")),
+                                }
+                            });
+                        match result {
+                            Ok(()) => {
+                                let new_entries = list_worktrees(selected_dir);
+                                // Match by branch name, fall back to directory name
+                                let found = new_entries
+                                    .iter()
+                                    .find(|e| e.branch.as_deref() == Some(&wt_name))
+                                    .or_else(|| {
+                                        new_entries.iter().find(|e| {
+                                            PathBuf::from(&e.path)
+                                                .file_name()
+                                                .is_some_and(|n| n.to_string_lossy() == wt_name)
+                                        })
+                                    });
+                                match found {
+                                    Some(e) if PathBuf::from(&e.path).is_dir() => {
+                                        WorktreeResult::Selected {
+                                            path: PathBuf::from(&e.path),
+                                            branch: e.branch.clone(),
+                                        }
+                                    }
+                                    _ => WorktreeResult::Cancelled,
+                                }
+                            }
+                            Err(msg) => {
+                                run_with_status(&format!("Error: {msg}"), || {
+                                    std::thread::sleep(Duration::from_secs(3));
+                                });
+                                WorktreeResult::Cancelled
+                            }
                         }
                     }
                     _ => WorktreeResult::Cancelled,
                 }
             } else {
-                WorktreeResult::Selected(PathBuf::from(id))
+                // Look up the branch from the original entries
+                let branch = entries
+                    .iter()
+                    .find(|e| e.path == id)
+                    .and_then(|e| e.branch.clone());
+                WorktreeResult::Selected {
+                    path: PathBuf::from(id),
+                    branch,
+                }
             }
         }
         PickerAction::Cancelled => WorktreeResult::Cancelled,

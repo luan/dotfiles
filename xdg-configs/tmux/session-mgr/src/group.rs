@@ -1,9 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::color::is_static;
-
 pub fn session_group(name: &str) -> &str {
-    name.split_once('/').map_or("", |(g, _)| g)
+    name.split_once('/').map_or(name, |(g, _)| g)
 }
 
 pub fn session_suffix(name: &str) -> &str {
@@ -24,11 +22,9 @@ impl GroupMeta {
         let mut seen = HashSet::new();
         for s in sessions {
             let g = session_group(s);
-            if !g.is_empty() {
-                *counts.entry(g.to_string()).or_default() += 1;
-                if seen.insert(g.to_string()) {
-                    order.push(g.to_string());
-                }
+            *counts.entry(g.to_string()).or_default() += 1;
+            if seen.insert(g.to_string()) {
+                order.push(g.to_string());
             }
         }
         let group_idx: HashMap<String, usize> = order
@@ -37,15 +33,11 @@ impl GroupMeta {
             .map(|(i, g)| (g.clone(), i))
             .collect();
         let dg = order.len();
-        let dorph = sessions
-            .iter()
-            .filter(|s| !s.contains('/') && !is_static(s))
-            .count();
         Self {
             counts,
             group_idx,
             dynamic_groups: dg,
-            dynamic_total: dg + dorph,
+            dynamic_total: dg,
         }
     }
 }

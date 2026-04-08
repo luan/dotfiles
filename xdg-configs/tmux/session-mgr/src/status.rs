@@ -151,12 +151,11 @@ pub fn render_status(
 
         colors.push((name.clone(), color.clone()));
         let a = attn.get(name.as_str()).map_or("", String::as_str);
-        let display = if !group.is_empty() && gtotal == 1 {
+        let display = if gtotal == 1 {
             group
-        } else if !group.is_empty() {
-            session_suffix(name)
         } else {
-            name.as_str()
+            let s = session_suffix(name);
+            if s.is_empty() { group } else { s }
         };
         let cur_group_key = if group.is_empty() {
             format!("__orphan__{name}")

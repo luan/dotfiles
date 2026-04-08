@@ -62,8 +62,9 @@ impl SessionStore {
     pub fn load() -> Self {
         let path = order_file();
         if let Ok(data) = fs::read_to_string(&path)
-            && let Ok(store) = serde_json::from_str::<SessionStore>(&data)
+            && let Ok(mut store) = serde_json::from_str::<SessionStore>(&data)
         {
+            store.normalize_groups();
             return store;
         }
         // Migration: read legacy flat file if JSON doesn't exist
@@ -93,20 +94,7 @@ impl SessionStore {
             if !seen.insert(name.clone()) {
                 continue;
             }
-            let group = session_group(name);
-            if group.is_empty() {
-                store.entries.push(SessionGroup {
-                    name: String::new(),
-                    sessions: vec![name.clone()],
-                });
-            } else if let Some(entry) = store.entries.iter_mut().find(|e| e.name == group) {
-                entry.sessions.push(name.clone());
-            } else {
-                store.entries.push(SessionGroup {
-                    name: group.to_string(),
-                    sessions: vec![name.clone()],
-                });
-            }
+            store.insert(name);
         }
         store
     }
@@ -119,18 +107,21 @@ impl SessionStore {
             .collect()
     }
 
-    /// Insert a new session into its group (at end) or as a new orphan/group at end.
+    /// Insert a new session into its group (at end) or as a new group at end.
+    /// If the group doesn't exist yet but a session with the group's name exists
+    /// as a standalone entry, upgrade that entry into the group.
     pub fn insert(&mut self, name: &str) {
         if self.contains(name) {
             return;
         }
         let group = session_group(name);
-        if group.is_empty() {
-            self.entries.push(SessionGroup {
-                name: String::new(),
-                sessions: vec![name.to_string()],
-            });
-        } else if let Some(entry) = self.entries.iter_mut().find(|e| e.name == group) {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.name == group) {
+            entry.sessions.push(name.to_string());
+        } else if let Some(entry) = self.entries.iter_mut().find(|e| {
+            e.sessions.len() == 1 && e.sessions[0] == group
+        }) {
+            // Upgrade standalone session into a named group
+            entry.name = group.to_string();
             entry.sessions.push(name.to_string());
         } else {
             self.entries.push(SessionGroup {
@@ -138,6 +129,28 @@ impl SessionStore {
                 sessions: vec![name.to_string()],
             });
         }
+    }
+
+    /// Merge entries that belong to the same group.
+    /// Handles legacy stores where standalone sessions had empty group names.
+    fn normalize_groups(&mut self) {
+        let mut merged = Vec::<SessionGroup>::new();
+        for entry in self.entries.drain(..) {
+            for session in &entry.sessions {
+                let group = session_group(session);
+                if let Some(target) = merged.iter_mut().find(|e| e.name == group) {
+                    if !target.sessions.contains(session) {
+                        target.sessions.push(session.clone());
+                    }
+                } else {
+                    merged.push(SessionGroup {
+                        name: group.to_string(),
+                        sessions: vec![session.clone()],
+                    });
+                }
+            }
+        }
+        self.entries = merged;
     }
 
     /// Remove dead sessions from the store, dropping empty groups.
