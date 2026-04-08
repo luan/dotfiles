@@ -286,6 +286,7 @@ pub fn cmd_new_session() {
         prompt: "\u{f044}  Session".to_string(),
         initial: default_name.clone(),
         placeholder: "session name...".to_string(),
+        prefix: String::new(),
     }) {
         TextInputAction::Confirmed(s) => {
             if s.is_empty() {
@@ -410,6 +411,7 @@ pub fn cmd_new_worktree() {
             prompt: "\u{f044}  Session".to_string(),
             initial: default_suffix,
             placeholder: "session name...".to_string(),
+            prefix: String::new(),
         }) {
             TextInputAction::Confirmed(s) if !s.is_empty() => s,
             _ => return,
@@ -419,6 +421,7 @@ pub fn cmd_new_worktree() {
             prompt: format!("\u{f044}  {repo_name}/"),
             initial: default_suffix,
             placeholder: "branch name...".to_string(),
+            prefix: String::new(),
         }) {
             TextInputAction::Confirmed(s) if !s.is_empty() => format!("{repo_name}/{s}"),
             _ => return,
@@ -571,8 +574,8 @@ pub fn cmd_ditch() {
             }
         }
     } else {
-        if let Some(untracked) = git_str(&dir, &["ls-files", "--others", "--exclude-standard"])
-            .filter(|s| !s.is_empty())
+        if let Some(untracked) =
+            git_str(&dir, &["ls-files", "--others", "--exclude-standard"]).filter(|s| !s.is_empty())
         {
             body.push(ConfirmLine::Warn("Untracked files (will be kept)".into()));
             for line in untracked.lines().take(5) {
@@ -586,9 +589,7 @@ pub fn cmd_ditch() {
 
     let has_unpushed = branch != "HEAD"
         && git_str(&dir, &["rev-parse", "--abbrev-ref", "@{upstream}"])
-            .and_then(|upstream| {
-                git_str(&dir, &["log", "--oneline", &format!("{upstream}..HEAD")])
-            })
+            .and_then(|upstream| git_str(&dir, &["log", "--oneline", &format!("{upstream}..HEAD")]))
             .is_some_and(|log| !log.is_empty());
     if has_unpushed {
         body.push(ConfirmLine::Error(format!("Unpushed commits on {branch}")));
@@ -1044,6 +1045,7 @@ fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> Worktree
                     prompt: "\u{f067}  Worktree".to_string(),
                     initial: String::new(),
                     placeholder: "branch name...".to_string(),
+                    prefix: String::new(),
                 }) {
                     TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {
                         let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();

@@ -562,6 +562,9 @@ pub struct TextInputConfig {
     pub prompt: String,
     pub initial: String,
     pub placeholder: String,
+    /// Fixed prefix displayed before the editable text (e.g., "repo/").
+    /// The user cannot edit or delete this prefix.
+    pub prefix: String,
 }
 
 pub enum TextInputAction {
@@ -615,20 +618,24 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                     height: inner.height,
                 };
 
+                let prefix_len = config.prefix.chars().count() as u16;
                 let line = if input.is_empty() {
-                    Line::from(Span::styled(
-                        &config.placeholder,
-                        Style::default().fg(OVERLAY0),
-                    ))
+                    Line::from(vec![
+                        Span::styled(&config.prefix, Style::default().fg(OVERLAY1)),
+                        Span::styled(&config.placeholder, Style::default().fg(OVERLAY0)),
+                    ])
                 } else {
-                    Line::from(Span::styled(&input, Style::default().fg(TEXT)))
+                    Line::from(vec![
+                        Span::styled(&config.prefix, Style::default().fg(OVERLAY1)),
+                        Span::styled(&input, Style::default().fg(TEXT)),
+                    ])
                 };
                 f.render_widget(
                     Paragraph::new(line).style(Style::default().bg(BASE)),
                     padded,
                 );
 
-                let cx = padded.x + cursor as u16;
+                let cx = padded.x + prefix_len + cursor as u16;
                 f.set_cursor_position((cx, padded.y));
             })
             .ok();

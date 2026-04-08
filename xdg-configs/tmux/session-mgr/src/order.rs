@@ -117,9 +117,11 @@ impl SessionStore {
         let group = session_group(name);
         if let Some(entry) = self.entries.iter_mut().find(|e| e.name == group) {
             entry.sessions.push(name.to_string());
-        } else if let Some(entry) = self.entries.iter_mut().find(|e| {
-            e.sessions.len() == 1 && e.sessions[0] == group
-        }) {
+        } else if let Some(entry) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.sessions.len() == 1 && e.sessions[0] == group)
+        {
             // Upgrade standalone session into a named group
             entry.name = group.to_string();
             entry.sessions.push(name.to_string());
@@ -270,7 +272,6 @@ impl SessionStore {
     }
 
     /// Rename a session in-place (preserves position).
-    #[allow(dead_code)]
     pub fn rename(&mut self, old: &str, new: &str) {
         for entry in &mut self.entries {
             for s in &mut entry.sessions {

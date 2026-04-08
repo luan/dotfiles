@@ -13,7 +13,8 @@ mod tmux;
 
 use color::compute_color;
 use group::GroupMeta;
-use order::compute_order;
+use order::{SessionStore, compute_order};
+use picker::{TextInputAction, TextInputConfig, run_text_input};
 use status::render_status;
 use tmux::{query_state, tmux as tmux_cmd};
 
@@ -197,6 +198,97 @@ fn cmd_move(args: &[String]) {
         .spawn();
 }
 
+fn cmd_rename() {
+    let old_name = tmux_cmd(&["display-message", "-p", "#S"]);
+
+    // Split into fixed prefix (repo/) and editable suffix
+    let (prefix, suffix) = if let Some(slash) = old_name.find('/') {
+        (
+            format!("{}/", &old_name[..slash]),
+            old_name[slash + 1..].to_string(),
+        )
+    } else {
+        (String::new(), old_name.clone())
+    };
+
+    let new_suffix = match run_text_input(TextInputConfig {
+        prompt: "\u{f044}  Rename".to_string(),
+        initial: suffix.clone(),
+        placeholder: "session name...".to_string(),
+        prefix: prefix.clone(),
+    }) {
+        TextInputAction::Confirmed(s) => s.trim().to_string(),
+        TextInputAction::Cancelled => return,
+    };
+
+    if new_suffix.is_empty() {
+        return;
+    }
+
+    let new_name = format!("{prefix}{new_suffix}");
+    if new_name == old_name {
+        return;
+    }
+
+    // Check for collision
+    if Command::new("tmux")
+        .args(["has-session", "-t", &format!("={new_name}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        eprintln!("Session '{new_name}' already exists");
+        return;
+    }
+
+    tmux_cmd(&["rename-session", "-t", &format!("={old_name}"), &new_name]);
+
+    // Update order store
+    let mut store = SessionStore::load();
+    store.rename(&old_name, &new_name);
+    store.save();
+}
+
+fn cmd_select(args: &[String]) {
+    let index: usize = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+    if index == 0 {
+        return;
+    }
+    let st = query_state();
+    let sessions = compute_order(&st.alive, false);
+    if let Some(target) = sessions.get(index - 1) {
+        tmux_cmd(&["switch-client", "-t", target]);
+    }
+}
+
+fn cmd_attention() {
+    let st = query_state();
+    if let Some(target) = st
+        .attn
+        .iter()
+        .find(|(_, v)| *v == "1")
+        .map(|(k, _)| k.as_str())
+    {
+        tmux_cmd(&["switch-client", "-t", target]);
+    }
+}
+
+fn cmd_hide_toggle(args: &[String]) {
+    let session = match args.first() {
+        Some(s) if !s.is_empty() => s.clone(),
+        _ => return,
+    };
+    let path = order::hidden_file();
+    let mut lines = order::load_lines(&path);
+    if let Some(pos) = lines.iter().position(|l| l == &session) {
+        lines.remove(pos);
+    } else {
+        lines.push(session);
+    }
+    order::save_lines(&path, &lines);
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let cmd = args.get(1).map_or("list", String::as_str);
@@ -214,6 +306,10 @@ fn main() {
         "new-session" => project::cmd_new_session(),
         "new-worktree" => project::cmd_new_worktree(),
         "ditch" => project::cmd_ditch(),
+        "rename" => cmd_rename(),
+        "select" => cmd_select(&rest),
+        "attention" => cmd_attention(),
+        "hide-toggle" => cmd_hide_toggle(&rest),
         "update" => cmd_update_with_args(&rest),
         _ => {
             eprintln!("Unknown: {cmd}");
