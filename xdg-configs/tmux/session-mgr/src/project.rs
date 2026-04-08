@@ -528,85 +528,73 @@ pub fn cmd_ditch() {
             "Windows are in different directories".into(),
         ));
         for d in &dirs {
-            body.push(ConfirmLine::Info(
-                d.strip_prefix(&home().to_string_lossy().to_string())
-                    .map(|rest| format!("~{rest}"))
-                    .unwrap_or_else(|| d.to_string()),
-            ));
+            body.push(ConfirmLine::Info(shorten_home(d)));
         }
-        run_confirm(ConfirmConfig {
+        // Only option: kill session (no git ops possible)
+        if run_confirm(ConfirmConfig {
             body,
-            prompt: "Cannot ditch — press any key".into(),
-        });
+            prompt: format!("Kill session '{session}' anyway?"),
+        }) {
+            tmux(&["kill-session", "-t", &format!("={session}")]);
+        }
         return;
     }
 
     let dir = PathBuf::from(dirs[0]);
-    let home_str = home().to_string_lossy().to_string();
-    let short_dir = dir
-        .to_string_lossy()
-        .strip_prefix(&home_str)
-        .map(|rest| format!("~{rest}"))
-        .unwrap_or_else(|| dir.to_string_lossy().to_string());
-    body.push(ConfirmLine::Ok(format!("All windows in: {short_dir}")));
+    body.push(ConfirmLine::Ok(format!(
+        "All windows in: {}",
+        shorten_home(&dir.to_string_lossy())
+    )));
 
-    // Must be a git repo
-    if !git_ok(&dir, &["rev-parse", "--git-dir"]) {
-        body.push(ConfirmLine::Error("Not a git repository".into()));
-        run_confirm(ConfirmConfig {
+    // Not a git repo — just offer kill
+    let is_git = git_ok(&dir, &["rev-parse", "--git-dir"]);
+    if !is_git {
+        body.push(ConfirmLine::Warn("Not a git repository".into()));
+        if run_confirm(ConfirmConfig {
             body,
-            prompt: "Cannot ditch — press any key".into(),
-        });
+            prompt: format!("Kill session '{session}'?"),
+        }) {
+            tmux(&["kill-session", "-t", &format!("={session}")]);
+        }
         return;
     }
     body.push(ConfirmLine::Ok("Git repository".into()));
 
-    // Check uncommitted changes
-    let has_staged = !git_ok(&dir, &["diff", "--cached", "--quiet"]);
-    let has_unstaged = !git_ok(&dir, &["diff", "--quiet", "HEAD"]);
-    if has_staged || has_unstaged {
+    // Gather state — all informational, never blocking
+    let dirty = !git_ok(&dir, &["diff", "--cached", "--quiet"])
+        || !git_ok(&dir, &["diff", "--quiet", "HEAD"]);
+    if dirty {
         body.push(ConfirmLine::Error("Uncommitted changes".into()));
         if let Some(status) = git_str(&dir, &["status", "--short"]) {
             for line in status.lines().take(5) {
                 body.push(ConfirmLine::Info(line.to_string()));
             }
         }
-        run_confirm(ConfirmConfig {
-            body,
-            prompt: "Cannot ditch — press any key".into(),
-        });
-        return;
-    }
-    // Warn about untracked files (non-blocking)
-    if let Some(untracked) =
-        git_str(&dir, &["ls-files", "--others", "--exclude-standard"]).filter(|s| !s.is_empty())
-    {
-        body.push(ConfirmLine::Warn("Untracked files (will be kept)".into()));
-        for line in untracked.lines().take(5) {
-            body.push(ConfirmLine::Info(line.to_string()));
+    } else {
+        if let Some(untracked) = git_str(&dir, &["ls-files", "--others", "--exclude-standard"])
+            .filter(|s| !s.is_empty())
+        {
+            body.push(ConfirmLine::Warn("Untracked files (will be kept)".into()));
+            for line in untracked.lines().take(5) {
+                body.push(ConfirmLine::Info(line.to_string()));
+            }
         }
+        body.push(ConfirmLine::Ok("No uncommitted changes".into()));
     }
 
-    body.push(ConfirmLine::Ok("No uncommitted changes".into()));
-
-    // Check unpushed commits
     let branch = git_str(&dir, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
-    if branch != "HEAD"
-        && let Some(upstream) = git_str(&dir, &["rev-parse", "--abbrev-ref", "@{upstream}"])
-        && let Some(unpushed) = git_str(&dir, &["log", "--oneline", &format!("{upstream}..HEAD")])
-        && !unpushed.is_empty()
-    {
+
+    let has_unpushed = branch != "HEAD"
+        && git_str(&dir, &["rev-parse", "--abbrev-ref", "@{upstream}"])
+            .and_then(|upstream| {
+                git_str(&dir, &["log", "--oneline", &format!("{upstream}..HEAD")])
+            })
+            .is_some_and(|log| !log.is_empty());
+    if has_unpushed {
         body.push(ConfirmLine::Error(format!("Unpushed commits on {branch}")));
-        for line in unpushed.lines().take(5) {
-            body.push(ConfirmLine::Info(line.to_string()));
-        }
-        run_confirm(ConfirmConfig {
-            body,
-            prompt: "Cannot ditch — press any key".into(),
-        });
-        return;
+    } else {
+        body.push(ConfirmLine::Ok("No unpushed changes".into()));
     }
-    body.push(ConfirmLine::Ok("No unpushed changes".into()));
 
     // Detect worktree
     let common_dir = git_str(&dir, &["rev-parse", "--git-common-dir"]);
@@ -614,78 +602,207 @@ pub fn cmd_ditch() {
         .as_deref()
         .is_some_and(|c| c != ".git" && c != format!("{}/.git", dir.display()));
 
-    if is_worktree {
-        let is_bare =
-            git_str(&dir, &["rev-parse", "--is-bare-repository"]).as_deref() == Some("true");
+    let default_branch = git_str(&dir, &["symbolic-ref", "refs/remotes/origin/HEAD"])
+        .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(String::from))
+        .unwrap_or_else(|| "main".into());
 
-        // Detect default branch
-        let default_branch = git_str(&dir, &["symbolic-ref", "refs/remotes/origin/HEAD"])
-            .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(String::from))
-            .unwrap_or_else(|| "main".into());
+    let branch_merged = is_worktree
+        && branch != "HEAD"
+        && branch != default_branch
+        && git_ok(
+            &dir,
+            &["diff", "--quiet", &format!("{default_branch}...HEAD")],
+        );
 
-        // Check if branch is merged / adds nothing
-        let branch_merged = branch != "HEAD"
-            && branch != default_branch
-            && git_ok(
-                &dir,
-                &["diff", "--quiet", &format!("{default_branch}...HEAD")],
-            );
+    if branch_merged {
+        body.push(ConfirmLine::Ok(format!(
+            "Branch adds nothing over {default_branch}"
+        )));
+    }
 
-        if branch_merged {
-            body.push(ConfirmLine::Ok(format!(
-                "Branch adds nothing over {default_branch} — safe to remove"
-            )));
-            if !run_confirm(ConfirmConfig {
-                body,
-                prompt: format!("Remove worktree '{branch}' and kill session '{session}'?"),
-            }) {
-                return;
+    // Build picker: status lines (non-selectable) + action items
+    let dir_str = dir.to_str().unwrap_or(".").to_string();
+
+    let green = Color::Rgb(0xa6, 0xe3, 0xa1);
+    let red = Color::Rgb(0xf3, 0x8b, 0xa8);
+    let overlay = Color::Rgb(0x7f, 0x84, 0x9c);
+
+    let mut actions: Vec<PickerItem> = body
+        .iter()
+        .map(|item| {
+            let (display, color) = match item {
+                ConfirmLine::Ok(msg) => (format!("✓ {msg}"), green),
+                ConfirmLine::Warn(msg) => (format!("! {msg}"), YELLOW),
+                ConfirmLine::Error(msg) => (format!("✗ {msg}"), red),
+                ConfirmLine::Info(msg) => (format!("  {msg}"), overlay),
+            };
+            PickerItem {
+                id: String::new(),
+                display,
+                style: Style::default().fg(color),
+                selectable: false,
+                color: None,
+                dim_color: None,
+                right_label: String::new(),
             }
-            // wt remove handles worktree + branch cleanup
-            let _ = Command::new("wt")
-                .args([
-                    "remove",
-                    &branch,
-                    "-y",
-                    "--force",
-                    "--foreground",
-                    "-C",
-                    dir.to_str().unwrap_or("."),
-                ])
+        })
+        .collect();
+
+    // Separator
+    actions.push(PickerItem {
+        id: String::new(),
+        display: String::new(),
+        style: Style::default(),
+        selectable: false,
+        color: None,
+        dim_color: None,
+        right_label: String::new(),
+    });
+
+    let safe = !dirty && !has_unpushed;
+
+    if is_worktree && branch_merged && safe {
+        // Safest: clean merged worktree
+        actions.push(ditch_item(
+            "remove_wt",
+            "\u{f00d}  Remove worktree + kill session",
+            CYAN,
+        ));
+    }
+
+    if is_worktree && !branch_merged && safe {
+        actions.push(ditch_item(
+            "detach",
+            "\u{f0e2}  Detach HEAD + kill session",
+            TEXT,
+        ));
+        actions.push(ditch_item(
+            "remove_wt_keep_branch",
+            "\u{f00d}  Remove worktree, keep branch + kill session",
+            TEXT,
+        ));
+    }
+
+    // Always available
+    actions.push(ditch_item("kill", "\u{f0513}  Kill session only", TEXT));
+
+    if is_worktree && !branch_merged {
+        actions.push(ditch_item(
+            "force_remove_wt",
+            "\u{f071}  Force remove worktree + delete branch",
+            YELLOW,
+        ));
+    }
+
+    if dirty {
+        actions.push(ditch_item(
+            "discard_kill",
+            "\u{f071}  Discard changes + kill session",
+            YELLOW,
+        ));
+        if is_worktree {
+            actions.push(ditch_item(
+                "discard_remove_wt",
+                "\u{f071}  Discard changes + remove worktree",
+                YELLOW,
+            ));
+        }
+    }
+
+    let config = PickerConfig {
+        prompt: format!("Ditch '{session}'"),
+        footer: String::new(),
+        placeholder: String::new(),
+        initial_id: None,
+    };
+
+    let action = run_picker(actions, config, HashMap::new());
+    let id = match action {
+        PickerAction::Selected(id) => id,
+        _ => return,
+    };
+
+    match id.as_str() {
+        "kill" => {}
+        "detach" => {
+            let _ = Command::new("git")
+                .args(["-C", &dir_str, "checkout", "--detach"])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status();
-        } else {
-            let skip_detach = !is_bare && branch == "main";
-            if skip_detach {
-                if !run_confirm(ConfirmConfig {
-                    body,
-                    prompt: format!("Kill session '{session}'?"),
-                }) {
-                    return;
-                }
-            } else {
-                if !run_confirm(ConfirmConfig {
-                    body,
-                    prompt: format!("Detach HEAD and kill session '{session}'?"),
-                }) {
-                    return;
-                }
-                let _ = Command::new("git")
-                    .args(["-C", dir.to_str().unwrap_or("."), "checkout", "--detach"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            }
         }
-    } else if !run_confirm(ConfirmConfig {
-        body,
-        prompt: format!("Kill session '{session}'?"),
-    }) {
-        return;
+        "remove_wt" => {
+            wt_remove(&dir_str, &branch, false, false);
+        }
+        "remove_wt_keep_branch" => {
+            wt_remove(&dir_str, &branch, false, true);
+        }
+        "force_remove_wt" => {
+            wt_remove(&dir_str, &branch, true, false);
+        }
+        "discard_kill" => {
+            let _ = Command::new("git")
+                .args(["-C", &dir_str, "checkout", "--", "."])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let _ = Command::new("git")
+                .args(["-C", &dir_str, "reset", "HEAD", "--", "."])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        "discard_remove_wt" => {
+            let _ = Command::new("git")
+                .args(["-C", &dir_str, "checkout", "--", "."])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let _ = Command::new("git")
+                .args(["-C", &dir_str, "reset", "HEAD", "--", "."])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            wt_remove(&dir_str, &branch, true, false);
+        }
+        _ => return,
     }
 
     tmux(&["kill-session", "-t", &format!("={session}")]);
+}
+
+fn shorten_home(path: &str) -> String {
+    let home_str = home().to_string_lossy().to_string();
+    path.strip_prefix(&home_str)
+        .map(|rest| format!("~{rest}"))
+        .unwrap_or_else(|| path.to_string())
+}
+
+fn ditch_item(id: &str, display: &str, color: Color) -> PickerItem {
+    PickerItem {
+        id: id.to_string(),
+        display: display.to_string(),
+        style: Style::default().fg(color),
+        selectable: true,
+        color: Some(color),
+        dim_color: None,
+        right_label: String::new(),
+    }
+}
+
+fn wt_remove(dir: &str, branch: &str, force_delete: bool, keep_branch: bool) {
+    let mut args = vec!["remove", branch, "-y", "--force", "--foreground", "-C", dir];
+    if force_delete {
+        args.push("-D");
+    }
+    if keep_branch {
+        args.push("--no-delete-branch");
+    }
+    let _ = Command::new("wt")
+        .args(&args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }
 
 // ── Directory picker ────────────────────────────────────────────────
