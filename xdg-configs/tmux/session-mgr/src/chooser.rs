@@ -139,7 +139,10 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             }
             let glyph = num_glyph(idx);
             idx += 1;
-            let suffix = session_suffix(name);
+            let suffix = {
+                let s = session_suffix(name);
+                if s.is_empty() { group } else { s }
+            };
             let (display, style) = if is_hidden {
                 (
                     format!("  {glyph} {suffix} \u{f0513}"),
@@ -231,7 +234,8 @@ pub fn cmd_chooser_list() {
             if group != last_group {
                 println!("__header__\t{gray}  {group}{reset}");
             }
-            let display = session_suffix(name);
+            let suffix = session_suffix(name);
+            let display = if suffix.is_empty() { group } else { suffix };
             idx += 1;
             if is_hidden {
                 println!("{name}\t{yellow}  {idx}: {display} \u{f0513}{reset}");

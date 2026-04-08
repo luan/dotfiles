@@ -86,7 +86,23 @@ if $is_worktree; then
     skip_detach=true
   fi
 
-  if $skip_detach; then
+  # Check if branch is merged or has no changes vs default branch
+  default_branch=$(git -C "$dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "main")
+  branch_merged=false
+  if [[ "$branch" != "HEAD" && "$branch" != "$default_branch" ]]; then
+    if git -C "$dir" diff --quiet "${default_branch}...HEAD" 2>/dev/null; then
+      branch_merged=true
+      echo -e "${GREEN}✓${RESET} Branch adds nothing over ${default_branch} — safe to remove"
+    fi
+  fi
+
+  if $branch_merged; then
+    if ! gum confirm "Remove worktree '$branch' and kill session '$session'?"; then
+      exit 0
+    fi
+    echo -e "${GREEN}Removing worktree...${RESET}"
+    wt remove "$branch" -y --force --foreground -C "$dir" 2>&1 || true
+  elif $skip_detach; then
     if ! gum confirm "Kill session '$session'?"; then
       exit 0
     fi
@@ -105,4 +121,4 @@ fi
 
 # Kill session
 echo -e "${GREEN}Killing session '$session'...${RESET}"
-tmux kill-session -t "$session"
+tmux kill-session -t "=$session"

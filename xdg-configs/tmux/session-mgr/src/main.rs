@@ -213,6 +213,7 @@ fn main() {
         "toggle-favorite" => project::cmd_toggle_favorite(&rest),
         "new-session" => project::cmd_new_session(),
         "new-worktree" => project::cmd_new_worktree(),
+        "ditch" => project::cmd_ditch(),
         "update" => cmd_update_with_args(&rest),
         _ => {
             eprintln!("Unknown: {cmd}");
