@@ -37,9 +37,14 @@ fn cmd_update_with_args(args: &[String]) {
         .first()
         .filter(|s| !s.is_empty())
         .map_or(&st.current, |s| s);
+    let client_width: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(200);
+    // CPU+battery modules hide below 100 cols, so reduce the right-side budget
+    let right_budget = if client_width < 100 { 4 } else { 40 };
+    let available_width = client_width.saturating_sub(right_budget).max(20);
+
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
-    let (status, colors) = render_status(&sessions, current, &meta, &st.attn);
+    let (status, colors) = render_status(&sessions, current, &meta, &st.attn, available_width);
     let cur_color = colors
         .iter()
         .find(|(n, _)| n == current)
@@ -74,6 +79,13 @@ fn cmd_update_with_args(args: &[String]) {
         ";".into(),
         "set".into(),
         "-g".into(),
+        "status-left-length".into(),
+        available_width.to_string(),
+    ]);
+    tmux_args.extend([
+        ";".into(),
+        "set".into(),
+        "-g".into(),
         "status-left".into(),
         format!(" {status} "),
     ]);
@@ -93,7 +105,7 @@ fn cmd_list() {
     let st = query_state();
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
-    let (status, colors) = render_status(&sessions, &st.current, &meta, &st.attn);
+    let (status, colors) = render_status(&sessions, &st.current, &meta, &st.attn, 200);
     print!("{status}");
 
     if !colors.is_empty() {
