@@ -52,6 +52,7 @@ COMPLETE=fish jj | source
 
 set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
 carapace _carapace | source
+source $__fish_data_dir/completions/cargo.fish # carapace's cargo completer is broken for -p/--package
 
 # opencode
 fish_add_path $HOME/.opencode/bin
