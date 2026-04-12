@@ -3,7 +3,9 @@ use std::env;
 use std::process::{Command, Stdio};
 
 mod chooser;
+mod codex;
 mod color;
+mod copilot;
 mod group;
 mod order;
 mod picker;
@@ -11,7 +13,7 @@ mod project;
 mod sidebar;
 mod status;
 mod tmux;
-mod usage_graph;
+mod usage_bars;
 
 use color::compute_color;
 use group::GroupMeta;
@@ -64,26 +66,25 @@ fn cmd_update_with_args(args: &[String]) {
 
     // When the terminal is fullscreened on a notched MacBook display, paint
     // the status-bar background solid black so the notch area reads as an
-    // intentional gap instead of broken chrome.
+    // intentional gap instead of broken chrome. The two-row stacking (blank
+    // row above real content) is separately gated by `@two_row_status` so
+    // users can keep the notched black-bg single-row layout.
     let notched = tmux_cmd(&["show-option", "-gv", "@notched"]) == "1";
-    let status_style = if notched {
-        "bg=#000000"
-    } else {
-        "bg=default"
-    };
+    let two_row = notched && tmux_cmd(&["show-option", "-gv", "@two_row_status"]) != "0";
+    let status_style = if notched { "bg=#000000" } else { "bg=default" };
 
     // Build status-format[0]: normally sessions=left, windows=centre,
     // system-info=right. When notched, the centre is behind the display cutout
     // so windows shift to the left segment (after sessions).
     let status_fmt = if notched {
         format!(
-            "#[align=left]{left}{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
+            "#[bg=#000000]#[align=left]{left}{win}#[align=right]#{{@sysinfo}}",
             left = left,
             win = win_str,
         )
     } else {
         format!(
-            "#[align=left]{left}#[align=centre]{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
+            "#[align=left]{left}#[align=centre]{win}#[align=right]#{{@sysinfo}}",
             left = left,
             win = win_str,
         )
@@ -123,7 +124,7 @@ fn cmd_update_with_args(args: &[String]) {
     ]);
     // On notched displays, stack a blank black row above the real content so
     // the notch sits in dedicated empty space instead of eating chrome.
-    if notched {
+    if two_row {
         tmux_args.extend([
             ";".into(),
             "set".into(),
@@ -217,16 +218,11 @@ fn cmd_click(args: &[String]) {
 }
 
 fn toggle_caffeine() {
-    // Kill existing caffeinate, or start one
-    let running = Command::new("pgrep")
-        .args(["-x", "caffeinate"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
-
-    if running {
-        let _ = Command::new("pkill").args(["-x", "caffeinate"]).status();
+    let pids = tmux::indefinite_caffeinate_pids();
+    if !pids.is_empty() {
+        for pid in pids {
+            let _ = Command::new("kill").arg(&pid).status();
+        }
     } else {
         let _ = Command::new("caffeinate")
             .args(["-di"])
@@ -241,6 +237,56 @@ fn toggle_caffeine() {
 fn cmd_system_info() {
     let system = query_system_info();
     print!("{}", status::render_system_info(&system));
+}
+
+fn cmd_sysinfo_daemon() {
+    let pid_file = std::env::temp_dir().join("tmux-sysinfo.pid");
+
+    // Deduplication: bail if another instance is already running
+    if let Ok(contents) = std::fs::read_to_string(&pid_file) {
+        if let Ok(pid) = contents.trim().parse::<u32>() {
+            let alive = Command::new("kill")
+                .args(["-0", &pid.to_string()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if alive {
+                return;
+            }
+        }
+    }
+    let _ = std::fs::write(&pid_file, std::process::id().to_string());
+
+    // Initial render before entering the loop
+    let mut cached = query_system_info();
+    let rendered = status::render_system_info(&cached);
+    tmux_cmd(&["set-option", "-g", "@sysinfo", &rendered, ";", "refresh-client", "-S"]);
+
+    let mut tick = 0u64;
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        tick += 1;
+
+        let now = chrono::Local::now();
+        cached.date = now.format("%a %b %-d").to_string();
+        cached.clock = now.format("%H:%M:%S").to_string();
+
+        // Refresh expensive fields every 5 seconds
+        if tick % 5 == 0 {
+            let fresh = query_system_info();
+            cached.cpu_load = fresh.cpu_load;
+            cached.mem_pct = fresh.mem_pct;
+            cached.battery_pct = fresh.battery_pct;
+            cached.battery_state = fresh.battery_state;
+            cached.battery_time = fresh.battery_time;
+            cached.caffeinated = fresh.caffeinated;
+        }
+
+        let rendered = status::render_system_info(&cached);
+        tmux_cmd(&["set-option", "-g", "@sysinfo", &rendered, ";", "refresh-client", "-S"]);
+    }
 }
 
 fn cmd_color(args: &[String]) {
@@ -442,6 +488,7 @@ fn main() {
         "click" => cmd_click(&rest),
         "sidebar" => sidebar::cmd_sidebar(),
         "system-info" => cmd_system_info(),
+        "sysinfo-daemon" => cmd_sysinfo_daemon(),
         _ => {
             eprintln!("Unknown: {cmd}");
             std::process::exit(1);

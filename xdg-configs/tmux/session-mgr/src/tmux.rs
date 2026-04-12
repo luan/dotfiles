@@ -87,6 +87,7 @@ pub fn query_windows() -> Vec<WindowInfo> {
         .collect()
 }
 
+#[derive(Clone)]
 pub struct SystemInfo {
     pub cpu_load: f32,
     pub mem_pct: u32,
@@ -94,9 +95,11 @@ pub struct SystemInfo {
     pub battery_state: BatteryState,
     pub battery_time: String,
     pub caffeinated: bool,
+    pub date: String,
     pub clock: String,
 }
 
+#[derive(Clone)]
 pub enum BatteryState {
     Charging,
     Discharging,
@@ -111,6 +114,30 @@ fn shell(cmd: &str) -> String {
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+/// PIDs of caffeinate processes running without a `-t` timeout (i.e. indefinite).
+/// Filters out time-limited invocations like `caffeinate -i -t 300` (Claude Code, etc.).
+pub fn indefinite_caffeinate_pids() -> Vec<String> {
+    let Ok(output) = Command::new("pgrep").args(["-x", "caffeinate"]).output() else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter(|pid| {
+            Command::new("ps")
+                .args(["-o", "args=", "-p", pid])
+                .output()
+                .ok()
+                .map(|o| !String::from_utf8_lossy(&o.stdout).contains("-t "))
+                .unwrap_or(false)
+        })
+        .map(String::from)
+        .collect()
 }
 
 pub fn query_system_info() -> SystemInfo {
@@ -130,16 +157,14 @@ pub fn query_system_info() -> SystemInfo {
     let batt_raw = shell("pmset -g batt");
     let (battery_pct, battery_state, battery_time) = parse_battery(&batt_raw);
 
-    // Caffeinate: check if running
-    let caffeinated = Command::new("pgrep")
-        .args(["-x", "caffeinate"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
+    // Caffeinate: check if an indefinite prevention is running (skip time-limited -t ones,
+    // e.g. Claude Code spawns `caffeinate -i -t 300` which shouldn't light up our icon).
+    let caffeinated = !indefinite_caffeinate_pids().is_empty();
 
-    // Clock
-    let clock = chrono::Local::now().format("%H:%M").to_string();
+    // Date and clock
+    let now = chrono::Local::now();
+    let date = now.format("%a %b %-d").to_string();
+    let clock = now.format("%H:%M:%S").to_string();
 
     SystemInfo {
         cpu_load,
@@ -148,6 +173,7 @@ pub fn query_system_info() -> SystemInfo {
         battery_state,
         battery_time,
         caffeinated,
+        date,
         clock,
     }
 }

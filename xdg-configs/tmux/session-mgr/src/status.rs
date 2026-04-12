@@ -409,12 +409,15 @@ pub fn render_system_info(info: &SystemInfo) -> String {
         }
     }
 
-    // Clock
-    sections.push(colored(&format!(" \u{F0954} {} ", info.clock), TEXT));
+    // Date + Clock
+    sections.push(format!(
+        "#[fg={OVERLAY2},italics] {} #[noitalics]#[fg={TEXT}]\u{F0954} {} ",
+        info.date, info.clock
+    ));
 
     // Wrap all sections in one continuous pill with thin separators
     let inner = sections.join(SEP);
     format!(
-        "#[fg={SURFACE1}]{PL_LEFT}#[bg={SURFACE1}]{inner}#[none,fg={SURFACE1}]{PL_RIGHT}#[default]"
+        "#[fg={SURFACE1}]{PL_LEFT}#[bg={SURFACE1}]{inner}#[fg={SURFACE1},bg=default]{PL_RIGHT}#[default]"
     )
 }
