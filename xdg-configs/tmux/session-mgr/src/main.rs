@@ -15,8 +15,8 @@ use color::compute_color;
 use group::GroupMeta;
 use order::{SessionStore, compute_order};
 use picker::{TextInputAction, TextInputConfig, run_text_input};
-use status::render_status;
-use tmux::{query_state, tmux as tmux_cmd};
+use status::{render_bar, render_windows};
+use tmux::{query_state, query_system_info, query_windows, tmux as tmux_cmd};
 
 fn cmd_order(args: &[String]) {
     let include_all = args.iter().any(|a| a == "--all");
@@ -32,23 +32,36 @@ fn cmd_order(args: &[String]) {
 
 fn cmd_update_with_args(args: &[String]) {
     let st = query_state();
-    // Use explicit session name if provided (from hook), otherwise fall back to query
     let current = args
         .first()
         .filter(|s| !s.is_empty())
         .map_or(&st.current, |s| s);
     let client_width: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(200);
-    // CPU+battery modules hide below 100 cols, so reduce the right-side budget
-    let right_budget = if client_width < 100 { 4 } else { 40 };
-    let available_width = client_width.saturating_sub(right_budget).max(20);
 
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
-    let (status, colors) = render_status(&sessions, current, &meta, &st.attn, available_width);
-    let cur_color = colors
+
+    let pre_colors: Vec<(String, String)> = {
+        let c = status::compute_all_colors(&sessions, &meta);
+        c.iter()
+            .map(|(n, col, _)| (n.clone(), col.clone()))
+            .collect()
+    };
+    let cur_color = pre_colors
         .iter()
         .find(|(n, _)| n == current)
         .map_or("#FFFFFF", |(_, c)| c.as_str());
+
+    let bar = render_bar(&sessions, current, &meta, &st.attn, client_width);
+    let windows = query_windows();
+    let win_str = render_windows(&windows, cur_color);
+
+    // Build status-format[0]: left=sessions, centre=windows, right=system-info
+    let status_fmt = format!(
+        "#[align=left]{left}#[align=centre]{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
+        left = bar.left,
+        win = win_str,
+    );
 
     let mut tmux_args: Vec<String> = vec![
         "set-option".into(),
@@ -57,7 +70,7 @@ fn cmd_update_with_args(args: &[String]) {
         "-u".into(),
         "@attention".into(),
     ];
-    for (name, color) in &colors {
+    for (name, color) in &bar.colors {
         tmux_args.extend([
             ";".into(),
             "set-option".into(),
@@ -79,15 +92,8 @@ fn cmd_update_with_args(args: &[String]) {
         ";".into(),
         "set".into(),
         "-g".into(),
-        "status-left-length".into(),
-        available_width.to_string(),
-    ]);
-    tmux_args.extend([
-        ";".into(),
-        "set".into(),
-        "-g".into(),
-        "status-left".into(),
-        format!(" {status} "),
+        "status-format[0]".into(),
+        status_fmt,
     ]);
     tmux_args.extend([";".into(), "refresh-client".into(), "-S".into()]);
 
@@ -105,12 +111,12 @@ fn cmd_list() {
     let st = query_state();
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
-    let (status, colors) = render_status(&sessions, &st.current, &meta, &st.attn, 200);
-    print!("{status}");
+    let bar = render_bar(&sessions, &st.current, &meta, &st.attn, 200);
+    print!("{}", bar.left);
 
-    if !colors.is_empty() {
+    if !bar.colors.is_empty() {
         let mut args: Vec<String> = Vec::new();
-        for (i, (name, color)) in colors.iter().enumerate() {
+        for (i, (name, color)) in bar.colors.iter().enumerate() {
             if i > 0 {
                 args.push(";".into());
             }
@@ -125,6 +131,44 @@ fn cmd_list() {
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         tmux_cmd(&refs);
     }
+}
+
+fn cmd_click(args: &[String]) {
+    let range = args.first().map_or("", String::as_str);
+    if let Some(session) = range.strip_prefix("s:") {
+        tmux_cmd(&["switch-client", "-t", session]);
+    } else if let Some(window) = range.strip_prefix("w:") {
+        tmux_cmd(&["select-window", "-t", &format!(":{window}")]);
+    } else if range == "caffeine" {
+        toggle_caffeine();
+    }
+}
+
+fn toggle_caffeine() {
+    // Kill existing caffeinate, or start one
+    let running = Command::new("pgrep")
+        .args(["-x", "caffeinate"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+
+    if running {
+        let _ = Command::new("pkill").args(["-x", "caffeinate"]).status();
+    } else {
+        let _ = Command::new("caffeinate")
+            .args(["-di"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+    }
+    // Refresh status bar to reflect change
+    tmux_cmd(&["refresh-client", "-S"]);
+}
+
+fn cmd_system_info() {
+    let system = query_system_info();
+    print!("{}", status::render_system_info(&system));
 }
 
 fn cmd_color(args: &[String]) {
@@ -323,6 +367,8 @@ fn main() {
         "attention" => cmd_attention(),
         "hide-toggle" => cmd_hide_toggle(&rest),
         "update" => cmd_update_with_args(&rest),
+        "click" => cmd_click(&rest),
+        "system-info" => cmd_system_info(),
         _ => {
             eprintln!("Unknown: {cmd}");
             std::process::exit(1);
