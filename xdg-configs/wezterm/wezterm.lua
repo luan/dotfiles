@@ -17,7 +17,7 @@ config.underline_position = "-0.25cell"
 config.underline_thickness = "3px"
 
 -- Window
-config.window_decorations = "RESIZE|MACOS_FORCE_SQUARE_CORNERS"
+config.window_decorations = "RESIZE|MACOS_FORCE_SQUARE_CORNERS|MACOS_FORCE_DISABLE_SHADOW"
 config.window_frame = {
 	border_left_width = 0,
 	border_right_width = 0,
@@ -28,11 +28,17 @@ config.hide_tab_bar_if_only_one_tab = true
 config.use_fancy_tab_bar = false
 config.tab_bar_at_bottom = false
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
+-- Applied on notched fullscreen only (see update_notched). Negative top
+-- padding pulls terminal content up so the tmux filler row hides behind the
+-- notch.
+local NOTCHED_TOP_PADDING = -30
 config.window_background_opacity = 1.0
 config.inactive_pane_hsb = { brightness = 1.0 }
-config.colors = { split = "#11111b" }
+config.colors = { split = "#1A1B26" }
 config.scrollback_lines = 10000000
 config.enable_scroll_bar = false
+config.macos_fullscreen_extend_behind_notch = true
+config.native_macos_fullscreen_mode = false
 
 -- Mouse
 config.hide_mouse_cursor_when_typing = true
@@ -57,6 +63,52 @@ local tmux_prefix = "\x00" -- Ctrl+Space
 local function csi(code)
 	return "\x1b[" .. code
 end
+
+-- Detect MacBook built-in display (14"/16" 2021+ have a notch). The active
+-- screen's name comes from wezterm.gui.screens(); names vary by machine/OS, so
+-- match on common substrings.
+local function is_notched_screen()
+	local ok, screens = pcall(wezterm.gui.screens)
+	if not ok or not screens or not screens.active then
+		return false
+	end
+	local name = (screens.active.name or ""):lower()
+	return name:find("built%-in") ~= nil or name:find("builtin") ~= nil or name:find("liquid retina") ~= nil
+end
+
+-- Push notched state to tmux and refresh the status bar. Triggered when the
+-- window enters/leaves fullscreen or moves between screens. Uses
+-- background_child_process (non-blocking, non-tty) to avoid stalling the GUI
+-- thread and to detach from the hardened-runtime parent cleanly.
+local function update_notched(window)
+	local dims = window:get_dimensions()
+	local notched = dims.is_full_screen and is_notched_screen()
+	local val = notched and "1" or "0"
+	local overrides = window:get_config_overrides() or {}
+	local desired_top = notched and NOTCHED_TOP_PADDING or 0
+	if not overrides.window_padding or overrides.window_padding.top ~= desired_top then
+		overrides.window_padding = { left = 0, right = 0, top = desired_top, bottom = 0 }
+		window:set_config_overrides(overrides)
+	end
+	wezterm.background_child_process({
+		"/bin/sh",
+		"-c",
+		"export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin; "
+			.. "tmux set-option -g @notched "
+			.. val
+			.. " >/dev/null 2>&1; "
+			.. "~/.config/tmux/scripts/tmux-session update '' "
+			.. "\"$(tmux display -p '#{client_width}' 2>/dev/null)\" "
+			.. ">/dev/null 2>&1",
+	})
+end
+
+wezterm.on("window-resized", function(window)
+	update_notched(window)
+end)
+wezterm.on("window-config-reloaded", function(window)
+	update_notched(window)
+end)
 
 local function find_sidebar(tab)
 	for _, info in ipairs(tab:panes_with_info()) do

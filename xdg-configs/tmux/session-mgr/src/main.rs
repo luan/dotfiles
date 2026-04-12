@@ -62,12 +62,32 @@ fn cmd_update_with_args(args: &[String]) {
     let sidebar_open = tmux_cmd(&["show-option", "-gv", "@sidebar_open"]) == "1";
     let left = if sidebar_open { "" } else { bar.left.as_str() };
 
-    // Build status-format[0]: left=sessions, centre=windows, right=system-info
-    let status_fmt = format!(
-        "#[align=left]{left}#[align=centre]{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
-        left = left,
-        win = win_str,
-    );
+    // When the terminal is fullscreened on a notched MacBook display, paint
+    // the status-bar background solid black so the notch area reads as an
+    // intentional gap instead of broken chrome.
+    let notched = tmux_cmd(&["show-option", "-gv", "@notched"]) == "1";
+    let status_style = if notched {
+        "bg=#000000"
+    } else {
+        "bg=default"
+    };
+
+    // Build status-format[0]: normally sessions=left, windows=centre,
+    // system-info=right. When notched, the centre is behind the display cutout
+    // so windows shift to the left segment (after sessions).
+    let status_fmt = if notched {
+        format!(
+            "#[align=left]{left}{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
+            left = left,
+            win = win_str,
+        )
+    } else {
+        format!(
+            "#[align=left]{left}#[align=centre]{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
+            left = left,
+            win = win_str,
+        )
+    };
 
     let mut tmux_args: Vec<String> = vec![
         "set-option".into(),
@@ -98,9 +118,55 @@ fn cmd_update_with_args(args: &[String]) {
         ";".into(),
         "set".into(),
         "-g".into(),
-        "status-format[0]".into(),
-        status_fmt,
+        "status-style".into(),
+        status_style.into(),
     ]);
+    // On notched displays, stack a blank black row above the real content so
+    // the notch sits in dedicated empty space instead of eating chrome.
+    if notched {
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-g".into(),
+            "status".into(),
+            "2".into(),
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-g".into(),
+            "status-format[0]".into(),
+            String::new(),
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-g".into(),
+            "status-format[1]".into(),
+            status_fmt,
+        ]);
+    } else {
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-g".into(),
+            "status".into(),
+            "on".into(),
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-gu".into(),
+            "status-format[1]".into(),
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set".into(),
+            "-g".into(),
+            "status-format[0]".into(),
+            status_fmt,
+        ]);
+    }
     tmux_args.extend([";".into(), "refresh-client".into(), "-S".into()]);
 
     let refs: Vec<&str> = tmux_args.iter().map(String::as_str).collect();

@@ -673,6 +673,7 @@ struct SidebarState {
     activity_cache: HashMap<String, (String, Instant)>,
     last_meta_refresh: Instant,
     focused: bool,
+    notched: bool,
 }
 
 const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
@@ -689,10 +690,12 @@ impl SidebarState {
             activity_cache: HashMap::new(),
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
             focused: true,
+            notched: false,
         }
     }
 
     fn refresh(&mut self) {
+        self.notched = tmux(&["show-option", "-gv", "@notched"]) == "1";
         let cur = tmux(&["display-message", "-p", "#S"]);
         let alive: HashSet<String> = tmux(&["list-sessions", "-F", "#S"])
             .lines()
@@ -1233,8 +1236,12 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
         return (0, 0);
     }
 
+    // On notched displays, reserve an extra solid-black row at the very top to
+    // match the tmux filler row that hides behind the display cutout.
+    let notch_h: u16 = if state.notched { 1 } else { 0 };
+
     // Fill background
-    for y in area.y..area.y + area.height {
+    for y in area.y + notch_h..area.y + area.height {
         let row = Rect {
             x: area.x,
             y,
@@ -1243,22 +1250,35 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
         };
         f.render_widget(Paragraph::new("").style(Style::default().bg(bg)), row);
     }
+    if notch_h > 0 {
+        let notch_row = Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: notch_h,
+        };
+        f.render_widget(
+            Paragraph::new("").style(Style::default().bg(Color::Rgb(0, 0, 0))),
+            notch_row,
+        );
+    }
 
     let content_w = area.width;
 
     // Layout:
+    //  (optional) notch row (black, hidden behind notch)
     //  row 0: blank (top padding)
     //  list rows
     //  usage graph (if there's room)
     //  2 footer rows
-    let list_y = area.y + 1;
+    let list_y = area.y + notch_h + 1;
     let footer_h = 2u16;
-    let graph_h = if area.height >= 4 + 1 + usage_graph::HEIGHT + footer_h {
+    let graph_h = if area.height >= 4 + 1 + notch_h + usage_graph::HEIGHT + footer_h {
         usage_graph::HEIGHT
     } else {
         0
     };
-    let list_h = area.height.saturating_sub(1 + footer_h + graph_h);
+    let list_h = area.height.saturating_sub(1 + notch_h + footer_h + graph_h);
 
     // Footer hints
     let hint1_y = area.y + area.height - 2;

@@ -156,6 +156,7 @@ dot-claude:
 tmux-session:
     cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/session-mgr/Cargo.toml"
     cp "{{ dotfiles_dir }}/xdg-configs/tmux/session-mgr/target/release/tmux-session" "{{ config_dir }}/tmux/scripts/tmux-session"
+    codesign --force --sign - "{{ config_dir }}/tmux/scripts/tmux-session"
     @echo "✓ tmux-session built"
 
 # Full setup: brew, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, tmux-session
