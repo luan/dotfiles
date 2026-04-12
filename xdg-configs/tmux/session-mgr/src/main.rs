@@ -8,8 +8,10 @@ mod group;
 mod order;
 mod picker;
 mod project;
+mod sidebar;
 mod status;
 mod tmux;
+mod usage_graph;
 
 use color::compute_color;
 use group::GroupMeta;
@@ -56,10 +58,14 @@ fn cmd_update_with_args(args: &[String]) {
     let windows = query_windows();
     let win_str = render_windows(&windows, cur_color);
 
+    // If the sidebar is open, hide the session list in the status bar
+    let sidebar_open = tmux_cmd(&["show-option", "-gv", "@sidebar_open"]) == "1";
+    let left = if sidebar_open { "" } else { bar.left.as_str() };
+
     // Build status-format[0]: left=sessions, centre=windows, right=system-info
     let status_fmt = format!(
         "#[align=left]{left}#[align=centre]{win}#[align=right]#(~/.config/tmux/scripts/tmux-session system-info)",
-        left = bar.left,
+        left = left,
         win = win_str,
     );
 
@@ -368,6 +374,7 @@ fn main() {
         "hide-toggle" => cmd_hide_toggle(&rest),
         "update" => cmd_update_with_args(&rest),
         "click" => cmd_click(&rest),
+        "sidebar" => sidebar::cmd_sidebar(),
         "system-info" => cmd_system_info(),
         _ => {
             eprintln!("Unknown: {cmd}");

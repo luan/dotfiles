@@ -10,8 +10,8 @@ use ratatui::widgets::{
     Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
 };
 
-// Catppuccin Mocha
-const BASE: Color = Color::Rgb(0x1e, 0x1e, 0x2e);
+// Catppuccin Mocha — matches sidebar bg
+const BASE: Color = Color::Rgb(0x11, 0x11, 0x1b);
 const SURFACE0: Color = Color::Rgb(0x31, 0x32, 0x44);
 const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
@@ -338,32 +338,20 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
-    // Outer border with rounded corners
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(ratatui::widgets::BorderType::Rounded)
-        .border_style(Style::default().fg(SURFACE1))
-        .title(Line::from(Span::styled(
-            format!(" {} ", config.prompt.trim()),
-            Style::default().fg(YELLOW).bold(),
-        )))
-        .style(Style::default().bg(BASE));
-
-    let inner = outer_block.inner(area);
-    f.render_widget(outer_block, area);
-
-    // Layout inside the border: padding(1) + search(1) + sep(1) + list(rest) + sep(1) + footer(1)
+    // Borderless layout: title, sep, search, sep, list, (sep, footer)
     let has_footer = !config.footer.is_empty();
-    let footer_height = if has_footer { 2 } else { 0 }; // separator + footer line
+    let footer_height = if has_footer { 2 } else { 0 };
 
     let padded = Rect {
-        x: inner.x + 1,
-        y: inner.y,
-        width: inner.width.saturating_sub(2),
-        height: inner.height,
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(1),
     };
 
     let chunks = Layout::vertical([
+        Constraint::Length(1),             // title
+        Constraint::Length(1),             // separator
         Constraint::Length(1),             // search input
         Constraint::Length(1),             // separator
         Constraint::Min(1),                // list
@@ -371,8 +359,27 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
     ])
     .split(padded);
 
+    // Title
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            config.prompt.trim().to_string(),
+            Style::default().fg(YELLOW).bold(),
+        )))
+        .style(Style::default().bg(BASE)),
+        chunks[0],
+    );
+    // Separator below title
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "─".repeat(chunks[1].width as usize),
+            Style::default().fg(SURFACE1),
+        )))
+        .style(Style::default().bg(BASE)),
+        chunks[1],
+    );
+
     // Search input
-    let search_area = chunks[0];
+    let search_area = chunks[2];
     if state.input.is_empty() {
         let placeholder = Line::from(Span::styled(
             &config.placeholder,
@@ -395,16 +402,16 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
     f.set_cursor_position((cursor_x, search_area.y));
 
     // Separator between search and list
-    let sep_width = chunks[1].width as usize;
+    let sep_width = chunks[3].width as usize;
     let sep = Paragraph::new(Line::from(Span::styled(
         "─".repeat(sep_width),
         Style::default().fg(SURFACE1),
     )))
     .style(Style::default().bg(BASE));
-    f.render_widget(sep, chunks[1]);
+    f.render_widget(sep, chunks[3]);
 
     // List area — reserve 1 col on right for scrollbar
-    let list_area = chunks[2];
+    let list_area = chunks[4];
     let content_width = list_area.width.saturating_sub(1); // leave room for scrollbar
     let visible_height = list_area.height as usize;
     let total_items = state.filtered.len();
@@ -533,7 +540,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
 
     // Footer
     if has_footer {
-        let footer_area = chunks[3];
+        let footer_area = chunks[5];
         let footer_chunks = Layout::vertical([
             Constraint::Length(1), // separator
             Constraint::Length(1), // text
@@ -589,34 +596,42 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 f.render_widget(Clear, area);
                 f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
-                // Compact box: 3 rows (top border + input + bottom border)
-                let box_height = 3u16;
-                let box_area = Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: box_height.min(area.height),
+                // Borderless: title (row 0), sep (row 1), input (row 2)
+                let row_title = Rect {
+                    x: area.x + 1,
+                    y: area.y + 1,
+                    width: area.width.saturating_sub(2),
+                    height: 1,
+                };
+                let row_sep = Rect {
+                    x: row_title.x,
+                    y: row_title.y + 1,
+                    width: row_title.width,
+                    height: 1,
+                };
+                let row_input = Rect {
+                    x: row_title.x,
+                    y: row_title.y + 2,
+                    width: row_title.width,
+                    height: 1,
                 };
 
-                let outer_block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(ratatui::widgets::BorderType::Rounded)
-                    .border_style(Style::default().fg(SURFACE1))
-                    .title(Line::from(Span::styled(
-                        format!(" {} ", config.prompt.trim()),
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        config.prompt.trim().to_string(),
                         Style::default().fg(YELLOW).bold(),
                     )))
-                    .style(Style::default().bg(BASE));
-
-                let inner = outer_block.inner(box_area);
-                f.render_widget(outer_block, box_area);
-
-                let padded = Rect {
-                    x: inner.x + 1,
-                    y: inner.y,
-                    width: inner.width.saturating_sub(2),
-                    height: inner.height,
-                };
+                    .style(Style::default().bg(BASE)),
+                    row_title,
+                );
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        "─".repeat(row_sep.width as usize),
+                        Style::default().fg(SURFACE1),
+                    )))
+                    .style(Style::default().bg(BASE)),
+                    row_sep,
+                );
 
                 let prefix_len = config.prefix.chars().count() as u16;
                 let line = if input.is_empty() {
@@ -632,11 +647,11 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 };
                 f.render_widget(
                     Paragraph::new(line).style(Style::default().bg(BASE)),
-                    padded,
+                    row_input,
                 );
 
-                let cx = padded.x + prefix_len + cursor as u16;
-                f.set_cursor_position((cx, padded.y));
+                let cx = row_input.x + prefix_len + cursor as u16;
+                f.set_cursor_position((cx, row_input.y));
             })
             .ok();
 
@@ -731,29 +746,12 @@ pub fn run_confirm(config: ConfirmConfig) -> bool {
                 f.render_widget(Clear, area);
                 f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
 
-                // body lines + blank + prompt + hint + border (2)
-                let box_height = (config.body.len() as u16 + 5).min(area.height);
-                let box_area = Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: box_height,
-                };
-
-                let outer_block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(ratatui::widgets::BorderType::Rounded)
-                    .border_style(Style::default().fg(SURFACE1))
-                    .style(Style::default().bg(BASE));
-
-                let inner = outer_block.inner(box_area);
-                f.render_widget(outer_block, box_area);
-
+                // Borderless: content starts at (x+1, y+1)
                 let padded = Rect {
-                    x: inner.x + 1,
-                    y: inner.y,
-                    width: inner.width.saturating_sub(2),
-                    height: inner.height,
+                    x: area.x + 1,
+                    y: area.y + 1,
+                    width: area.width.saturating_sub(2),
+                    height: area.height.saturating_sub(1),
                 };
 
                 let green = Color::Rgb(0xa6, 0xe3, 0xa1);
