@@ -10,7 +10,7 @@ config.font = wezterm.font_with_fallback({
 	"Maple Mono NF",
 	"IosevkaTerm Nerd Font Mono",
 })
-config.font_size = 13
+config.font_size = 11
 config.warn_about_missing_glyphs = false
 config.line_height = 1.45
 config.underline_position = "-0.25cell"
@@ -23,15 +23,20 @@ config.window_frame = {
 	border_right_width = 0,
 	border_top_height = 0,
 	border_bottom_height = 0,
+
+	-- tab bar
+	font = wezterm.font({ family = "Maple Mono NF", weight = "Thin" }),
+	font_size = 2.0,
+	inactive_titlebar_bg = "#000000",
+	active_titlebar_bg = "#000000",
 }
-config.hide_tab_bar_if_only_one_tab = true
-config.use_fancy_tab_bar = false
+config.use_fancy_tab_bar = true
+config.hide_tab_bar_if_only_one_tab = false
+config.show_new_tab_button_in_tab_bar = false
+config.show_close_tab_button_in_tabs = false
+config.show_tab_index_in_tab_bar = false
 config.tab_bar_at_bottom = false
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
--- Applied on notched fullscreen only (see update_notched). Negative top
--- padding pulls terminal content up so the tmux filler row hides behind the
--- notch.
-local NOTCHED_TOP_PADDING = -30
 config.window_background_opacity = 1.0
 config.inactive_pane_hsb = { brightness = 1.0 }
 config.colors = { split = "#1A1B26" }
@@ -85,9 +90,18 @@ local function update_notched(window)
 	local notched = dims.is_full_screen and is_notched_screen()
 	local val = notched and "1" or "0"
 	local overrides = window:get_config_overrides() or {}
-	local desired_top = notched and NOTCHED_TOP_PADDING or 0
-	if not overrides.window_padding or overrides.window_padding.top ~= desired_top then
-		overrides.window_padding = { left = 0, right = 0, top = desired_top, bottom = 0 }
+	local desired_split = notched and "#000000" or "#1A1B26"
+	local desired_hide = not notched
+	local dirty = false
+	if not overrides.colors or overrides.colors.split ~= desired_split then
+		overrides.colors = { split = desired_split }
+		dirty = true
+	end
+	if overrides.hide_tab_bar_if_only_one_tab ~= desired_hide then
+		overrides.hide_tab_bar_if_only_one_tab = desired_hide
+		dirty = true
+	end
+	if dirty then
 		window:set_config_overrides(overrides)
 	end
 	wezterm.background_child_process({
@@ -103,12 +117,30 @@ local function update_notched(window)
 	})
 end
 
+wezterm.on("gui-startup", function(cmd)
+	local _, _, window = wezterm.mux.spawn_window(cmd or {})
+	local gui = window:gui_window()
+	gui:maximize()
+	gui:toggle_fullscreen()
+end)
 wezterm.on("window-resized", function(window)
 	update_notched(window)
 end)
 wezterm.on("window-config-reloaded", function(window)
 	update_notched(window)
 end)
+
+local function sidebar_enabled()
+	local f = io.popen(
+		"PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin tmux show-option -gv @sidebar_enabled 2>/dev/null"
+	)
+	if not f then
+		return true
+	end
+	local out = f:read("*a") or ""
+	f:close()
+	return out:gsub("%s+$", "") ~= "0"
+end
 
 local function find_sidebar(tab)
 	for _, info in ipairs(tab:panes_with_info()) do
@@ -120,6 +152,9 @@ local function find_sidebar(tab)
 end
 
 local function open_sidebar(window, pane)
+	if not sidebar_enabled() then
+		return
+	end
 	window:perform_action(
 		act.SplitPane({
 			direction = "Left",
@@ -197,6 +232,7 @@ config.keys = {
 	{ key = "0", mods = "SUPER", action = act.ResetFontSize },
 
 	-- Window management
+	{ key = "f", mods = "CTRL|ALT|SUPER", action = act.ToggleFullScreen },
 	{ key = "w", mods = "SUPER", action = act.CloseCurrentPane({ confirm = false }) },
 	{ key = "w", mods = "SUPER|SHIFT", action = act.CloseCurrentTab({ confirm = false }) },
 	{ key = "q", mods = "SUPER", action = act.QuitApplication },

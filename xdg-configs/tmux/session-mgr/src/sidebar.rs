@@ -17,7 +17,7 @@ use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::order::compute_order;
 use crate::tmux::tmux;
-use crate::usage_graph;
+use crate::{codex, copilot, usage_bars};
 
 // Catppuccin Mocha
 const MANTLE: Color = Color::Rgb(0x11, 0x11, 0x1b);
@@ -236,7 +236,7 @@ fn parse_activity(text: &str) -> Option<String> {
             | '\u{22C6}'  // ⋆
             | '\u{2726}'  // ✦
             | '\u{2727}'  // ✧
-            | '\u{2736}'  // ✶
+            | '\u{2736}' // ✶
         ) {
             continue;
         }
@@ -600,9 +600,7 @@ fn query_session_meta(sessions: &[String]) -> HashMap<String, SessionMeta> {
                 agent: agents_map.get(name).cloned().unwrap_or_default(),
                 claude_ctx: claude_scrape_map.get(name).and_then(|s| s.ctx.clone()),
                 claude_age: claude_age_map.get(name).copied(),
-                claude_activity: claude_scrape_map
-                    .get(name)
-                    .and_then(|s| s.activity.clone()),
+                claude_activity: claude_scrape_map.get(name).and_then(|s| s.activity.clone()),
                 attention: *attn.get(name).unwrap_or(&false),
                 ports: ports_map.get(name).cloned().unwrap_or_default(),
                 status: statuses.get(name).cloned().unwrap_or_default(),
@@ -863,8 +861,8 @@ fn build_items(sessions: &[String], cur: &str, meta: &HashMap<String, SessionMet
         let sm = meta.get(name).unwrap_or(&empty_meta);
 
         let is_grouped = !group.is_empty() && gtotal > 1;
-        let is_last_in_group = is_grouped
-            && sessions.get(i + 1).map(|n| session_group(n)) != Some(group);
+        let is_last_in_group =
+            is_grouped && sessions.get(i + 1).map(|n| session_group(n)) != Some(group);
         let session_tree = if !is_grouped {
             Tree::None
         } else if is_last_in_group {
@@ -1042,6 +1040,9 @@ fn build_items(sessions: &[String], cur: &str, meta: &HashMap<String, SessionMet
 // ── Main loop ────────────────────────────────────────────────
 
 pub fn cmd_sidebar() {
+    copilot::start_poller();
+    codex::start_poller();
+
     // Set WezTerm user var for toggle detection
     // "dHJ1ZQ==" is base64("true")
     print!("\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07");
@@ -1050,6 +1051,15 @@ pub fn cmd_sidebar() {
     // Tell tmux status bar to hide the session list while sidebar is open
     tmux(&["set-option", "-g", "@sidebar_open", "1"]);
     refresh_status_bar();
+
+    // On notched displays, paint this pane's terminal background black via
+    // OSC 11 so the wezterm split reads as solid black (matching the status
+    // filler) without affecting the main pane's bg.
+    let notched_pane = tmux(&["show-option", "-gv", "@notched"]) == "1";
+    if notched_pane {
+        print!("\x1b]11;rgb:0000/0000/0000\x1b\\");
+        io::stdout().flush().ok();
+    }
 
     enter_tui();
     let backend = CrosstermBackend::new(io::stdout());
@@ -1086,8 +1096,7 @@ pub fn cmd_sidebar() {
                         if me.row >= last_list_y && me.row < last_list_y + last_list_h =>
                     {
                         let idx = state.offset + (me.row - last_list_y) as usize;
-                        if let Some(sid) =
-                            state.items.get(idx).and_then(|i| i.session_id.clone())
+                        if let Some(sid) = state.items.get(idx).and_then(|i| i.session_id.clone())
                             && let Some(row_idx) = state
                                 .items
                                 .iter()
@@ -1100,10 +1109,7 @@ pub fn cmd_sidebar() {
                     MouseEventKind::Moved => {
                         if me.row >= last_list_y && me.row < last_list_y + last_list_h {
                             let idx = state.offset + (me.row - last_list_y) as usize;
-                            state.hover = state
-                                .items
-                                .get(idx)
-                                .and_then(|it| it.session_id.clone());
+                            state.hover = state.items.get(idx).and_then(|it| it.session_id.clone());
                         } else {
                             state.hover = None;
                         }
@@ -1169,6 +1175,12 @@ pub fn cmd_sidebar() {
 
     leave_tui();
 
+    // Reset pane background (OSC 111) to whatever the user's theme defines.
+    if notched_pane {
+        print!("\x1b]111\x1b\\");
+        io::stdout().flush().ok();
+    }
+
     // Restore status bar
     tmux(&["set-option", "-gu", "@sidebar_open"]);
     refresh_status_bar();
@@ -1230,7 +1242,11 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
     let area = f.area();
     f.render_widget(Clear, area);
 
-    let bg = MANTLE;
+    let bg = if state.notched {
+        Color::Rgb(0, 0, 0)
+    } else {
+        MANTLE
+    };
 
     if area.height < 3 || area.width < 6 {
         return (0, 0);
@@ -1273,12 +1289,17 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
     //  2 footer rows
     let list_y = area.y + notch_h + 1;
     let footer_h = 2u16;
-    let graph_h = if area.height >= 4 + 1 + notch_h + usage_graph::HEIGHT + footer_h {
-        usage_graph::HEIGHT
+    let bars = usage_bars::collect();
+    let wanted_bars_h = usage_bars::height(bars.len());
+    // Only show bars when the list still has room for at least 4 rows after.
+    // Add 2 extra rows for dim separator lines above and below the bars.
+    let bars_h = if wanted_bars_h > 0 && area.height >= 4 + 1 + notch_h + wanted_bars_h + 2 + footer_h {
+        wanted_bars_h
     } else {
         0
     };
-    let list_h = area.height.saturating_sub(1 + notch_h + footer_h + graph_h);
+    let sep_h = if bars_h > 0 { 2u16 } else { 0 };
+    let list_h = area.height.saturating_sub(1 + notch_h + footer_h + bars_h + sep_h);
 
     // Footer hints
     let hint1_y = area.y + area.height - 2;
@@ -1287,14 +1308,23 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
     render_at(f, area.x, hint1_y, content_w, hint1, bg);
     render_at(f, area.x, hint2_y, content_w, hint2, bg);
 
-    if graph_h > 0 {
-        let graph_rect = Rect {
+    if bars_h > 0 {
+        let sep_y_above = list_y + list_h;
+        let bars_y = sep_y_above + 1;
+        let sep_y_below = bars_y + bars_h;
+        let sep_line = Line::from(Span::styled(
+            "╌".repeat(content_w as usize),
+            Style::default().fg(SURFACE1).bg(bg),
+        ));
+        render_at(f, area.x, sep_y_above, content_w, sep_line.clone(), bg);
+        render_at(f, area.x, sep_y_below, content_w, sep_line, bg);
+        let bars_rect = Rect {
             x: area.x,
-            y: list_y + list_h,
+            y: bars_y,
             width: content_w,
-            height: graph_h,
+            height: bars_h,
         };
-        usage_graph::draw(f, graph_rect, bg);
+        usage_bars::draw(f, bars_rect, bg, &bars);
     }
 
     if list_h == 0 {
@@ -1400,8 +1430,7 @@ fn render_item(
     match &item.kind {
         ItemKind::Group => {
             let disp = truncate(&item.display, content_w);
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(
                 disp,
@@ -1464,8 +1493,7 @@ fn render_item(
         }
         ItemKind::Branch => {
             let disp = truncate(&item.display, content_w);
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(
                 disp,
@@ -1491,8 +1519,7 @@ fn render_item(
             } else {
                 Style::default().fg(color).italic().bg(row_bg)
             };
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(disp, style));
             if !age_str.is_empty() {
@@ -1520,8 +1547,7 @@ fn render_item(
                 .join(" ");
             let disp = truncate(&text, content_w);
             let color = if is_cur { GREEN } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(disp, Style::default().fg(color).bg(row_bg)));
             f.render_widget(
@@ -1532,8 +1558,7 @@ fn render_item(
         ItemKind::Status => {
             let disp = truncate(&item.display, content_w);
             let color = if is_cur { SUBTEXT0 } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(
                 disp,
@@ -1547,8 +1572,7 @@ fn render_item(
         ItemKind::Activity(text) => {
             let disp = truncate(text, content_w);
             let color = if is_cur { SUBTEXT0 } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(
                 disp,
@@ -1632,8 +1656,7 @@ fn render_item(
             let empty = bar_cells.saturating_sub(filled);
             let pct_text = format!(" {pct}%");
             let filled_color = if is_cur { item.color } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> =
-                vec![bar_span(item, is_sel, row_bg)];
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
             line.push(Span::styled(
                 "█".repeat(filled),
@@ -1656,8 +1679,8 @@ fn render_item(
 }
 
 fn footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
-    let key = |k: &'static str| Span::styled(k, Style::default().fg(TEXT).bold());
-    let lbl = |s: &'static str| Span::styled(s, Style::default().fg(OVERLAY0));
+    let key = |k: &'static str| Span::styled(k, Style::default().fg(TEXT).bold().italic());
+    let lbl = |s: &'static str| Span::styled(s, Style::default().fg(OVERLAY0).italic());
     let sep = || Span::styled("  ", Style::default());
 
     if width >= 34 {

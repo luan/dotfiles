@@ -982,6 +982,41 @@ fn list_worktrees(dir: &Path) -> Vec<WtEntry> {
     entries
 }
 
+fn resolve_common_dir(dir: &Path) -> Option<PathBuf> {
+    let out = git_output(dir, &["rev-parse", "--git-common-dir"])?;
+    let raw = String::from_utf8_lossy(&out).trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(&raw);
+    Some(if p.is_absolute() { p } else { dir.join(p) })
+}
+
+fn next_wt_name(common_dir: &Path, entries: &[WtEntry]) -> String {
+    let mut max_n = 0u32;
+    let mut consider = |name: &str| {
+        if let Some(rest) = name.strip_prefix("wt")
+            && let Ok(n) = rest.parse::<u32>()
+        {
+            max_n = max_n.max(n);
+        }
+    };
+    for e in entries {
+        if let Some(name) = PathBuf::from(&e.path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+        {
+            consider(&name);
+        }
+    }
+    if let Ok(rd) = fs::read_dir(common_dir) {
+        for ent in rd.flatten() {
+            consider(&ent.file_name().to_string_lossy());
+        }
+    }
+    format!("wt{}", max_n + 1)
+}
+
 fn find_detached_worktree(entries: &[WtEntry]) -> Option<PathBuf> {
     entries
         .iter()
@@ -1041,72 +1076,48 @@ fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> Worktree
     match run_picker(items, config, HashMap::new()) {
         PickerAction::Selected(id) => {
             if id == "__new__" {
-                match run_text_input(TextInputConfig {
-                    prompt: "\u{f067}  Worktree".to_string(),
-                    initial: String::new(),
-                    placeholder: "branch name...".to_string(),
-                    prefix: String::new(),
-                }) {
-                    TextInputAction::Confirmed(wt_name) if !wt_name.is_empty() => {
-                        let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
-                        let branch = wt_name.clone();
-                        let result: Result<(), String> =
-                            run_with_status(&format!("Creating worktree {wt_name}..."), || {
-                                let output = Command::new("wt")
-                                    .args([
-                                        "switch", "--create", &branch, "--no-cd", "-y", "-C",
-                                        &dir_arg,
-                                    ])
-                                    .stdin(Stdio::null())
-                                    .stdout(Stdio::null())
-                                    .output();
-                                match output {
-                                    Ok(o) if o.status.success() => Ok(()),
-                                    Ok(o) => {
-                                        let msg =
-                                            String::from_utf8_lossy(&o.stderr).trim().to_string();
-                                        Err(if msg.is_empty() {
-                                            format!("wt exited with {}", o.status)
-                                        } else {
-                                            msg
-                                        })
-                                    }
-                                    Err(e) => Err(format!("failed to run wt: {e}")),
-                                }
-                            });
-                        match result {
-                            Ok(()) => {
-                                let new_entries = list_worktrees(selected_dir);
-                                // Match by branch name, fall back to directory name
-                                let found = new_entries
-                                    .iter()
-                                    .find(|e| e.branch.as_deref() == Some(&wt_name))
-                                    .or_else(|| {
-                                        new_entries.iter().find(|e| {
-                                            PathBuf::from(&e.path)
-                                                .file_name()
-                                                .is_some_and(|n| n.to_string_lossy() == wt_name)
-                                        })
-                                    });
-                                match found {
-                                    Some(e) if PathBuf::from(&e.path).is_dir() => {
-                                        WorktreeResult::Selected {
-                                            path: PathBuf::from(&e.path),
-                                            branch: e.branch.clone(),
-                                        }
-                                    }
-                                    _ => WorktreeResult::Cancelled,
-                                }
+                let Some(common_dir) = resolve_common_dir(selected_dir) else {
+                    run_with_status("Error: not a git repo", || {
+                        std::thread::sleep(Duration::from_secs(2));
+                    });
+                    return WorktreeResult::Cancelled;
+                };
+                let wt_name = next_wt_name(&common_dir, &entries);
+                let wt_path = common_dir.join(&wt_name);
+                let wt_path_str = wt_path.to_string_lossy().to_string();
+                let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
+                let result: Result<(), String> =
+                    run_with_status(&format!("Creating worktree {wt_name}..."), || {
+                        let output = Command::new("git")
+                            .args(["-C", &dir_arg, "worktree", "add", "--detach", &wt_path_str])
+                            .stdin(Stdio::null())
+                            .stdout(Stdio::null())
+                            .output();
+                        match output {
+                            Ok(o) if o.status.success() => Ok(()),
+                            Ok(o) => {
+                                let msg = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                                Err(if msg.is_empty() {
+                                    format!("git exited with {}", o.status)
+                                } else {
+                                    msg
+                                })
                             }
-                            Err(msg) => {
-                                run_with_status(&format!("Error: {msg}"), || {
-                                    std::thread::sleep(Duration::from_secs(3));
-                                });
-                                WorktreeResult::Cancelled
-                            }
+                            Err(e) => Err(format!("failed to run git: {e}")),
                         }
+                    });
+                match result {
+                    Ok(()) if wt_path.is_dir() => WorktreeResult::Selected {
+                        path: wt_path,
+                        branch: Some(wt_name),
+                    },
+                    Ok(()) => WorktreeResult::Cancelled,
+                    Err(msg) => {
+                        run_with_status(&format!("Error: {msg}"), || {
+                            std::thread::sleep(Duration::from_secs(3));
+                        });
+                        WorktreeResult::Cancelled
                     }
-                    _ => WorktreeResult::Cancelled,
                 }
             } else {
                 // Look up the branch from the original entries
