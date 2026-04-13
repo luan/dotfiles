@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::env;
 use std::process::{Command, Stdio};
 
+use serde::Deserialize;
+
 mod chooser;
 mod codex;
 mod color;
@@ -17,10 +19,21 @@ mod usage_bars;
 
 use color::compute_color;
 use group::GroupMeta;
-use order::{SessionStore, compute_order};
+use order::compute_order;
 use picker::{TextInputAction, TextInputConfig, run_text_input};
+use project::{rename_parts, rename_session};
 use status::{render_bar, render_windows};
 use tmux::{query_state, query_system_info, query_windows, tmux as tmux_cmd};
+
+#[derive(Deserialize)]
+struct WeztermPane {
+    window_id: u64,
+    tab_id: u64,
+    pane_id: u64,
+    title: String,
+    is_active: bool,
+    left_col: usize,
+}
 
 fn cmd_order(args: &[String]) {
     let include_all = args.iter().any(|a| a == "--all");
@@ -372,18 +385,14 @@ fn cmd_move(args: &[String]) {
         .spawn();
 }
 
-fn cmd_rename() {
-    let old_name = tmux_cmd(&["display-message", "-p", "#S"]);
+fn cmd_rename(args: &[String]) {
+    let old_name = args
+        .first()
+        .filter(|s| !s.is_empty())
+        .cloned()
+        .unwrap_or_else(|| tmux_cmd(&["display-message", "-p", "#S"]));
 
-    // Split into fixed prefix (repo/) and editable suffix
-    let (prefix, suffix) = if let Some(slash) = old_name.find('/') {
-        (
-            format!("{}/", &old_name[..slash]),
-            old_name[slash + 1..].to_string(),
-        )
-    } else {
-        (String::new(), old_name.clone())
-    };
+    let (prefix, suffix) = rename_parts(&old_name);
 
     let new_suffix = match run_text_input(TextInputConfig {
         prompt: "\u{f044}  Rename".to_string(),
@@ -400,28 +409,7 @@ fn cmd_rename() {
     }
 
     let new_name = format!("{prefix}{new_suffix}");
-    if new_name == old_name {
-        return;
-    }
-
-    // Check for collision
-    if Command::new("tmux")
-        .args(["has-session", "-t", &format!("={new_name}")])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
-    {
-        eprintln!("Session '{new_name}' already exists");
-        return;
-    }
-
-    tmux_cmd(&["rename-session", "-t", &format!("={old_name}"), &new_name]);
-
-    // Update order store
-    let mut store = SessionStore::load();
-    store.rename(&old_name, &new_name);
-    store.save();
+    let _ = rename_session(&old_name, &new_name);
 }
 
 fn cmd_select(args: &[String]) {
@@ -463,6 +451,128 @@ fn cmd_hide_toggle(args: &[String]) {
     order::save_lines(&path, &lines);
 }
 
+fn cmd_picker(args: &[String]) {
+    let Some(action) = args.first().map(String::as_str) else {
+        eprintln!("Missing picker action");
+        std::process::exit(1);
+    };
+
+    if tmux_cmd(&["show-option", "-gv", "@sidebar_open"]) == "1" && dispatch_sidebar_picker(action)
+    {
+        return;
+    }
+
+    open_picker_popup(action);
+}
+
+fn dispatch_sidebar_picker(action: &str) -> bool {
+    let key = match action {
+        "rename" => "r",
+        "chooser" => "/",
+        "new-session" => "n",
+        "new-worktree" => "w",
+        "ditch" => "x",
+        _ => return false,
+    };
+
+    let Ok(output) = Command::new("wezterm")
+        .args(["cli", "list", "--format", "json"])
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+
+    if !output.status.success() {
+        return false;
+    }
+
+    let Ok(panes) = serde_json::from_slice::<Vec<WeztermPane>>(&output.stdout) else {
+        return false;
+    };
+
+    let Some(active) = panes.iter().find(|pane| pane.is_active) else {
+        return false;
+    };
+
+    let Some(sidebar) = panes
+        .iter()
+        .filter(|pane| {
+            pane.window_id == active.window_id
+                && pane.tab_id == active.tab_id
+                && pane.pane_id != active.pane_id
+                && pane.left_col < active.left_col
+                && pane.title.starts_with("tmux-session")
+        })
+        .min_by_key(|pane| pane.left_col)
+    else {
+        return false;
+    };
+
+    let pane_id = sidebar.pane_id.to_string();
+
+    if !Command::new("wezterm")
+        .args(["cli", "activate-pane", "--pane-id", &pane_id])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+    {
+        return false;
+    }
+
+    Command::new("wezterm")
+        .args([
+            "cli",
+            "send-text",
+            "--no-paste",
+            "--pane-id",
+            &pane_id,
+            key,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn open_picker_popup(action: &str) {
+    let (width, height, allow_failure) = match action {
+        "rename" => ("60%", "6", true),
+        "chooser" => ("80%", "40%", false),
+        "new-session" => ("80%", "60%", true),
+        "new-worktree" => ("80%", "60%", true),
+        "ditch" => ("80%", "50%", true),
+        _ => return,
+    };
+
+    let mut command = format!("~/.config/tmux/scripts/tmux-session {action}");
+    if allow_failure {
+        command.push_str(" || true");
+    }
+
+    let _ = Command::new("tmux")
+        .args([
+            "display-popup",
+            "-E",
+            "-B",
+            "-w",
+            width,
+            "-h",
+            height,
+            "-x",
+            "C",
+            "-y",
+            "C",
+            "-s",
+            "bg=#{@popup_bg}",
+            &command,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let cmd = args.get(1).map_or("list", String::as_str);
@@ -478,12 +588,13 @@ fn main() {
         "project-list" => project::cmd_project_list(&rest),
         "toggle-favorite" => project::cmd_toggle_favorite(&rest),
         "new-session" => project::cmd_new_session(),
-        "new-worktree" => project::cmd_new_worktree(),
-        "ditch" => project::cmd_ditch(),
-        "rename" => cmd_rename(),
+        "new-worktree" => project::cmd_new_worktree(&rest),
+        "ditch" => project::cmd_ditch(&rest),
+        "rename" => cmd_rename(&rest),
         "select" => cmd_select(&rest),
         "attention" => cmd_attention(),
         "hide-toggle" => cmd_hide_toggle(&rest),
+        "picker" => cmd_picker(&rest),
         "update" => cmd_update_with_args(&rest),
         "click" => cmd_click(&rest),
         "sidebar" => sidebar::cmd_sidebar(),
