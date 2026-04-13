@@ -15,6 +15,7 @@ config.warn_about_missing_glyphs = false
 config.line_height = 1.45
 config.underline_position = "-0.25cell"
 config.underline_thickness = "3px"
+config.enable_kitty_keyboard = true
 
 -- Window
 config.window_decorations = "RESIZE|MACOS_FORCE_SQUARE_CORNERS|MACOS_FORCE_DISABLE_SHADOW"
