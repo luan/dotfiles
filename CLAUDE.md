@@ -45,6 +45,8 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 
 `xdg-configs/tmux/` has extensive session management scripts in `scripts/`. Plugins managed by tpm. The tmux config lives at `~/.config/tmux/tmux.conf` (XDG path, not `~/.tmux.conf`).
 
+When changing `tmux-session`, run `just tmux-session` to rebuild, copy, and codesign the runtime binary.
+
 ## Conventions
 
 - Branch prefix: `luan/`

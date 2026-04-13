@@ -16,6 +16,14 @@ pub fn hidden_file() -> PathBuf {
     home().join(".config/tmux/session-hidden")
 }
 
+fn temp_path(path: &PathBuf) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("tmp");
+    path.with_file_name(format!("{file_name}.{}.tmp", std::process::id()))
+}
+
 pub fn load_lines(path: &PathBuf) -> Vec<String> {
     fs::read_to_string(path)
         .unwrap_or_default()
@@ -32,7 +40,7 @@ pub fn save_lines(path: &PathBuf, lines: &[String]) {
         .filter(|l| seen.insert(l.as_str()))
         .map(String::as_str)
         .collect();
-    let tmp = path.with_extension("tmp");
+    let tmp = temp_path(path);
     let mut f = fs::File::create(&tmp).unwrap();
     for l in &deduped {
         writeln!(f, "{l}").unwrap();
@@ -80,7 +88,10 @@ impl SessionStore {
 
     pub fn save(&self) {
         let path = order_file();
-        let tmp = path.with_extension("tmp");
+        // Multiple tmux hooks can refresh session order at once while a session
+        // is being created or removed. A shared temp filename lets concurrent
+        // writers clobber each other and corrupt the JSON store.
+        let tmp = temp_path(&path);
         let json = serde_json::to_string_pretty(self).unwrap_or_default();
         fs::write(&tmp, json).ok();
         fs::rename(tmp, path).ok();
@@ -294,7 +305,9 @@ pub fn compute_order(alive: &HashSet<String>, include_hidden: bool) -> Vec<Strin
     let mut store = SessionStore::load();
 
     // Insert any new alive sessions not yet in the store
-    for s in alive {
+    let mut alive_sorted: Vec<&String> = alive.iter().collect();
+    alive_sorted.sort();
+    for s in alive_sorted {
         store.insert(s);
     }
 
