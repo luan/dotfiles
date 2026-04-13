@@ -275,9 +275,9 @@ config.keys = {
 	-- Cmd+Shift+P → session prev
 	{ key = "p", mods = "SUPER|SHIFT", action = act.SendString(csi("65~")) },
 	-- Cmd+Shift+, → session move up
-	{ key = ",", mods = "SUPER|SHIFT", action = act.SendString(csi("66~")) },
+	{ key = "mapped:<", mods = "SUPER|SHIFT", action = act.SendString(csi("66~")) },
 	-- Cmd+Shift+. → session move down
-	{ key = ".", mods = "SUPER|SHIFT", action = act.SendString(csi("67~")) },
+	{ key = "mapped:>", mods = "SUPER|SHIFT", action = act.SendString(csi("67~")) },
 	-- Cmd+Ctrl+N → new worktree
 	{ key = "n", mods = "SUPER|CTRL", action = act.SendString(csi("68~")) },
 	-- Ctrl+Alt+[ → copy mode
