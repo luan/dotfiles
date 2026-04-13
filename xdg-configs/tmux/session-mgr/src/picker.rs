@@ -20,6 +20,23 @@ const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
 
+fn picker_bg() -> Color {
+    std::env::var("TMUX_SESSION_BG")
+        .ok()
+        .and_then(|value| {
+            let hex = value.trim().trim_start_matches('#');
+            if hex.len() != 6 {
+                return None;
+            }
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some(Color::Rgb(r, g, b))
+        })
+        .unwrap_or(BASE)
+}
+
+#[derive(Clone)]
 pub struct PickerItem {
     pub id: String,
     pub display: String,
@@ -335,8 +352,9 @@ fn move_selection(items: &[PickerItem], state: &mut PickerState, direction: i32)
 
 fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut PickerState) {
     let area = f.area();
+    let base = picker_bg();
     f.render_widget(Clear, area);
-    f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+    f.render_widget(Block::default().style(Style::default().bg(base)), area);
 
     // Borderless layout: title, sep, search, sep, list, (sep, footer)
     let has_footer = !config.footer.is_empty();
@@ -365,7 +383,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
             config.prompt.trim().to_string(),
             Style::default().fg(YELLOW).bold(),
         )))
-        .style(Style::default().bg(BASE)),
+        .style(Style::default().bg(base)),
         chunks[0],
     );
     // Separator below title
@@ -374,7 +392,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
             "─".repeat(chunks[1].width as usize),
             Style::default().fg(SURFACE1),
         )))
-        .style(Style::default().bg(BASE)),
+        .style(Style::default().bg(base)),
         chunks[1],
     );
 
@@ -386,13 +404,13 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
             Style::default().fg(OVERLAY0).italic(),
         ));
         f.render_widget(
-            Paragraph::new(placeholder).style(Style::default().bg(BASE)),
+            Paragraph::new(placeholder).style(Style::default().bg(base)),
             search_area,
         );
     } else {
         let input_line = Line::from(Span::styled(&state.input, Style::default().fg(TEXT)));
         f.render_widget(
-            Paragraph::new(input_line).style(Style::default().bg(BASE)),
+            Paragraph::new(input_line).style(Style::default().bg(base)),
             search_area,
         );
     }
@@ -407,7 +425,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
         "─".repeat(sep_width),
         Style::default().fg(SURFACE1),
     )))
-    .style(Style::default().bg(BASE));
+    .style(Style::default().bg(base));
     f.render_widget(sep, chunks[3]);
 
     // List area — reserve 1 col on right for scrollbar
@@ -450,11 +468,11 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
                 Span::styled("  ", Style::default()),
                 Span::styled(&item.display, Style::default().fg(OVERLAY0)),
             ]);
-            let bg = Style::default().bg(BASE);
+            let bg = Style::default().bg(base);
             f.render_widget(Paragraph::new(header_line).style(bg), row_area);
         } else {
             // Selectable item
-            let bg_color = if is_selected { SURFACE0 } else { BASE };
+            let bg_color = if is_selected { SURFACE0 } else { base };
             let accent = item.color.unwrap_or(BLUE);
 
             let mut spans = Vec::new();
@@ -531,7 +549,7 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
                 .begin_symbol(None)
                 .end_symbol(None)
                 .track_symbol(Some(" "))
-                .track_style(Style::default().bg(BASE))
+                .track_style(Style::default().bg(base))
                 .thumb_style(Style::default().fg(SURFACE1)),
             scrollbar_area,
             &mut scrollbar_state,
@@ -552,14 +570,14 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
             "─".repeat(fsep_width),
             Style::default().fg(SURFACE1),
         )))
-        .style(Style::default().bg(BASE));
+        .style(Style::default().bg(base));
         f.render_widget(footer_sep, footer_chunks[0]);
 
         let footer_text = Paragraph::new(Line::from(Span::styled(
             &config.footer,
             Style::default().fg(OVERLAY0),
         )))
-        .style(Style::default().bg(BASE));
+        .style(Style::default().bg(base));
         f.render_widget(footer_text, footer_chunks[1]);
     }
 }
@@ -593,8 +611,9 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
         terminal
             .draw(|f| {
                 let area = f.area();
+                let base = picker_bg();
                 f.render_widget(Clear, area);
-                f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+                f.render_widget(Block::default().style(Style::default().bg(base)), area);
 
                 // Borderless: title (row 0), sep (row 1), input (row 2)
                 let row_title = Rect {
@@ -621,7 +640,7 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                         config.prompt.trim().to_string(),
                         Style::default().fg(YELLOW).bold(),
                     )))
-                    .style(Style::default().bg(BASE)),
+                    .style(Style::default().bg(base)),
                     row_title,
                 );
                 f.render_widget(
@@ -629,7 +648,7 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                         "─".repeat(row_sep.width as usize),
                         Style::default().fg(SURFACE1),
                     )))
-                    .style(Style::default().bg(BASE)),
+                    .style(Style::default().bg(base)),
                     row_sep,
                 );
 
@@ -646,7 +665,7 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
                     ])
                 };
                 f.render_widget(
-                    Paragraph::new(line).style(Style::default().bg(BASE)),
+                    Paragraph::new(line).style(Style::default().bg(base)),
                     row_input,
                 );
 
@@ -723,6 +742,7 @@ pub struct ConfirmConfig {
     pub prompt: String,
 }
 
+#[derive(Clone)]
 pub enum ConfirmLine {
     Ok(String),
     Warn(String),
@@ -743,8 +763,9 @@ pub fn run_confirm(config: ConfirmConfig) -> bool {
         terminal
             .draw(|f| {
                 let area = f.area();
+                let base = picker_bg();
                 f.render_widget(Clear, area);
-                f.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+                f.render_widget(Block::default().style(Style::default().bg(base)), area);
 
                 // Borderless: content starts at (x+1, y+1)
                 let padded = Rect {
@@ -795,7 +816,7 @@ pub fn run_confirm(config: ConfirmConfig) -> bool {
                 f.render_widget(
                     Paragraph::new(lines)
                         .wrap(ratatui::widgets::Wrap { trim: false })
-                        .style(Style::default().bg(BASE)),
+                        .style(Style::default().bg(base)),
                     padded,
                 );
             })
@@ -835,14 +856,15 @@ pub fn run_with_status<T, F: FnOnce() -> T>(message: &str, f: F) -> T {
     terminal
         .draw(|frame| {
             let area = frame.area();
+            let base = picker_bg();
             frame.render_widget(Clear, area);
-            frame.render_widget(Block::default().style(Style::default().bg(BASE)), area);
+            frame.render_widget(Block::default().style(Style::default().bg(base)), area);
 
             let block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(SURFACE1))
-                .style(Style::default().bg(BASE));
+                .style(Style::default().bg(base));
 
             let inner = block.inner(area);
             frame.render_widget(block, area);
@@ -856,7 +878,7 @@ pub fn run_with_status<T, F: FnOnce() -> T>(message: &str, f: F) -> T {
 
             let line = Line::from(Span::styled(message, Style::default().fg(OVERLAY1)));
             frame.render_widget(
-                Paragraph::new(line).style(Style::default().bg(BASE)),
+                Paragraph::new(line).style(Style::default().bg(base)),
                 padded,
             );
         })

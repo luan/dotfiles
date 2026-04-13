@@ -1,21 +1,32 @@
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, Stdout, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crossterm::cursor;
 use crossterm::event::{
     self, DisableFocusChange, DisableMouseCapture, EnableFocusChange, EnableMouseCapture, Event,
-    KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use nucleo_matcher::pattern::{Atom, CaseMatching, Normalization};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::prelude::*;
 use ratatui::widgets::{Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 
+use crate::picker::PickerItem;
 use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::order::compute_order;
+use crate::project::{
+    DitchPlan, WtEntry, build_ditch_plan, build_project_items, build_worktree_items,
+    create_new_worktree, create_session_at_dir, default_session_name, execute_ditch_action,
+    list_worktrees, rename_parts, rename_session, resolve_selected_dir_from_session,
+    toggle_favorite, touch_lru, worktree_name_parts,
+};
 use crate::tmux::tmux;
 use crate::{codex, copilot, usage_bars};
 
@@ -657,10 +668,333 @@ struct Item {
     kind: ItemKind,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SidebarMode {
+    Browse,
+    Chooser,
+}
+
+enum SidebarOverlay {
+    Rename(RenameOverlay),
+    Ditch(ListOverlay),
+    Project(ProjectOverlay),
+    Worktree(WorktreeOverlay),
+    SessionName(SessionNameOverlay),
+}
+
+enum OverlayKeyResult {
+    Unhandled,
+    Keep,
+    Close,
+}
+
+struct RenameOverlay {
+    old_name: String,
+    prefix: String,
+    input: String,
+    cursor: usize,
+    error: Option<String>,
+}
+
+struct ListOverlay {
+    title: String,
+    items: Vec<PickerItem>,
+    selected: usize,
+    offset: usize,
+    error: Option<String>,
+    plan: Option<DitchPlan>,
+}
+
+struct ProjectOverlay {
+    filter: String,
+    cursor: usize,
+    all_items: Vec<PickerItem>,
+    items: Vec<PickerItem>,
+    selected: usize,
+    offset: usize,
+}
+
+enum WorktreeFlow {
+    NewSession,
+    NewWorktree,
+}
+
+struct WorktreeOverlay {
+    flow: WorktreeFlow,
+    selected_dir: PathBuf,
+    entries: Vec<WtEntry>,
+    items: Vec<PickerItem>,
+    selected: usize,
+    offset: usize,
+    error: Option<String>,
+}
+
+struct SessionNameOverlay {
+    title: String,
+    prefix: String,
+    input: String,
+    cursor: usize,
+    default_on_empty: Option<String>,
+    final_dir: PathBuf,
+    error: Option<String>,
+}
+
+fn first_selectable_picker(items: &[PickerItem]) -> usize {
+    items.iter().position(|item| item.selectable).unwrap_or(0)
+}
+
+fn move_picker_selection(items: &[PickerItem], selected: &mut usize, dir: i32) {
+    if items.is_empty() {
+        return;
+    }
+    let mut pos = (*selected).min(items.len().saturating_sub(1));
+    loop {
+        if dir > 0 {
+            if pos + 1 >= items.len() {
+                return;
+            }
+            pos += 1;
+        } else {
+            if pos == 0 {
+                return;
+            }
+            pos -= 1;
+        }
+        if items[pos].selectable {
+            *selected = pos;
+            return;
+        }
+    }
+}
+
+fn prev_char_boundary(s: &str, cursor: usize) -> usize {
+    if cursor == 0 {
+        return 0;
+    }
+    s[..cursor]
+        .char_indices()
+        .last()
+        .map(|(idx, _)| idx)
+        .unwrap_or(0)
+}
+
+fn next_char_boundary(s: &str, cursor: usize) -> usize {
+    if cursor >= s.len() {
+        return s.len();
+    }
+    let mut iter = s[cursor..].char_indices();
+    let _ = iter.next();
+    iter.next().map(|(idx, _)| cursor + idx).unwrap_or(s.len())
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '_' | '-' | '/' | '.')
+}
+
+fn prev_word_boundary(s: &str, cursor: usize) -> usize {
+    if cursor == 0 {
+        return 0;
+    }
+
+    let chars: Vec<(usize, char)> = s[..cursor].char_indices().collect();
+    let mut i = chars.len();
+    while i > 0 && !is_word_char(chars[i - 1].1) {
+        i -= 1;
+    }
+    while i > 0 && is_word_char(chars[i - 1].1) {
+        i -= 1;
+    }
+    chars.get(i).map(|(idx, _)| *idx).unwrap_or(0)
+}
+
+fn next_word_boundary(s: &str, cursor: usize) -> usize {
+    if cursor >= s.len() {
+        return s.len();
+    }
+
+    let chars: Vec<(usize, char)> = s[cursor..].char_indices().collect();
+    let mut i = 0usize;
+    while i < chars.len() && !is_word_char(chars[i].1) {
+        i += 1;
+    }
+    while i < chars.len() && is_word_char(chars[i].1) {
+        i += 1;
+    }
+    chars.get(i).map(|(idx, _)| cursor + idx).unwrap_or(s.len())
+}
+
+fn handle_readline_key(text: &mut String, cursor: &mut usize, key: KeyEvent) -> bool {
+    match (key.code, key.modifiers) {
+        (KeyCode::Char(c), m) if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            text.insert(*cursor, c);
+            *cursor += c.len_utf8();
+            true
+        }
+        (KeyCode::Backspace, KeyModifiers::ALT) | (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
+            let prev = prev_word_boundary(text, *cursor);
+            text.drain(prev..*cursor);
+            *cursor = prev;
+            true
+        }
+        (KeyCode::Backspace, _) | (KeyCode::Char('h'), KeyModifiers::CONTROL) => {
+            if *cursor > 0 {
+                let prev = prev_char_boundary(text, *cursor);
+                text.drain(prev..*cursor);
+                *cursor = prev;
+            }
+            true
+        }
+        (KeyCode::Delete, _) => {
+            if *cursor < text.len() {
+                let next = next_char_boundary(text, *cursor);
+                text.drain(*cursor..next);
+            }
+            true
+        }
+        (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+            if *cursor < text.len() {
+                let next = next_char_boundary(text, *cursor);
+                text.drain(*cursor..next);
+            }
+            true
+        }
+        (KeyCode::Left, _) | (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
+            *cursor = prev_char_boundary(text, *cursor);
+            true
+        }
+        (KeyCode::Right, _) | (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+            *cursor = next_char_boundary(text, *cursor);
+            true
+        }
+        (KeyCode::Home, _) | (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
+            *cursor = 0;
+            true
+        }
+        (KeyCode::End, _) | (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
+            *cursor = text.len();
+            true
+        }
+        (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+            text.drain(..*cursor);
+            *cursor = 0;
+            true
+        }
+        (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
+            text.truncate(*cursor);
+            true
+        }
+        (KeyCode::Char('b'), KeyModifiers::ALT) => {
+            *cursor = prev_word_boundary(text, *cursor);
+            true
+        }
+        (KeyCode::Char('f'), KeyModifiers::ALT) => {
+            *cursor = next_word_boundary(text, *cursor);
+            true
+        }
+        (KeyCode::Char('d'), KeyModifiers::ALT) => {
+            let next = next_word_boundary(text, *cursor);
+            text.drain(*cursor..next);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn filter_picker_items(items: &[PickerItem], query: &str) -> Vec<PickerItem> {
+    if query.is_empty() {
+        return items.to_vec();
+    }
+
+    let mut matcher = Matcher::new(Config::DEFAULT);
+    let atom = Atom::new(
+        query,
+        CaseMatching::Ignore,
+        Normalization::Smart,
+        nucleo_matcher::pattern::AtomKind::Fuzzy,
+        false,
+    );
+    let needle = atom.needle_text();
+    let mut buf = Vec::new();
+    let mut matches = Vec::new();
+
+    for item in items {
+        let hay = format!("{} {}", item.display, item.id);
+        let haystack = Utf32Str::new(&hay, &mut buf);
+        let mut indices = Vec::new();
+        if let Some(score) = matcher.fuzzy_indices(haystack, needle, &mut indices) {
+            matches.push((item.clone(), score));
+        }
+        buf.clear();
+    }
+
+    matches.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.display.cmp(&b.0.display)));
+    matches.into_iter().map(|(item, _)| item).collect()
+}
+
+fn session_exists(session_name: &str) -> bool {
+    Command::new("tmux")
+        .args(["has-session", "-t", &format!("={session_name}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn all_pane_dirs() -> Vec<PathBuf> {
+    tmux(&["list-panes", "-a", "-F", "#{pane_current_path}"])
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+fn used_worktree_paths(entries: &[WtEntry]) -> HashSet<String> {
+    let pane_dirs = all_pane_dirs();
+    entries
+        .iter()
+        .filter(|entry| {
+            let entry_path = Path::new(&entry.path);
+            pane_dirs.iter().any(|dir| dir.starts_with(entry_path))
+        })
+        .map(|entry| entry.path.clone())
+        .collect()
+}
+
+fn build_sidebar_worktree_items(entries: &[WtEntry]) -> (Vec<PickerItem>, usize) {
+    let used = used_worktree_paths(entries);
+    let mut items = build_worktree_items(entries);
+
+    for item in items.iter_mut().skip(1) {
+        if used.contains(&item.id) {
+            item.right_label = "live".to_string();
+        }
+    }
+
+    let selected = items
+        .iter()
+        .enumerate()
+        .skip(1)
+        .find(|(_, item)| item.selectable && !used.contains(&item.id))
+        .map(|(idx, _)| idx)
+        .unwrap_or_else(|| first_selectable_picker(&items));
+
+    (items, selected)
+}
+
+fn handoff_to_main(state: &mut SidebarState) {
+    state.overlay = None;
+    state.last_meta_refresh = Instant::now() - Duration::from_secs(60);
+    state.focused = false;
+    state.hover = None;
+    state.refresh();
+    focus_main_pane();
+}
+
 // ── State ────────────────────────────────────────────────────
 
 struct SidebarState {
     items: Vec<Item>,
+    visible: Vec<usize>,
     current: String,
     selected: usize,
     offset: usize,
@@ -672,6 +1006,10 @@ struct SidebarState {
     last_meta_refresh: Instant,
     focused: bool,
     notched: bool,
+    mode: SidebarMode,
+    overlay: Option<SidebarOverlay>,
+    filter: String,
+    filter_cursor: usize,
 }
 
 const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
@@ -680,6 +1018,7 @@ impl SidebarState {
     fn new() -> Self {
         Self {
             items: Vec::new(),
+            visible: Vec::new(),
             current: String::new(),
             selected: 0,
             offset: 0,
@@ -689,6 +1028,221 @@ impl SidebarState {
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
             focused: true,
             notched: false,
+            mode: SidebarMode::Browse,
+            overlay: None,
+            filter: String::new(),
+            filter_cursor: 0,
+        }
+    }
+
+    fn chooser_active(&self) -> bool {
+        self.mode == SidebarMode::Chooser
+    }
+
+    fn overlay_active(&self) -> bool {
+        self.overlay.is_some()
+    }
+
+    fn open_chooser(&mut self) {
+        self.mode = SidebarMode::Chooser;
+        self.overlay = None;
+        self.filter.clear();
+        self.filter_cursor = 0;
+        self.offset = 0;
+        self.rebuild_visible();
+        self.snap_to_current();
+    }
+
+    fn close_chooser(&mut self) {
+        if !self.chooser_active() {
+            return;
+        }
+        self.mode = SidebarMode::Browse;
+        self.filter.clear();
+        self.filter_cursor = 0;
+        self.offset = 0;
+        self.rebuild_visible();
+    }
+
+    fn close_overlay(&mut self) {
+        self.overlay = None;
+    }
+
+    fn open_rename_overlay(&mut self) {
+        let Some(old_name) = self.selected_session_id() else {
+            return;
+        };
+        let (prefix, suffix) = rename_parts(&old_name);
+        self.overlay = Some(SidebarOverlay::Rename(RenameOverlay {
+            old_name,
+            prefix,
+            input: suffix.clone(),
+            cursor: suffix.len(),
+            error: None,
+        }));
+    }
+
+    fn open_ditch_overlay(&mut self) {
+        let Some(session) = self.selected_session_id() else {
+            return;
+        };
+        let Some(plan) = build_ditch_plan(&session) else {
+            return;
+        };
+        self.overlay = Some(SidebarOverlay::Ditch(ListOverlay {
+            title: format!("Ditch {session}"),
+            selected: first_selectable_picker(&plan.actions),
+            offset: 0,
+            items: plan.actions.clone(),
+            error: None,
+            plan: Some(plan),
+        }));
+    }
+
+    fn open_project_overlay(&mut self) {
+        let items = build_project_items("all");
+        self.overlay = Some(SidebarOverlay::Project(ProjectOverlay {
+            filter: String::new(),
+            cursor: 0,
+            selected: first_selectable_picker(&items),
+            offset: 0,
+            all_items: items.clone(),
+            items,
+        }));
+    }
+
+    fn open_worktree_overlay(&mut self) {
+        let Some(target) = self.selected_session_id() else {
+            return;
+        };
+        let Some(selected_dir) = resolve_selected_dir_from_session(Some(&target)) else {
+            return;
+        };
+        let entries = list_worktrees(&selected_dir);
+        if entries.is_empty() {
+            return;
+        }
+        let (items, selected) = build_sidebar_worktree_items(&entries);
+        self.overlay = Some(SidebarOverlay::Worktree(WorktreeOverlay {
+            flow: WorktreeFlow::NewWorktree,
+            selected_dir,
+            entries,
+            selected,
+            offset: 0,
+            items,
+            error: None,
+        }));
+    }
+
+    fn open_worktree_overlay_for_dir(&mut self, selected_dir: PathBuf, flow: WorktreeFlow) {
+        let entries = list_worktrees(&selected_dir);
+        if entries.is_empty() {
+            let final_dir = selected_dir.clone();
+            let default_name = default_session_name(&selected_dir, &final_dir);
+            self.open_session_name_overlay(
+                "Session".to_string(),
+                String::new(),
+                default_name.clone(),
+                Some(default_name),
+                final_dir,
+            );
+            return;
+        }
+        let (items, selected) = build_sidebar_worktree_items(&entries);
+        self.overlay = Some(SidebarOverlay::Worktree(WorktreeOverlay {
+            flow,
+            selected_dir,
+            entries,
+            selected,
+            offset: 0,
+            items,
+            error: None,
+        }));
+    }
+
+    fn open_session_name_overlay(
+        &mut self,
+        title: String,
+        prefix: String,
+        initial: String,
+        default_on_empty: Option<String>,
+        final_dir: PathBuf,
+    ) {
+        self.overlay = Some(SidebarOverlay::SessionName(SessionNameOverlay {
+            title,
+            prefix,
+            cursor: initial.len(),
+            input: initial,
+            default_on_empty,
+            final_dir,
+            error: None,
+        }));
+    }
+
+    fn rebuild_visible(&mut self) {
+        self.visible.clear();
+        self.visible.extend(0..self.items.len());
+    }
+
+    fn search_matches(&self) -> Vec<(usize, u16)> {
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let atom = Atom::new(
+            &self.filter,
+            CaseMatching::Ignore,
+            Normalization::Smart,
+            nucleo_matcher::pattern::AtomKind::Fuzzy,
+            false,
+        );
+        let needle = atom.needle_text();
+        let mut buf = Vec::new();
+        let mut matches = Vec::new();
+
+        for (idx, item) in self.items.iter().enumerate() {
+            if !item.selectable {
+                continue;
+            }
+            let hay = match item.session_id.as_ref() {
+                Some(session_id) => format!("{} {}", item.display, session_id),
+                None => item.display.clone(),
+            };
+            let haystack = Utf32Str::new(&hay, &mut buf);
+            let mut indices = Vec::new();
+            if let Some(score) = matcher.fuzzy_indices(haystack, needle, &mut indices) {
+                matches.push((idx, score));
+            }
+            buf.clear();
+        }
+
+        matches.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        matches
+    }
+
+    fn selectable_visible_indices(&self) -> Vec<usize> {
+        self.visible
+            .iter()
+            .copied()
+            .filter(|idx| self.items.get(*idx).is_some_and(|item| item.selectable))
+            .collect()
+    }
+
+    fn is_visible_index(&self, idx: usize) -> bool {
+        self.visible.contains(&idx)
+    }
+
+    fn snap_to_first_visible(&mut self) {
+        if let Some(idx) = self.selectable_visible_indices().into_iter().next() {
+            self.selected = idx;
+        }
+    }
+
+    fn apply_filter_change(&mut self) {
+        self.offset = 0;
+        if self.filter.is_empty() {
+            self.snap_to_current();
+            return;
+        }
+        if let Some((idx, _)) = self.search_matches().into_iter().next() {
+            self.selected = idx;
         }
     }
 
@@ -730,6 +1284,7 @@ impl SidebarState {
 
         self.items = build_items(&sessions, &cur, &self.meta);
         self.current = cur;
+        self.rebuild_visible();
 
         // When unfocused, always track current session
         if !self.focused {
@@ -739,47 +1294,58 @@ impl SidebarState {
 
         if let Some(ref id) = prev_id
             && let Some(pos) = self.items.iter().position(|i| i.id == *id)
+            && self.is_visible_index(pos)
         {
             self.selected = pos;
             return;
         }
-        self.snap_to_current();
+        if self.chooser_active() && !self.filter.is_empty() {
+            self.apply_filter_change();
+        } else {
+            self.snap_to_current();
+        }
     }
 
     fn snap_to_current(&mut self) {
-        self.selected = self
+        if let Some(pos) = self
             .items
             .iter()
             .position(|i| i.selectable && i.id == self.current)
-            .unwrap_or(0);
+            .filter(|pos| self.is_visible_index(*pos))
+        {
+            self.selected = pos;
+            return;
+        }
+        self.snap_to_first_visible();
     }
 
     fn move_sel(&mut self, dir: i32) {
-        let len = self.items.len();
-        if len == 0 {
+        let selectable = self.selectable_visible_indices();
+        if selectable.is_empty() {
             return;
         }
-        let mut pos = self.selected;
-        loop {
-            if dir > 0 {
-                if pos + 1 >= len {
-                    return;
-                }
-                pos += 1;
-            } else {
-                if pos == 0 {
-                    return;
-                }
-                pos -= 1;
-            }
-            if self.items[pos].selectable {
-                self.selected = pos;
+        let Some(mut pos) = selectable.iter().position(|idx| *idx == self.selected) else {
+            self.selected = selectable[0];
+            return;
+        };
+        if dir > 0 {
+            if pos + 1 >= selectable.len() {
                 return;
             }
+            pos += 1;
+        } else {
+            if pos == 0 {
+                return;
+            }
+            pos -= 1;
         }
+        self.selected = selectable[pos];
     }
 
     fn selected_session_id(&self) -> Option<String> {
+        if !self.is_visible_index(self.selected) {
+            return None;
+        }
         self.items
             .get(self.selected)
             .and_then(|i| i.session_id.clone())
@@ -791,18 +1357,252 @@ impl SidebarState {
         }
     }
 
+    fn move_selected_session(&mut self, direction: &str) {
+        if let Some(id) = self.selected_session_id() {
+            let exe = std::env::current_exe().unwrap_or_else(|_| "tmux-session".into());
+            let _ = Command::new(exe)
+                .args(["move", direction, &id])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            self.last_meta_refresh = Instant::now() - Duration::from_secs(60);
+            self.refresh();
+        }
+    }
+
     fn select_by_number(&mut self, c: char) {
         let n = (c as usize) - ('1' as usize);
-        let selectable: Vec<usize> = self
-            .items
-            .iter()
-            .enumerate()
-            .filter(|(_, i)| i.selectable)
-            .map(|(idx, _)| idx)
-            .collect();
+        let selectable = self.selectable_visible_indices();
         if let Some(&idx) = selectable.get(n) {
             self.selected = idx;
             self.switch_to_selected();
+        }
+    }
+
+    fn handle_overlay_key(&mut self, key: KeyEvent) -> bool {
+        let Some(mut overlay) = self.overlay.take() else {
+            return false;
+        };
+
+        let result = match &mut overlay {
+            SidebarOverlay::Rename(rename) => self.handle_rename_key(rename, key),
+            SidebarOverlay::Ditch(list) => self.handle_ditch_key(list, key),
+            SidebarOverlay::Project(project) => self.handle_project_key(project, key),
+            SidebarOverlay::Worktree(worktree) => self.handle_worktree_key(worktree, key),
+            SidebarOverlay::SessionName(session) => self.handle_session_name_key(session, key),
+        };
+
+        match result {
+            OverlayKeyResult::Unhandled => {
+                self.overlay = Some(overlay);
+                false
+            }
+            OverlayKeyResult::Keep => {
+                if self.overlay.is_none() {
+                    self.overlay = Some(overlay);
+                }
+                true
+            }
+            OverlayKeyResult::Close => true,
+        }
+    }
+
+    fn handle_rename_key(&mut self, rename: &mut RenameOverlay, key: KeyEvent) -> OverlayKeyResult {
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => OverlayKeyResult::Close,
+            (KeyCode::Enter, _) => {
+                let new_suffix = rename.input.trim();
+                if new_suffix.is_empty() {
+                    rename.error = Some("session name required".to_string());
+                    return OverlayKeyResult::Keep;
+                }
+                let new_name = format!("{}{}", rename.prefix, new_suffix);
+                match rename_session(&rename.old_name, &new_name) {
+                    Ok(()) => OverlayKeyResult::Close,
+                    Err(err) => {
+                        rename.error = Some(err);
+                        OverlayKeyResult::Keep
+                    }
+                }
+            }
+            _ if handle_readline_key(&mut rename.input, &mut rename.cursor, key) => {
+                rename.error = None;
+                OverlayKeyResult::Keep
+            }
+            _ => OverlayKeyResult::Unhandled,
+        }
+    }
+
+    fn handle_ditch_key(&mut self, list: &mut ListOverlay, key: KeyEvent) -> OverlayKeyResult {
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => OverlayKeyResult::Close,
+            (KeyCode::Enter, _) => {
+                if let Some(item) = list.items.get(list.selected)
+                    && item.selectable
+                    && let Some(plan) = list.plan.as_ref()
+                {
+                    match execute_ditch_action(plan, &item.id) {
+                        Ok(()) => {
+                            handoff_to_main(self);
+                            return OverlayKeyResult::Close;
+                        }
+                        Err(err) => list.error = Some(err),
+                    }
+                }
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('j'), _) | (KeyCode::Down, _) => {
+                move_picker_selection(&list.items, &mut list.selected, 1);
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('k'), _) | (KeyCode::Up, _) => {
+                move_picker_selection(&list.items, &mut list.selected, -1);
+                OverlayKeyResult::Keep
+            }
+            _ => OverlayKeyResult::Unhandled,
+        }
+    }
+
+    fn handle_project_key(&mut self, project: &mut ProjectOverlay, key: KeyEvent) -> OverlayKeyResult {
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => OverlayKeyResult::Close,
+            (KeyCode::Enter, _) => {
+                let Some(item) = project.items.get(project.selected) else {
+                    return OverlayKeyResult::Keep;
+                };
+                let selected_dir = PathBuf::from(&item.id);
+                touch_lru(&item.id);
+                self.open_worktree_overlay_for_dir(selected_dir, WorktreeFlow::NewSession);
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('s'), KeyModifiers::ALT) => {
+                if let Some(item) = project.items.get(project.selected) {
+                    toggle_favorite(&item.id);
+                    project.all_items = build_project_items("all");
+                    project.items = filter_picker_items(&project.all_items, &project.filter);
+                    project.selected = first_selectable_picker(&project.items);
+                    project.offset = 0;
+                }
+                OverlayKeyResult::Keep
+            }
+            _ if handle_readline_key(&mut project.filter, &mut project.cursor, key) => {
+                project.items = filter_picker_items(&project.all_items, &project.filter);
+                project.selected = first_selectable_picker(&project.items);
+                project.offset = 0;
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('j'), _) | (KeyCode::Down, _) => {
+                move_picker_selection(&project.items, &mut project.selected, 1);
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('k'), _) | (KeyCode::Up, _) => {
+                move_picker_selection(&project.items, &mut project.selected, -1);
+                OverlayKeyResult::Keep
+            }
+            _ => OverlayKeyResult::Unhandled,
+        }
+    }
+
+    fn handle_worktree_key(&mut self, worktree: &mut WorktreeOverlay, key: KeyEvent) -> OverlayKeyResult {
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => OverlayKeyResult::Close,
+            (KeyCode::Enter, _) => {
+                let Some(item) = worktree.items.get(worktree.selected) else {
+                    return OverlayKeyResult::Keep;
+                };
+
+                let (final_dir, branch) = if item.id == "__new__" {
+                    match create_new_worktree(&worktree.selected_dir, &worktree.entries) {
+                        Ok((path, name)) => (path, Some(name)),
+                        Err(err) => {
+                            worktree.error = Some(err);
+                            return OverlayKeyResult::Keep;
+                        }
+                    }
+                } else {
+                    let branch = worktree
+                        .entries
+                        .iter()
+                        .find(|entry| entry.path == item.id)
+                        .and_then(|entry| entry.branch.clone());
+                    (PathBuf::from(&item.id), branch)
+                };
+
+                match worktree.flow {
+                    WorktreeFlow::NewSession => {
+                        let default_name = default_session_name(&worktree.selected_dir, &final_dir);
+                        self.open_session_name_overlay(
+                            "Session".to_string(),
+                            String::new(),
+                            default_name.clone(),
+                            Some(default_name),
+                            final_dir,
+                        );
+                    }
+                    WorktreeFlow::NewWorktree => {
+                        let (repo_name, default_suffix) =
+                            worktree_name_parts(&worktree.selected_dir, branch.as_deref());
+                        let title = if repo_name.is_empty() {
+                            "Session".to_string()
+                        } else {
+                            format!("{repo_name}/")
+                        };
+                        let prefix = if repo_name.is_empty() {
+                            String::new()
+                        } else {
+                            format!("{repo_name}/")
+                        };
+                        self.open_session_name_overlay(
+                            title,
+                            prefix,
+                            default_suffix,
+                            None,
+                            final_dir,
+                        );
+                    }
+                }
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('j'), _) | (KeyCode::Down, _) => {
+                move_picker_selection(&worktree.items, &mut worktree.selected, 1);
+                OverlayKeyResult::Keep
+            }
+            (KeyCode::Char('k'), _) | (KeyCode::Up, _) => {
+                move_picker_selection(&worktree.items, &mut worktree.selected, -1);
+                OverlayKeyResult::Keep
+            }
+            _ => OverlayKeyResult::Unhandled,
+        }
+    }
+
+    fn handle_session_name_key(&mut self, session: &mut SessionNameOverlay, key: KeyEvent) -> OverlayKeyResult {
+        match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) => OverlayKeyResult::Close,
+            (KeyCode::Enter, _) => {
+                let raw = session.input.trim();
+                let suffix = if raw.is_empty() {
+                    session.default_on_empty.clone().unwrap_or_default()
+                } else {
+                    raw.to_string()
+                };
+                if suffix.is_empty() {
+                    session.error = Some("session name required".to_string());
+                    return OverlayKeyResult::Keep;
+                }
+                let session_name = format!("{}{}", session.prefix, suffix);
+                if session_exists(&session_name) {
+                    tmux(&["switch-client", "-t", &format!("={session_name}")]);
+                } else {
+                    create_session_at_dir(&session_name, &session.final_dir);
+                }
+                handoff_to_main(self);
+                OverlayKeyResult::Close
+            }
+            _ if handle_readline_key(&mut session.input, &mut session.cursor, key) => {
+                session.error = None;
+                OverlayKeyResult::Keep
+            }
+            _ => OverlayKeyResult::Unhandled,
         }
     }
 }
@@ -1089,14 +1889,21 @@ pub fn cmd_sidebar() {
                 Ok(Event::FocusLost) => {
                     state.focused = false;
                     state.hover = None;
+                    state.close_overlay();
+                    state.close_chooser();
                     state.snap_to_current();
                 }
+                Ok(Event::Mouse(_)) if state.overlay_active() => {}
                 Ok(Event::Mouse(me)) => match me.kind {
                     MouseEventKind::Down(MouseButton::Left)
                         if me.row >= last_list_y && me.row < last_list_y + last_list_h =>
                     {
-                        let idx = state.offset + (me.row - last_list_y) as usize;
-                        if let Some(sid) = state.items.get(idx).and_then(|i| i.session_id.clone())
+                        let vis_idx = state.offset + (me.row - last_list_y) as usize;
+                        if let Some(item_idx) = state.visible.get(vis_idx).copied()
+                            && let Some(sid) = state
+                                .items
+                                .get(item_idx)
+                                .and_then(|i| i.session_id.clone())
                             && let Some(row_idx) = state
                                 .items
                                 .iter()
@@ -1104,12 +1911,20 @@ pub fn cmd_sidebar() {
                         {
                             state.selected = row_idx;
                             state.switch_to_selected();
+                            if state.chooser_active() {
+                                state.close_chooser();
+                                focus_main_pane();
+                            }
                         }
                     }
                     MouseEventKind::Moved => {
                         if me.row >= last_list_y && me.row < last_list_y + last_list_h {
-                            let idx = state.offset + (me.row - last_list_y) as usize;
-                            state.hover = state.items.get(idx).and_then(|it| it.session_id.clone());
+                            let vis_idx = state.offset + (me.row - last_list_y) as usize;
+                            state.hover = state
+                                .visible
+                                .get(vis_idx)
+                                .and_then(|idx| state.items.get(*idx))
+                                .and_then(|it| it.session_id.clone());
                         } else {
                             state.hover = None;
                         }
@@ -1119,10 +1934,69 @@ pub fn cmd_sidebar() {
                     _ => {}
                 },
                 Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
+                    if state.overlay_active() {
+                        let handled = state.handle_overlay_key(key);
+                        if handled || state.overlay_active() {
+                            continue;
+                        }
+                    }
+
+                    if state.chooser_active() {
+                        match (key.code, key.modifiers) {
+                            (KeyCode::Esc, _) => {
+                                state.close_chooser();
+                                continue;
+                            }
+                            (KeyCode::Enter, _) => {
+                                state.switch_to_selected();
+                                state.close_chooser();
+                                focus_main_pane();
+                                continue;
+                            }
+                            (KeyCode::Char('h'), KeyModifiers::ALT) => {
+                                if let Some(id) = state.selected_session_id() {
+                                    spawn_subcmd(&mut terminal, &["hide-toggle", &id]);
+                                }
+                                continue;
+                            }
+                            (KeyCode::Char('j'), KeyModifiers::ALT) => {
+                                state.move_selected_session("down");
+                                continue;
+                            }
+                            (KeyCode::Char('k'), KeyModifiers::ALT) => {
+                                state.move_selected_session("up");
+                                continue;
+                            }
+                            _ if handle_readline_key(&mut state.filter, &mut state.filter_cursor, key) => {
+                                state.apply_filter_change();
+                                continue;
+                            }
+                            (KeyCode::Char('j'), _)
+                            | (KeyCode::Down, _)
+                            | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                                state.move_sel(1);
+                                continue;
+                            }
+                            (KeyCode::Char('k'), _)
+                            | (KeyCode::Up, _)
+                            | (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
+                                state.move_sel(-1);
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('q'), _)
                         | (KeyCode::Esc, _)
                         | (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
+                        (KeyCode::Char('j'), KeyModifiers::ALT) => {
+                            state.move_selected_session("down");
+                        }
+                        (KeyCode::Char('k'), KeyModifiers::ALT) => {
+                            state.move_selected_session("up");
+                        }
                         (KeyCode::Char('j'), _)
                         | (KeyCode::Down, _)
                         | (KeyCode::Char('n'), KeyModifiers::CONTROL) => state.move_sel(1),
@@ -1136,18 +2010,16 @@ pub fn cmd_sidebar() {
                         (KeyCode::Char('n'), m)
                             if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                         {
-                            spawn_subcmd(&mut terminal, &["new-session"]);
-                            state.last_meta_refresh = Instant::now() - Duration::from_secs(60);
+                            state.open_project_overlay();
                         }
                         (KeyCode::Char('w'), _) => {
-                            spawn_subcmd(&mut terminal, &["new-worktree"]);
-                            state.last_meta_refresh = Instant::now() - Duration::from_secs(60);
+                            state.open_worktree_overlay();
                         }
                         (KeyCode::Char('r'), _) => {
-                            spawn_subcmd(&mut terminal, &["rename"]);
+                            state.open_rename_overlay();
                         }
                         (KeyCode::Char('x'), _) => {
-                            spawn_subcmd(&mut terminal, &["ditch"]);
+                            state.open_ditch_overlay();
                         }
                         (KeyCode::Char('h'), _) => {
                             if let Some(id) = state.selected_session_id() {
@@ -1155,8 +2027,7 @@ pub fn cmd_sidebar() {
                             }
                         }
                         (KeyCode::Char('/'), _) => {
-                            spawn_subcmd(&mut terminal, &["chooser"]);
-                            focus_main_pane();
+                            state.open_chooser();
                         }
                         (KeyCode::Char(c @ '1'..='9'), m)
                             if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
@@ -1230,7 +2101,15 @@ fn focus_main_pane() {
 fn spawn_subcmd(terminal: &mut Terminal<CrosstermBackend<Stdout>>, args: &[&str]) {
     leave_tui();
     let exe = std::env::current_exe().unwrap_or_else(|_| "tmux-session".into());
-    let _ = Command::new(&exe).args(args).status();
+    let bg = if tmux(&["show-option", "-gv", "@notched"]) == "1" {
+        "000000"
+    } else {
+        "11111b"
+    };
+    let _ = Command::new(&exe)
+        .args(args)
+        .env("TMUX_SESSION_BG", bg)
+        .status();
     enter_tui();
     terminal.clear().ok();
 }
@@ -1283,7 +2162,7 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
 
     // Layout:
     //  (optional) notch row (black, hidden behind notch)
-    //  row 0: blank (top padding)
+    //  row 0: blank or chooser filter
     //  list rows
     //  usage graph (if there's room)
     //  2 footer rows
@@ -1304,9 +2183,25 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
     // Footer hints
     let hint1_y = area.y + area.height - 2;
     let hint2_y = area.y + area.height - 1;
-    let (hint1, hint2) = footer_hints(content_w as usize);
+    let (hint1, hint2) = if state.overlay_active() {
+        overlay_footer_hints(content_w as usize)
+    } else if state.chooser_active() {
+        chooser_footer_hints(content_w as usize)
+    } else {
+        footer_hints(content_w as usize)
+    };
     render_at(f, area.x, hint1_y, content_w, hint1, bg);
     render_at(f, area.x, hint2_y, content_w, hint2, bg);
+
+    if state.chooser_active() {
+        let filter_area = Rect {
+            x: area.x,
+            y: area.y + notch_h,
+            width: content_w,
+            height: 1,
+        };
+        render_filter_row(f, filter_area, state, bg);
+    }
 
     if bars_h > 0 {
         let sep_y_above = list_y + list_h;
@@ -1332,24 +2227,26 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
     }
 
     let list_w_with_bar = content_w.saturating_sub(1); // right pad
-    let total = state.items.len();
+    let total = state.visible.len();
     let list_height = list_h as usize;
+    let selected_visible = state.visible.iter().position(|idx| *idx == state.selected);
 
     // Scroll
-    if state.selected < state.offset {
-        state.offset = state.selected;
-    }
-    if state.selected >= state.offset + list_height {
-        state.offset = state.selected - list_height + 1;
+    if let Some(selected_visible) = selected_visible {
+        if selected_visible < state.offset {
+            state.offset = selected_visible;
+        }
+        if selected_visible >= state.offset + list_height {
+            state.offset = selected_visible - list_height + 1;
+        }
+    } else {
+        state.offset = 0;
     }
 
-    let selected_session: Option<String> = state
-        .items
-        .get(state.selected)
-        .and_then(|i| i.session_id.clone());
+    let selected_session = state.selected_session_id();
 
     for vi in 0..list_height.min(total.saturating_sub(state.offset)) {
-        let item_idx = state.offset + vi;
+        let item_idx = state.visible[state.offset + vi];
         let item = &state.items[item_idx];
         let is_sel = item.session_id.is_some() && item.session_id == selected_session;
         let is_hover = item.session_id.is_some() && item.session_id == state.hover;
@@ -1361,7 +2258,29 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
             height: 1,
         };
 
-        render_item(f, row, item, is_sel, is_hover, belongs_to_current, bg);
+        let rendered_inline_rename = if item_idx == state.selected {
+            if let Some(SidebarOverlay::Rename(rename)) = state.overlay.as_mut() {
+                render_inline_rename_item(
+                    f,
+                    row,
+                    item,
+                    rename,
+                    is_hover,
+                    belongs_to_current,
+                    bg,
+                    state.focused,
+                );
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if !rendered_inline_rename {
+            render_item(f, row, item, is_sel, is_hover, belongs_to_current, bg);
+        }
     }
 
     // Scrollbar
@@ -1383,6 +2302,24 @@ fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
             sb_area,
             &mut sb,
         );
+    }
+
+    if let Some(overlay) = state.overlay.as_mut() {
+        if !matches!(overlay, SidebarOverlay::Rename(_)) {
+            let anchor_rel = selected_visible
+                .map(|idx| idx.saturating_sub(state.offset))
+                .unwrap_or(0) as u16;
+            let anchor_y = list_y + anchor_rel.min(list_h.saturating_sub(1));
+            let overlay_h = overlay_height(overlay, list_h);
+            let overlay_y = anchor_y.min(list_y + list_h.saturating_sub(overlay_h));
+            let overlay_area = Rect {
+                x: area.x,
+                y: overlay_y,
+                width: list_w_with_bar,
+                height: overlay_h,
+            };
+            render_overlay(f, overlay_area, overlay, bg, state.focused);
+        }
     }
 
     (list_y, list_h)
@@ -1678,6 +2615,78 @@ fn render_item(
     }
 }
 
+fn render_inline_rename_item(
+    f: &mut Frame,
+    row: Rect,
+    item: &Item,
+    rename: &mut RenameOverlay,
+    is_hover: bool,
+    is_cur: bool,
+    _bg: Color,
+    focused: bool,
+) {
+    let w = row.width as usize;
+    if w == 0 {
+        return;
+    }
+
+    const HOVER_BG: Color = Color::Rgb(0x28, 0x29, 0x3a);
+    let row_bg = if is_hover {
+        HOVER_BG
+    } else if is_cur {
+        BASE
+    } else {
+        SURFACE0
+    };
+
+    let indent = item.indent as usize;
+    let mut spans: Vec<Span<'_>> = vec![bar_span(item, true, row_bg)];
+    spans.extend(tree_prefix_spans(item.tree, indent, row_bg));
+
+    let prefix_width = rename.prefix.chars().count();
+    let error_text = rename
+        .error
+        .as_ref()
+        .map(|err| format!("  ! {}", truncate(err, 24)))
+        .unwrap_or_default();
+    let reserved = error_text.chars().count();
+    let used = spans.iter().skip(1).map(|s| s.width()).sum::<usize>();
+    let available = w.saturating_sub(1 + used + reserved);
+    let editable_width = available.saturating_sub(prefix_width).max(1);
+    let shown_input = truncate(&rename.input, editable_width);
+
+    spans.push(Span::styled(
+        rename.prefix.clone(),
+        Style::default().fg(SUBTEXT0).bg(row_bg),
+    ));
+    if shown_input.is_empty() {
+        spans.push(Span::styled(" ", Style::default().bg(row_bg)));
+    } else {
+        spans.push(Span::styled(
+            shown_input.clone(),
+            Style::default().fg(TEXT).bold().bg(row_bg),
+        ));
+    }
+    if !error_text.is_empty() {
+        spans.push(Span::styled(
+            error_text,
+            Style::default().fg(PEACH).bg(row_bg),
+        ));
+    }
+
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(row_bg)),
+        row,
+    );
+
+    if focused {
+        let base_x = row.x + 1 + indent as u16 + prefix_width as u16;
+        let max_x = row.x + row.width.saturating_sub(1);
+        let cursor_x = (base_x + rename.cursor as u16).min(max_x);
+        f.set_cursor_position((cursor_x, row.y));
+    }
+}
+
 fn footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
     let key = |k: &'static str| Span::styled(k, Style::default().fg(TEXT).bold().italic());
     let lbl = |s: &'static str| Span::styled(s, Style::default().fg(OVERLAY0).italic());
@@ -1690,18 +2699,21 @@ fn footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
             lbl(" new"),
             sep(),
             key("w"),
-            lbl(" worktree"),
+            lbl(" work"),
             sep(),
             key("r"),
-            lbl(" rename"),
+            lbl(" ren"),
         ]);
         let line2 = Line::from(vec![
             lbl(" "),
             key("x"),
-            lbl(" ditch"),
+            lbl(" del"),
             sep(),
             key("h"),
-            lbl(" hide"),
+            lbl(" hid"),
+            sep(),
+            key("M-jk"),
+            lbl(" mv"),
             sep(),
             key("q"),
             lbl(" close"),
@@ -1746,6 +2758,396 @@ fn footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
         ]);
         let line2 = Line::from(vec![lbl(" "), key("q"), lbl(" close")]);
         (line1, line2)
+    }
+}
+
+fn chooser_footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
+    let key = |k: &'static str| Span::styled(k, Style::default().fg(TEXT).bold().italic());
+    let lbl = |s: &'static str| Span::styled(s, Style::default().fg(OVERLAY0).italic());
+    let sep = || Span::styled("  ", Style::default());
+
+    if width >= 34 {
+        let line1 = Line::from(vec![
+            lbl(" "),
+            key("↵"),
+            lbl(" jump"),
+            sep(),
+            key("/text"),
+            lbl(" search"),
+            sep(),
+            key("esc"),
+            lbl(" done"),
+        ]);
+        let line2 = Line::from(vec![
+            lbl(" "),
+            key("M-h"),
+            lbl(" hide"),
+            sep(),
+            key("M-jk"),
+            lbl(" move"),
+            sep(),
+            key("q"),
+            lbl(" close"),
+        ]);
+        (line1, line2)
+    } else if width >= 22 {
+        let line1 = Line::from(vec![
+            lbl(" "),
+            key("↵"),
+            lbl(" jump"),
+            sep(),
+            key("esc"),
+            lbl(" done"),
+        ]);
+        let line2 = Line::from(vec![
+            lbl(" "),
+            key("M-h"),
+            lbl(" hide"),
+            sep(),
+            key("q"),
+            lbl(" close"),
+        ]);
+        (line1, line2)
+    } else {
+        let line1 = Line::from(vec![lbl(" "), key("↵"), lbl(" "), key("esc")]);
+        let line2 = Line::from(vec![lbl(" "), key("q"), lbl(" close")]);
+        (line1, line2)
+    }
+}
+
+fn overlay_footer_hints(width: usize) -> (Line<'static>, Line<'static>) {
+    let key = |k: &'static str| Span::styled(k, Style::default().fg(TEXT).bold().italic());
+    let lbl = |s: &'static str| Span::styled(s, Style::default().fg(OVERLAY0).italic());
+    let sep = || Span::styled("  ", Style::default());
+
+    if width >= 34 {
+        (
+            Line::from(vec![
+                lbl(" "),
+                key("↵"),
+                lbl(" use"),
+                sep(),
+                key("esc"),
+                lbl(" back"),
+            ]),
+            Line::from(vec![lbl(" ")]),
+        )
+    } else {
+        (
+            Line::from(vec![lbl(" "), key("↵"), lbl(" "), key("esc")]),
+            Line::from(vec![lbl(" ")]),
+        )
+    }
+}
+
+fn overlay_height(overlay: &SidebarOverlay, max_list_h: u16) -> u16 {
+    let desired = match overlay {
+        SidebarOverlay::Rename(rename) => 1 + u16::from(rename.error.is_some()),
+        SidebarOverlay::SessionName(session) => 1 + u16::from(session.error.is_some()),
+        SidebarOverlay::Project(project) => 1 + min(project.items.len(), 4) as u16,
+        SidebarOverlay::Worktree(worktree) => u16::from(worktree.error.is_some()) + worktree.items.len() as u16,
+        SidebarOverlay::Ditch(list) => u16::from(list.error.is_some()) + min(list.items.len(), 4) as u16,
+    };
+    desired.clamp(1, max_list_h.max(1))
+}
+
+fn render_overlay(
+    f: &mut Frame,
+    area: Rect,
+    overlay: &mut SidebarOverlay,
+    bg: Color,
+    focused: bool,
+) {
+    if area.width < 4 || area.height == 0 {
+        return;
+    }
+
+    let inner = area;
+    f.render_widget(Clear, inner);
+    f.render_widget(Paragraph::new("").style(Style::default().bg(bg)), inner);
+
+    match overlay {
+        SidebarOverlay::Rename(_) => {}
+        SidebarOverlay::SessionName(session) => render_text_overlay(
+            f,
+            inner,
+            &session.title,
+            &session.prefix,
+            &session.input,
+            session.cursor,
+            session.error.as_deref(),
+            focused,
+            bg,
+        ),
+        SidebarOverlay::Project(project) => {
+            render_picker_overlay(f, inner, "New Session", Some((&project.filter, project.cursor)), &mut project.selected, &mut project.offset, &project.items, None, focused, bg)
+        }
+        SidebarOverlay::Worktree(worktree) => render_picker_overlay(
+            f,
+            inner,
+            match worktree.flow {
+                WorktreeFlow::NewSession => "Worktree",
+                WorktreeFlow::NewWorktree => "New Worktree",
+            },
+            None,
+            &mut worktree.selected,
+            &mut worktree.offset,
+            &worktree.items,
+            worktree.error.as_deref(),
+            focused,
+            bg,
+        ),
+        SidebarOverlay::Ditch(list) => render_picker_overlay(
+            f,
+            inner,
+            &list.title,
+            None,
+            &mut list.selected,
+            &mut list.offset,
+            &list.items,
+            list.error.as_deref(),
+            focused,
+            bg,
+        ),
+    }
+}
+
+fn render_text_overlay(
+    f: &mut Frame,
+    area: Rect,
+    title: &str,
+    prefix: &str,
+    input: &str,
+    cursor: usize,
+    error: Option<&str>,
+    focused: bool,
+    bg: Color,
+) {
+    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Length(if error.is_some() { 1 } else { 0 })]).split(area);
+
+    let input_bg = bg;
+    let placeholder = if prefix.is_empty() {
+        format!("{}...", title.to_lowercase())
+    } else {
+        "session name...".to_string()
+    };
+    let content = if input.is_empty() {
+        Line::from(vec![
+            Span::styled(prefix.to_string(), Style::default().fg(SUBTEXT0).bg(input_bg)),
+            Span::styled(
+                placeholder,
+                Style::default().fg(OVERLAY0).italic().bg(input_bg),
+            ),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(prefix.to_string(), Style::default().fg(SUBTEXT0).bg(input_bg)),
+            Span::styled(input.to_string(), Style::default().fg(TEXT).bg(input_bg)),
+        ])
+    };
+    let line = Line::from(
+        std::iter::once(Span::styled("▌", Style::default().fg(BLUE).bg(input_bg)))
+            .chain(std::iter::once(Span::styled(" ", Style::default().bg(input_bg))))
+            .chain(content.spans)
+            .collect::<Vec<_>>(),
+    );
+    f.render_widget(Paragraph::new(line).style(Style::default().bg(input_bg)), chunks[0]);
+
+    if let Some(error) = error {
+        render_at(
+            f,
+            chunks[1].x,
+            chunks[1].y,
+            chunks[1].width,
+            Line::from(vec![
+                Span::styled("! ", Style::default().fg(PEACH).bg(bg)),
+                Span::styled(error.to_string(), Style::default().fg(PEACH).bg(bg)),
+            ]),
+            bg,
+        );
+    }
+
+    if focused {
+        let max_x = chunks[0].x + chunks[0].width.saturating_sub(1);
+        let cursor_x = (chunks[0].x + 2 + prefix.chars().count() as u16 + cursor as u16).min(max_x);
+        f.set_cursor_position((cursor_x, chunks[0].y));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_picker_overlay(
+    f: &mut Frame,
+    area: Rect,
+    _title: &str,
+    filter: Option<(&str, usize)>,
+    selected: &mut usize,
+    offset: &mut usize,
+    items: &[PickerItem],
+    error: Option<&str>,
+    focused: bool,
+    _bg: Color,
+) {
+    let overlay_bg = _bg;
+    let chunks = Layout::vertical([
+        Constraint::Length(if filter.is_some() { 1 } else { 0 }),
+        Constraint::Length(if error.is_some() { 1 } else { 0 }),
+        Constraint::Min(1),
+    ])
+    .split(area);
+    if let Some((query, cursor)) = filter {
+        let input_bg = overlay_bg;
+        let line = if query.is_empty() {
+            Line::from(vec![
+                Span::styled("/ ", Style::default().fg(SUBTEXT0).bg(input_bg)),
+                Span::styled(
+                    "search...",
+                    Style::default().fg(OVERLAY0).italic().bg(input_bg),
+                ),
+            ])
+        } else {
+            Line::from(vec![
+                Span::styled("/ ", Style::default().fg(SUBTEXT0).bg(input_bg)),
+                Span::styled(query.to_string(), Style::default().fg(TEXT).bg(input_bg)),
+            ])
+        };
+        f.render_widget(Paragraph::new(line).style(Style::default().bg(input_bg)), chunks[0]);
+        if focused {
+            let max_x = chunks[0].x + chunks[0].width.saturating_sub(1);
+            let cursor_x = (chunks[0].x + 2 + cursor as u16).min(max_x);
+            f.set_cursor_position((cursor_x, chunks[0].y));
+        }
+    }
+
+    if let Some(error) = error {
+        let row = if filter.is_some() { chunks[1] } else { chunks[0] };
+        render_at(
+            f,
+            row.x,
+            row.y,
+            row.width,
+            Line::from(vec![
+                Span::styled("! ", Style::default().fg(PEACH).bg(overlay_bg)),
+                Span::styled(error.to_string(), Style::default().fg(PEACH).bg(overlay_bg)),
+            ]),
+            overlay_bg,
+        );
+    }
+
+    let list_area = chunks[2];
+    let visible_height = list_area.height as usize;
+    if visible_height == 0 {
+        return;
+    }
+
+    if *selected < *offset {
+        *offset = *selected;
+    }
+    if *selected >= *offset + visible_height {
+        *offset = *selected - visible_height + 1;
+    }
+
+    for vi in 0..visible_height.min(items.len().saturating_sub(*offset)) {
+        let idx = *offset + vi;
+        let item = &items[idx];
+        let row = Rect {
+            x: list_area.x,
+            y: list_area.y + vi as u16,
+            width: list_area.width,
+            height: 1,
+        };
+
+        if !item.selectable && item.display.is_empty() {
+            render_at(
+                f,
+                row.x,
+                row.y,
+                row.width,
+                Line::from(Span::styled(
+                    "╌".repeat(row.width as usize),
+                    Style::default().fg(SURFACE1).bg(overlay_bg),
+                )),
+                overlay_bg,
+            );
+            continue;
+        }
+
+        let row_bg = if idx == *selected { SURFACE0 } else { overlay_bg };
+        let marker_color = if idx == *selected {
+            item.color.unwrap_or(BLUE)
+        } else if item.selectable {
+            SURFACE1
+        } else {
+            TREE_COLOR
+        };
+        let text_style = if idx == *selected {
+            item.style.fg(item.color.unwrap_or(TEXT)).bold().bg(row_bg)
+        } else if item.selectable {
+            item.style.bg(row_bg)
+        } else {
+            item.style.fg(OVERLAY0).bg(row_bg)
+        };
+        let right_style = if idx == *selected {
+            Style::default().fg(SUBTEXT0).italic().bg(row_bg)
+        } else {
+            Style::default().fg(OVERLAY0).italic().bg(row_bg)
+        };
+
+        let mut spans = vec![Span::styled(
+            if idx == *selected {
+                "▌"
+            } else if item.selectable {
+                "│"
+            } else {
+                " "
+            },
+            Style::default().fg(marker_color).bg(row_bg),
+        )];
+        spans.push(Span::styled(" ", Style::default().bg(row_bg)));
+
+        let text_width = row.width.saturating_sub(2) as usize;
+        let label_width = item.right_label.chars().count();
+        let main_width =
+            text_width.saturating_sub(label_width.saturating_add(if label_width > 0 { 1 } else { 0 }));
+        spans.push(Span::styled(truncate(&item.display, main_width), text_style));
+        if label_width > 0 {
+            let used = spans.iter().map(|span| span.width()).sum::<usize>().saturating_sub(2);
+            let pad = text_width.saturating_sub(used + label_width);
+            if pad > 0 {
+                spans.push(Span::styled(" ".repeat(pad), Style::default().bg(row_bg)));
+            }
+            spans.push(Span::styled(item.right_label.clone(), right_style));
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(row_bg)),
+            row,
+        );
+    }
+}
+
+fn render_filter_row(f: &mut Frame, row: Rect, state: &SidebarState, bg: Color) {
+    if row.width == 0 {
+        return;
+    }
+
+    let prefix = "/ ";
+    let line = if state.filter.is_empty() {
+        Line::from(vec![
+            Span::styled(prefix, Style::default().fg(SUBTEXT0).bg(bg)),
+            Span::styled("search...", Style::default().fg(OVERLAY0).italic().bg(bg)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(prefix, Style::default().fg(SUBTEXT0).bg(bg)),
+            Span::styled(&state.filter, Style::default().fg(TEXT).bg(bg)),
+        ])
+    };
+
+    f.render_widget(Paragraph::new(line).style(Style::default().bg(bg)), row);
+
+    if state.focused {
+        let max_x = row.x + row.width.saturating_sub(1);
+        let cursor_x = (row.x + prefix.chars().count() as u16 + state.filter_cursor as u16).min(max_x);
+        f.set_cursor_position((cursor_x, row.y));
     }
 }
 
