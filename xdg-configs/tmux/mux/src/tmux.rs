@@ -3,30 +3,49 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-pub fn home() -> PathBuf {
-    PathBuf::from(env::var("HOME").unwrap())
+use sysinfo::System;
+use tracing::error;
+
+pub(crate) fn home() -> PathBuf {
+    match env::var("HOME") {
+        Ok(h) => PathBuf::from(h),
+        Err(_) => {
+            error!("HOME env var missing, falling back to /");
+            PathBuf::from("/")
+        }
+    }
 }
 
-pub fn tmux(args: &[&str]) -> String {
-    String::from_utf8_lossy(
-        &Command::new("tmux")
-            .args(args)
-            .stderr(Stdio::null())
-            .output()
-            .expect("failed to run tmux")
-            .stdout,
-    )
-    .trim()
-    .to_string()
+pub(crate) fn tmux(args: &[&str]) -> String {
+    let output = match Command::new("tmux")
+        .args(args)
+        .stderr(Stdio::piped())
+        .output()
+    {
+        Ok(o) => o,
+        Err(e) => {
+            error!(args = ?args, error = %e, "failed to spawn tmux");
+            return String::new();
+        }
+    };
+    if !output.status.success() {
+        error!(
+            args = ?args,
+            exit_code = output.status.code(),
+            stderr = %String::from_utf8_lossy(&output.stderr),
+            "tmux command failed"
+        );
+    }
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-pub struct TmuxState {
-    pub current: String,
-    pub alive: HashSet<String>,
-    pub attn: HashMap<String, String>,
+pub(crate) struct TmuxState {
+    pub(crate) current: String,
+    pub(crate) alive: HashSet<String>,
+    pub(crate) attn: HashMap<String, String>,
 }
 
-pub fn query_state() -> TmuxState {
+pub(crate) fn query_state() -> TmuxState {
     let raw = tmux(&[
         "display-message",
         "-p",
@@ -56,14 +75,14 @@ pub fn query_state() -> TmuxState {
     }
 }
 
-pub struct WindowInfo {
-    pub index: usize,
-    pub name: String,
-    pub active: bool,
-    pub zoomed: bool,
+pub(crate) struct WindowInfo {
+    pub(crate) index: usize,
+    pub(crate) name: String,
+    pub(crate) active: bool,
+    pub(crate) zoomed: bool,
 }
 
-pub fn query_windows() -> Vec<WindowInfo> {
+pub(crate) fn query_windows() -> Vec<WindowInfo> {
     let raw = tmux(&[
         "list-windows",
         "-F",
@@ -88,19 +107,19 @@ pub fn query_windows() -> Vec<WindowInfo> {
 }
 
 #[derive(Clone)]
-pub struct SystemInfo {
-    pub cpu_load: f32,
-    pub mem_pct: u32,
-    pub battery_pct: Option<u32>,
-    pub battery_state: BatteryState,
-    pub battery_time: String,
-    pub caffeinated: bool,
-    pub date: String,
-    pub clock: String,
+pub(crate) struct SystemInfo {
+    pub(crate) cpu_load: f32,
+    pub(crate) mem_pct: u32,
+    pub(crate) battery_pct: Option<u32>,
+    pub(crate) battery_state: BatteryState,
+    pub(crate) battery_time: String,
+    pub(crate) caffeinated: bool,
+    pub(crate) date: String,
+    pub(crate) clock: String,
 }
 
 #[derive(Clone)]
-pub enum BatteryState {
+pub(crate) enum BatteryState {
     Charging,
     Discharging,
     Charged,
@@ -118,7 +137,7 @@ fn shell(cmd: &str) -> String {
 
 /// PIDs of caffeinate processes running without a `-t` timeout (i.e. indefinite).
 /// Filters out time-limited invocations like `caffeinate -i -t 300` (Claude Code, etc.).
-pub fn indefinite_caffeinate_pids() -> Vec<String> {
+pub(crate) fn indefinite_caffeinate_pids() -> Vec<String> {
     let Ok(output) = Command::new("pgrep").args(["-x", "caffeinate"]).output() else {
         return Vec::new();
     };
@@ -140,28 +159,38 @@ pub fn indefinite_caffeinate_pids() -> Vec<String> {
         .collect()
 }
 
-pub fn query_system_info() -> SystemInfo {
-    // CPU: 1-minute load average
-    let cpu_load: f32 = shell("sysctl -n vm.loadavg")
-        .trim_start_matches('{')
-        .split_whitespace()
-        .next()
-        .unwrap_or("0")
-        .parse()
-        .unwrap_or(0.0);
+fn query_cpu_load() -> f32 {
+    System::load_average().one as f32
+}
 
-    // Memory: parse vm_stat
-    let mem_pct = parse_memory();
+fn query_memory_pct(sys: &mut System) -> u32 {
+    sys.refresh_memory();
+    let total = sys.total_memory();
+    if total == 0 {
+        return 0;
+    }
+    // Use available_memory (not used_memory) to match macOS memory_pressure
+    // semantics: available includes inactive/cached pages eligible for reuse,
+    // so (total - available) / total ≈ memory_pressure's "used percentage".
+    let available = sys.available_memory();
+    (((total - available) as f64 / total as f64) * 100.0).round() as u32
+}
 
-    // Battery via pmset
+pub(crate) fn query_system_info() -> SystemInfo {
+    let mut sys = System::new();
+    query_system_info_with(&mut sys)
+}
+
+pub(crate) fn query_system_info_with(sys: &mut System) -> SystemInfo {
+    let cpu_load = query_cpu_load();
+    let mem_pct = query_memory_pct(sys);
+
+    // Battery via pmset (sysinfo doesn't expose macOS battery)
     let batt_raw = shell("pmset -g batt");
     let (battery_pct, battery_state, battery_time) = parse_battery(&batt_raw);
 
-    // Caffeinate: check if an indefinite prevention is running (skip time-limited -t ones,
-    // e.g. Claude Code spawns `caffeinate -i -t 300` which shouldn't light up our icon).
     let caffeinated = !indefinite_caffeinate_pids().is_empty();
 
-    // Date and clock
     let now = chrono::Local::now();
     let date = now.format("%a %b %-d").to_string();
     let clock = now.format("%H:%M:%S").to_string();
@@ -176,21 +205,6 @@ pub fn query_system_info() -> SystemInfo {
         date,
         clock,
     }
-}
-
-fn parse_memory() -> u32 {
-    // macOS memory pressure: "System-wide memory free percentage: 69%"
-    let raw = shell("memory_pressure -Q");
-    let free_pct: u32 = raw
-        .lines()
-        .find(|l| l.contains("free percentage"))
-        .and_then(|l| {
-            l.split_whitespace()
-                .find(|w| w.ends_with('%'))
-                .and_then(|w| w.trim_end_matches('%').parse().ok())
-        })
-        .unwrap_or(100);
-    100u32.saturating_sub(free_pct)
 }
 
 fn parse_battery(raw: &str) -> (Option<u32>, BatteryState, String) {
@@ -228,7 +242,7 @@ fn parse_battery(raw: &str) -> (Option<u32>, BatteryState, String) {
     (Some(pct), state, time)
 }
 
-pub fn git_toplevel(dir: &str) -> Option<String> {
+pub(crate) fn git_toplevel(dir: &str) -> Option<String> {
     Command::new("git")
         .args(["-C", dir, "rev-parse", "--show-toplevel"])
         .output()

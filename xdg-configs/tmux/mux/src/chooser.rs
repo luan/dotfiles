@@ -4,108 +4,22 @@ use std::process::Command;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::prelude::*;
 
-use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::order::{compute_order, hidden_file, load_lines};
+use crate::palette::{OVERLAY0, TEXT, group_glyph, hex_to_color, num_glyph};
 use crate::picker::{PickerAction, PickerConfig, PickerItem, run_picker};
 use crate::tmux::tmux;
 
-// Catppuccin Mocha colors
-const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
-const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-
-// Nerd Font group count glyphs (box-style, unselected)
-const GROUP_GLYPHS: &[char] = &[
-    '\u{F03A5}',
-    '\u{F03A8}',
-    '\u{F03AB}',
-    '\u{F03B2}',
-    '\u{F03AF}',
-    '\u{F03B4}',
-    '\u{F03B7}',
-    '\u{F03BA}',
-    '\u{F03BD}',
-    '\u{F03C0}',
-];
-
-fn group_glyph(count: usize) -> char {
-    let idx = count.clamp(1, GROUP_GLYPHS.len()) - 1;
-    GROUP_GLYPHS[idx]
-}
-
-// Nerd Font box-outline number glyphs (matching status.rs NUM_UNSELECTED)
-const NUM_GLYPHS: &[char] = &[
-    '\u{F03A6}', // 1
-    '\u{F03A9}', // 2
-    '\u{F03AC}', // 3
-    '\u{F03AE}', // 4
-    '\u{F03B0}', // 5
-    '\u{F03B5}', // 6
-    '\u{F03B8}', // 7
-    '\u{F03BB}', // 8
-    '\u{F03BE}', // 9
-    '\u{F03C1}', // 9+
-];
-
-fn num_glyph(idx: usize) -> char {
-    if idx < NUM_GLYPHS.len() {
-        NUM_GLYPHS[idx]
-    } else {
-        NUM_GLYPHS[NUM_GLYPHS.len() - 1]
-    }
-}
-
-fn hex_to_color(hex: &str) -> Color {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() >= 6 {
-        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
-        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
-        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
-        Color::Rgb(r, g, b)
-    } else {
-        Color::Rgb(0x89, 0xb4, 0xfa) // fallback blue
-    }
-}
 
 fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<PickerItem> {
     let meta = GroupMeta::new(sessions);
 
-    // Compute colors for each session (same logic as status.rs)
-    let mut gpos_counter: HashMap<&str, usize> = HashMap::new();
-    let mut orphan_idx = 0usize;
-    let mut session_colors: HashMap<&str, (Color, Color)> = HashMap::new();
-
-    for name in sessions {
-        let group = session_group(name);
-        let gtotal = if group.is_empty() {
-            0
-        } else {
-            *meta.counts.get(group).unwrap_or(&0)
-        };
-
-        let (color_hex, dim_hex) = if is_static(name) {
-            compute_color(name, 0, 0, 0, 0)
-        } else if !group.is_empty() {
-            let gpos = *gpos_counter.get(group).unwrap_or(&0);
-            let gidx = *meta.group_idx.get(group).unwrap_or(&0);
-            let r = compute_color(name, gidx, meta.dynamic_total, gpos, gtotal);
-            *gpos_counter.entry(group).or_default() += 1;
-            r
-        } else {
-            let r = compute_color(
-                name,
-                meta.dynamic_groups + orphan_idx,
-                meta.dynamic_total,
-                0,
-                0,
-            );
-            orphan_idx += 1;
-            r
-        };
-
-        session_colors.insert(name, (hex_to_color(&color_hex), hex_to_color(&dim_hex)));
-    }
+    let color_list = crate::color::compute_session_colors(sessions, &meta);
+    let session_colors: HashMap<&str, (Color, Color)> = color_list
+        .iter()
+        .map(|(n, c, d)| (n.as_str(), (hex_to_color(c), hex_to_color(d))))
+        .collect();
 
     let mut items = Vec::new();
     let mut idx = 0usize;
@@ -126,7 +40,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
 
         if !group.is_empty() && gtotal > 1 {
             if group != last_group {
-                let gg = group_glyph(gtotal);
+                let gg = group_glyph(gtotal, false);
                 items.push(PickerItem {
                     id: format!("__group__{group}"),
                     display: format!("{gg} {group}"),
@@ -137,7 +51,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
                     right_label: String::new(),
                 });
             }
-            let glyph = num_glyph(idx);
+            let glyph = num_glyph(idx, false);
             idx += 1;
             let suffix = {
                 let s = session_suffix(name);
@@ -171,7 +85,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
             } else {
                 name.as_str()
             };
-            let glyph = num_glyph(idx);
+            let glyph = num_glyph(idx, false);
             idx += 1;
             let (display, style) = if is_hidden {
                 (
@@ -202,7 +116,7 @@ fn build_items(sessions: &[String], hidden: &HashSet<String>, cur: &str) -> Vec<
     items
 }
 
-pub fn cmd_chooser_list() {
+pub(crate) fn cmd_chooser_list() {
     let cur = tmux(&["display-message", "-p", "#S"]);
     let alive: HashSet<String> = tmux(&["list-sessions", "-F", "#S"])
         .lines()
@@ -263,9 +177,8 @@ pub fn cmd_chooser_list() {
     }
 }
 
-pub fn cmd_chooser() {
-    let self_bin =
-        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("tmux-session"));
+pub(crate) fn cmd_chooser() {
+    let self_bin = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("mux"));
     let self_path = self_bin.to_string_lossy().to_string();
 
     let cur = tmux(&["display-message", "-p", "#S"]);

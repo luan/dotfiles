@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::prelude::*;
 
+use tracing::warn;
+
 use crate::order::{load_lines, save_lines};
 use crate::picker::{
     ConfirmConfig, ConfirmLine, PickerAction, PickerConfig, PickerItem, TextInputAction,
@@ -180,7 +182,11 @@ pub(crate) fn default_session_name(selected_dir: &Path, final_dir: &Path) -> Str
         repo_display_name(selected_dir)
     } else {
         git_toplevel(final_dir.to_str().unwrap_or(""))
-            .and_then(|tl| PathBuf::from(tl).file_name().map(|n| n.to_string_lossy().to_string()))
+            .and_then(|tl| {
+                PathBuf::from(tl)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+            })
             .map(|name| name.trim_start_matches('.').to_string())
             .unwrap_or_default()
     };
@@ -196,10 +202,7 @@ pub(crate) fn default_session_name(selected_dir: &Path, final_dir: &Path) -> Str
     }
 }
 
-pub(crate) fn worktree_name_parts(
-    selected_dir: &Path,
-    branch: Option<&str>,
-) -> (String, String) {
+pub(crate) fn worktree_name_parts(selected_dir: &Path, branch: Option<&str>) -> (String, String) {
     let repo_name = repo_display_name(selected_dir);
     let default_suffix = branch
         .filter(|b| !b.is_empty() && *b != repo_name)
@@ -302,7 +305,7 @@ pub(crate) fn resolve_selected_dir_from_session(target: Option<&str>) -> Option<
     })
 }
 
-pub fn cmd_project_list(args: &[String]) {
+pub(crate) fn cmd_project_list(args: &[String]) {
     let filter = args.first().map_or("all", String::as_str);
     let favs = load_favorites();
     let h = home();
@@ -332,7 +335,7 @@ pub fn cmd_project_list(args: &[String]) {
     }
 }
 
-pub fn cmd_toggle_favorite(args: &[String]) {
+pub(crate) fn cmd_toggle_favorite(args: &[String]) {
     let Some(raw) = args.first() else {
         return;
     };
@@ -386,7 +389,7 @@ pub(crate) fn rename_session(old_name: &str, new_name: &str) -> Result<(), Strin
     Ok(())
 }
 
-pub fn cmd_new_session() {
+pub(crate) fn cmd_new_session() {
     // Phase 1: Directory picker
     let (selected_dir, auto_worktree) = match phase_directory_picker() {
         Some(DirectoryPickerResult::Normal(d)) => (d, false),
@@ -452,7 +455,7 @@ pub fn cmd_new_session() {
         .status()
         .is_ok_and(|s| s.success())
     {
-        eprintln!("\x1b[33mSession '{session_name}' exists, switching...\x1b[0m");
+        warn!(name = %session_name, "session already exists");
         tmux(&["switch-client", "-t", &exact]);
         return;
     }
@@ -460,7 +463,7 @@ pub fn cmd_new_session() {
     create_session_at_dir(&session_name, &final_dir);
 }
 
-pub fn cmd_new_worktree(args: &[String]) {
+pub(crate) fn cmd_new_worktree(args: &[String]) {
     let target = args.first().filter(|s| !s.is_empty()).cloned();
     let Some(selected_dir) = resolve_selected_dir_from_session(target.as_deref()) else {
         return;
@@ -633,7 +636,10 @@ pub(crate) fn build_ditch_plan(session: &str) -> Option<DitchPlan> {
     let branch_merged = is_worktree
         && branch != "HEAD"
         && branch != default_branch
-        && git_ok(&dir, &["diff", "--quiet", &format!("{default_branch}...HEAD")]);
+        && git_ok(
+            &dir,
+            &["diff", "--quiet", &format!("{default_branch}...HEAD")],
+        );
 
     if branch_merged {
         body.push(ConfirmLine::Ok(format!(
@@ -678,19 +684,26 @@ pub(crate) fn build_ditch_plan(session: &str) -> Option<DitchPlan> {
     });
 
     let safe = !dirty && !has_unpushed;
+
+    if is_worktree {
+        // Detach HEAD is always the preferred first action for worktrees —
+        // non-destructive: branch and commits survive.
+        actions.push(ditch_item(
+            "detach",
+            "\u{f0e2}  Detach HEAD + kill session",
+            CYAN,
+        ));
+    }
+
     if is_worktree && branch_merged && safe {
         actions.push(ditch_item(
             "remove_wt",
             "\u{f00d}  Remove worktree + kill session",
-            CYAN,
-        ));
-    }
-    if is_worktree && !branch_merged && safe {
-        actions.push(ditch_item(
-            "detach",
-            "\u{f0e2}  Detach HEAD + kill session",
             TEXT,
         ));
+    }
+
+    if is_worktree && !branch_merged && safe {
         actions.push(ditch_item(
             "remove_wt_keep_branch",
             "\u{f00d}  Remove worktree, keep branch + kill session",
@@ -728,7 +741,7 @@ pub(crate) fn build_ditch_plan(session: &str) -> Option<DitchPlan> {
     })
 }
 
-pub fn cmd_ditch(args: &[String]) {
+pub(crate) fn cmd_ditch(args: &[String]) {
     let session = args
         .first()
         .filter(|s| !s.is_empty())
@@ -846,8 +859,7 @@ fn wt_remove(dir: &str, force_delete: bool, keep_branch: bool) {
 // ── Directory picker ────────────────────────────────────────────────
 
 fn phase_directory_picker() -> Option<DirectoryPickerResult> {
-    let self_bin =
-        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("tmux-session"));
+    let self_bin = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("mux"));
     let self_path = self_bin.to_string_lossy().to_string();
     let mut current_filter = "all".to_string();
 

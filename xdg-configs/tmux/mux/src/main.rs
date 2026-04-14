@@ -3,18 +3,22 @@ use std::env;
 use std::process::{Command, Stdio};
 
 use serde::Deserialize;
+use tracing::{debug, error};
 
 mod chooser;
-mod codex;
 mod color;
-mod copilot;
+mod filter;
 mod group;
+mod logging;
 mod order;
+mod palette;
 mod picker;
+mod process;
 mod project;
 mod sidebar;
 mod status;
 mod tmux;
+mod usage;
 mod usage_bars;
 
 use color::compute_color;
@@ -23,7 +27,9 @@ use order::compute_order;
 use picker::{TextInputAction, TextInputConfig, run_text_input};
 use project::{rename_parts, rename_session};
 use status::{render_bar, render_windows};
-use tmux::{query_state, query_system_info, query_windows, tmux as tmux_cmd};
+use tmux::{
+    query_state, query_system_info, query_system_info_with, query_windows, tmux as tmux_cmd,
+};
 
 #[derive(Deserialize)]
 struct WeztermPane {
@@ -243,8 +249,21 @@ fn toggle_caffeine() {
             .stderr(Stdio::null())
             .spawn();
     }
-    // Refresh status bar to reflect change
-    tmux_cmd(&["refresh-client", "-S"]);
+    // Re-render @sysinfo immediately so the icon flips without waiting for
+    // the 5s sysinfo-daemon tick. A short delay gives the spawned caffeinate
+    // process time to register with pgrep on the kill→spawn path.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let info = query_system_info();
+    let rendered = status::render_system_info(&info);
+    tmux_cmd(&[
+        "set-option",
+        "-g",
+        "@sysinfo",
+        &rendered,
+        ";",
+        "refresh-client",
+        "-S",
+    ]);
 }
 
 fn cmd_system_info() {
@@ -256,26 +275,37 @@ fn cmd_sysinfo_daemon() {
     let pid_file = std::env::temp_dir().join("tmux-sysinfo.pid");
 
     // Deduplication: bail if another instance is already running
-    if let Ok(contents) = std::fs::read_to_string(&pid_file) {
-        if let Ok(pid) = contents.trim().parse::<u32>() {
-            let alive = Command::new("kill")
-                .args(["-0", &pid.to_string()])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
-            if alive {
-                return;
-            }
+    if let Ok(contents) = std::fs::read_to_string(&pid_file)
+        && let Ok(pid) = contents.trim().parse::<u32>()
+    {
+        let alive = Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if alive {
+            return;
         }
     }
     let _ = std::fs::write(&pid_file, std::process::id().to_string());
 
+    // Reuse one System instance across all ticks — avoids per-tick allocation
+    let mut sys = sysinfo::System::new();
+
     // Initial render before entering the loop
-    let mut cached = query_system_info();
+    let mut cached = query_system_info_with(&mut sys);
     let rendered = status::render_system_info(&cached);
-    tmux_cmd(&["set-option", "-g", "@sysinfo", &rendered, ";", "refresh-client", "-S"]);
+    tmux_cmd(&[
+        "set-option",
+        "-g",
+        "@sysinfo",
+        &rendered,
+        ";",
+        "refresh-client",
+        "-S",
+    ]);
 
     let mut tick = 0u64;
     loop {
@@ -287,8 +317,8 @@ fn cmd_sysinfo_daemon() {
         cached.clock = now.format("%H:%M:%S").to_string();
 
         // Refresh expensive fields every 5 seconds
-        if tick % 5 == 0 {
-            let fresh = query_system_info();
+        if tick.is_multiple_of(5) {
+            let fresh = query_system_info_with(&mut sys);
             cached.cpu_load = fresh.cpu_load;
             cached.mem_pct = fresh.mem_pct;
             cached.battery_pct = fresh.battery_pct;
@@ -298,7 +328,15 @@ fn cmd_sysinfo_daemon() {
         }
 
         let rendered = status::render_system_info(&cached);
-        tmux_cmd(&["set-option", "-g", "@sysinfo", &rendered, ";", "refresh-client", "-S"]);
+        tmux_cmd(&[
+            "set-option",
+            "-g",
+            "@sysinfo",
+            &rendered,
+            ";",
+            "refresh-client",
+            "-S",
+        ]);
     }
 }
 
@@ -355,7 +393,7 @@ fn cmd_switch(args: &[String]) {
     let target = match (idx, direction) {
         (Some(i), "prev") => &sessions[(i + sessions.len() - 1) % sessions.len()],
         (Some(i), _) => &sessions[(i + 1) % sessions.len()],
-        (None, "prev") => sessions.last().unwrap(),
+        (None, "prev") => sessions.last().expect("non-empty after early return"),
         (None, _) => &sessions[0],
     };
     tmux_cmd(&["switch-client", "-t", target]);
@@ -377,12 +415,7 @@ fn cmd_move(args: &[String]) {
     }
     // Fork the status-bar refresh into background so tmux unblocks immediately
     // (allows rapid repeated moves without losing keypresses to serialization)
-    let exe = env::current_exe().unwrap_or_else(|_| "tmux-session".into());
-    let _ = Command::new(exe)
-        .args(["update"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+    process::spawn_detached_update();
 }
 
 fn cmd_rename(args: &[String]) {
@@ -453,7 +486,7 @@ fn cmd_hide_toggle(args: &[String]) {
 
 fn cmd_picker(args: &[String]) {
     let Some(action) = args.first().map(String::as_str) else {
-        eprintln!("Missing picker action");
+        error!("missing picker action");
         std::process::exit(1);
     };
 
@@ -502,7 +535,7 @@ fn dispatch_sidebar_picker(action: &str) -> bool {
                 && pane.tab_id == active.tab_id
                 && pane.pane_id != active.pane_id
                 && pane.left_col < active.left_col
-                && pane.title.starts_with("tmux-session")
+                && pane.title == "mux"
         })
         .min_by_key(|pane| pane.left_col)
     else {
@@ -522,14 +555,7 @@ fn dispatch_sidebar_picker(action: &str) -> bool {
     }
 
     Command::new("wezterm")
-        .args([
-            "cli",
-            "send-text",
-            "--no-paste",
-            "--pane-id",
-            &pane_id,
-            key,
-        ])
+        .args(["cli", "send-text", "--no-paste", "--pane-id", &pane_id, key])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -546,7 +572,7 @@ fn open_picker_popup(action: &str) {
         _ => return,
     };
 
-    let mut command = format!("~/.config/tmux/scripts/tmux-session {action}");
+    let mut command = format!("~/.config/tmux/scripts/mux {action}");
     if allow_failure {
         command.push_str(" || true");
     }
@@ -573,10 +599,80 @@ fn open_picker_popup(action: &str) {
         .status();
 }
 
+fn cmd_bench(args: &[String]) {
+    let iterations: usize = args.first().and_then(|s| s.parse().ok()).unwrap_or(20);
+
+    // Bench usage_bars::collect()
+    let mut collect_times = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let t0 = std::time::Instant::now();
+        let _ = usage_bars::collect();
+        collect_times.push(t0.elapsed());
+    }
+
+    // Bench a full sidebar refresh cycle (the core of what refresh() does)
+    let alive: std::collections::HashSet<String> = tmux_cmd(&["list-sessions", "-F", "#S"])
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    let sessions = compute_order(&alive, false);
+
+    let mut refresh_times = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let t0 = std::time::Instant::now();
+        // Simulate the refresh hot path: batch tmux query + meta + usage_bars
+        let _batch = tmux_cmd(&[
+            "show-option",
+            "-gv",
+            "@notched",
+            ";",
+            "display-message",
+            "-p",
+            "#S",
+            ";",
+            "list-sessions",
+            "-F",
+            "#S",
+        ]);
+        sidebar::bench_query_session_meta(&sessions);
+        let _ = usage_bars::collect();
+        refresh_times.push(t0.elapsed());
+    }
+
+    let stats = |times: &[std::time::Duration]| -> (u128, u128, u128) {
+        let min = times.iter().map(|d| d.as_micros()).min().unwrap_or(0);
+        let max = times.iter().map(|d| d.as_micros()).max().unwrap_or(0);
+        let avg = times.iter().map(|d| d.as_micros()).sum::<u128>() / times.len().max(1) as u128;
+        (min, avg, max)
+    };
+
+    // Bench sysinfo daemon tick (query_system_info_with reusing a System instance)
+    let mut sys = sysinfo::System::new();
+    // Warm up the System instance (first call populates internal caches)
+    let _ = query_system_info_with(&mut sys);
+    let mut sysinfo_times = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let t0 = std::time::Instant::now();
+        let _ = query_system_info_with(&mut sys);
+        sysinfo_times.push(t0.elapsed());
+    }
+
+    let (cmin, cavg, cmax) = stats(&collect_times);
+    let (rmin, ravg, rmax) = stats(&refresh_times);
+    let (smin, savg, smax) = stats(&sysinfo_times);
+
+    println!("usage_bars::collect()  n={iterations}  min={cmin}µs  avg={cavg}µs  max={cmax}µs");
+    println!("refresh() simulation   n={iterations}  min={rmin}µs  avg={ravg}µs  max={rmax}µs");
+    println!("sysinfo daemon tick    n={iterations}  min={smin}µs  avg={savg}µs  max={smax}µs");
+}
+
 fn main() {
+    let _guard = logging::init_tracing();
     let args: Vec<String> = env::args().collect();
     let cmd = args.get(1).map_or("list", String::as_str);
     let rest: Vec<String> = args.iter().skip(2).cloned().collect();
+    debug!(subcommand = %cmd, args = ?rest, "dispatch");
     match cmd {
         "order" => cmd_order(&rest),
         "list" => cmd_list(),
@@ -600,8 +696,10 @@ fn main() {
         "sidebar" => sidebar::cmd_sidebar(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
+        "log" => logging::cmd_log(&rest),
+        "bench" => cmd_bench(&rest),
         _ => {
-            eprintln!("Unknown: {cmd}");
+            error!(cmd = %cmd, "unknown subcommand");
             std::process::exit(1);
         }
     }

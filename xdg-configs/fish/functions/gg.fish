@@ -111,7 +111,7 @@ function __gg_tmux_session --argument-names grove_name worktree_path
     tmux new-window -t "$session_name" -n "vi" -c "$worktree_path"
     tmux new-window -t "$session_name" -n "sh" -c "$worktree_path"
 
-    # Launch claude and nvim via send-keys (matches session-mgr)
+    # Launch claude and nvim via send-keys (matches mux)
     set -l claude_cmd (__gg_claude_cmd "$worktree_path")
     tmux send-keys -t "$session_name:ai" "$claude_cmd" Enter
     tmux send-keys -t "$session_name:vi" "nvim" Enter
