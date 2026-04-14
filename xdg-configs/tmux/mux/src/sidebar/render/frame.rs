@@ -72,11 +72,11 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
     let mut hint_lines: Vec<Line<'static>> = if state.overlay_active() {
         overlay_footer_hints(content_w as usize)
     } else if state.chooser_active() {
-        chooser_footer_hints(content_w as usize)
+        chooser_footer_hints(content_w as usize, state.show_hidden)
     } else if !state.focused {
         unfocused_footer_hints(content_w as usize)
     } else {
-        footer_hints(content_w as usize)
+        footer_hints(content_w as usize, state.show_hidden)
     };
     while hint_lines.len() < FOOTER_H as usize {
         hint_lines.insert(0, Line::default());

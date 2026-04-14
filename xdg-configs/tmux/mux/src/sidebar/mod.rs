@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, Stdout, Write};
+use std::io::{self, Write};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -143,6 +143,10 @@ impl SidebarState {
 
     fn overlay_active(&self) -> bool {
         self.overlay.is_some()
+    }
+
+    fn force_refresh(&mut self) {
+        self.last_meta_refresh = Instant::now() - Duration::from_secs(60);
     }
 
     fn open_chooser(&mut self) {
@@ -610,9 +614,12 @@ pub(crate) fn cmd_sidebar() {
                                 focus_main_pane();
                                 continue;
                             }
-                            (KeyCode::Char('h'), KeyModifiers::ALT) => {
+                            (KeyCode::Char('h'), m)
+                                if m.contains(KeyModifiers::ALT) =>
+                            {
                                 if let Some(id) = state.selected_session_id() {
-                                    spawn_subcmd(&mut terminal, &["hide-toggle", &id]);
+                                    toggle_hidden(&id);
+                                    state.force_refresh();
                                 }
                                 continue;
                             }
@@ -689,9 +696,12 @@ pub(crate) fn cmd_sidebar() {
                         (KeyCode::Char('x'), _) => {
                             state.open_ditch_overlay();
                         }
-                        (KeyCode::Char('h'), KeyModifiers::ALT) => {
+                        (KeyCode::Char('h'), m)
+                            if m.contains(KeyModifiers::ALT) =>
+                        {
                             if let Some(id) = state.selected_session_id() {
-                                spawn_subcmd(&mut terminal, &["hide-toggle", &id]);
+                                toggle_hidden(&id);
+                                state.force_refresh();
                             }
                         }
                         (KeyCode::Char('h'), _) => {
@@ -761,6 +771,17 @@ fn leave_tui() {
     let _ = terminal::disable_raw_mode();
 }
 
+fn toggle_hidden(session: &str) {
+    let path = crate::order::hidden_file();
+    let mut lines = crate::order::load_lines(&path);
+    if let Some(pos) = lines.iter().position(|l| l == session) {
+        lines.remove(pos);
+    } else {
+        lines.push(session.to_string());
+    }
+    crate::order::save_lines(&path, &lines);
+}
+
 fn focus_main_pane() {
     let _ = Command::new("wezterm")
         .args(["cli", "activate-pane-direction", "Right"])
@@ -769,18 +790,3 @@ fn focus_main_pane() {
         .spawn();
 }
 
-fn spawn_subcmd(terminal: &mut Terminal<CrosstermBackend<Stdout>>, args: &[&str]) {
-    leave_tui();
-    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
-    let bg = if tmux(&["show-option", "-gv", "@notched"]) == "1" {
-        "000000"
-    } else {
-        "11111b"
-    };
-    let _ = Command::new(&exe)
-        .args(args)
-        .env("TMUX_SESSION_BG", bg)
-        .status();
-    enter_tui();
-    terminal.clear().ok();
-}

@@ -8,16 +8,18 @@ pub(in crate::sidebar) fn hint_key(k: impl Into<std::borrow::Cow<'static, str>>)
     Span::styled(k, Style::default().fg(TEXT).bold().italic())
 }
 
-pub(in crate::sidebar) fn hint_lbl(s: &'static str) -> Span<'static> {
-    Span::styled(s, Style::default().fg(OVERLAY0).italic())
+pub(in crate::sidebar) fn hint_lbl(s: impl Into<String>) -> Span<'static> {
+    Span::styled(s.into(), Style::default().fg(OVERLAY0).italic())
 }
 
 pub(in crate::sidebar) fn hint_sep() -> Span<'static> {
     Span::styled("  ", Style::default())
 }
 
-pub(in crate::sidebar) fn footer_hints(width: usize) -> Vec<Line<'static>> {
+pub(in crate::sidebar) fn footer_hints(width: usize, show_hidden: bool) -> Vec<Line<'static>> {
     let opt_jk = format!("{KEY_OPT} jk");
+    let h_short = if show_hidden { " sho" } else { " hid" };
+    let h_long = if show_hidden { " show" } else { " hide" };
 
     if width >= 34 {
         vec![
@@ -38,7 +40,7 @@ pub(in crate::sidebar) fn footer_hints(width: usize) -> Vec<Line<'static>> {
                 hint_lbl(" del"),
                 hint_sep(),
                 hint_key("h"),
-                hint_lbl(" hid"),
+                hint_lbl(h_short.to_string()),
                 hint_sep(),
                 hint_key(opt_jk),
                 hint_lbl(" mv"),
@@ -66,7 +68,7 @@ pub(in crate::sidebar) fn footer_hints(width: usize) -> Vec<Line<'static>> {
                 hint_lbl(" del"),
                 hint_sep(),
                 hint_key("h"),
-                hint_lbl(" hide"),
+                hint_lbl(h_long.to_string()),
                 hint_sep(),
                 hint_key("q"),
                 hint_lbl(" close"),
@@ -91,9 +93,10 @@ pub(in crate::sidebar) fn footer_hints(width: usize) -> Vec<Line<'static>> {
     }
 }
 
-pub(in crate::sidebar) fn chooser_footer_hints(width: usize) -> Vec<Line<'static>> {
+pub(in crate::sidebar) fn chooser_footer_hints(width: usize, show_hidden: bool) -> Vec<Line<'static>> {
     let opt_h = format!("{KEY_OPT} h");
     let opt_jk = format!("{KEY_OPT} jk");
+    let h_long = if show_hidden { " show" } else { " hide" };
 
     if width >= 34 {
         vec![
@@ -111,7 +114,7 @@ pub(in crate::sidebar) fn chooser_footer_hints(width: usize) -> Vec<Line<'static
             Line::from(vec![
                 hint_lbl(" "),
                 hint_key(opt_h),
-                hint_lbl(" hide"),
+                hint_lbl(h_long.to_string()),
                 hint_sep(),
                 hint_key(opt_jk),
                 hint_lbl(" move"),
@@ -133,7 +136,7 @@ pub(in crate::sidebar) fn chooser_footer_hints(width: usize) -> Vec<Line<'static
             Line::from(vec![
                 hint_lbl(" "),
                 hint_key(opt_h),
-                hint_lbl(" hide"),
+                hint_lbl(h_long.to_string()),
                 hint_sep(),
                 hint_key("q"),
                 hint_lbl(" close"),
