@@ -30,6 +30,8 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 - `./nvim` → `~/.config/nvim` (github.com/luan/nvim) — full Neovim config
 - `./dot-claude` → `~/.claude` (github.com/luan/dot-claude) — Claude Code settings, CLAUDE.md, rules, hooks, skills, MCP config
 
+See [docs/architecture.md](docs/architecture.md) for the layered diagram + module map.
+
 **Root-level files** (not stowed):
 - `gitconfig` / `themes.gitconfig` — sourced via `[include]` in `~/.gitconfig`
 - `Brewfile` — Homebrew bundle
