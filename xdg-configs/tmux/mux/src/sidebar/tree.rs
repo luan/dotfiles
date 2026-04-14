@@ -12,9 +12,17 @@ pub(super) enum ItemKind {
     Session { attention: bool },
     Group,
     Branch,
-    Agent { name: String, age: Option<Duration> },
-    Activity(String),
-    ContextBar { pct: u8, tokens: String },
+    Agent {
+        name: String,
+        age: Option<Duration>,
+        /// When Some, the agent is actively working — the gerund (e.g. "Churning…")
+        /// drives the percolation text animation on this row.
+        gerund: Option<String>,
+        /// Context window: (pct, tokens) shown at row end.
+        ctx: Option<(u8, String)>,
+        /// Agent is waiting for user input.
+        asking: bool,
+    },
     Ports(Vec<u16>),
     Status,
     Progress(u8),
@@ -140,10 +148,10 @@ pub(super) fn build_items(
         });
 
         // Detail rows (all indented to align after number glyph)
-        if !sm.agent.is_empty() {
+        for (ai, agent) in sm.agents.iter().enumerate() {
             items.push(Item {
-                id: format!("__agent__{name}"),
-                display: sm.agent.clone(),
+                id: format!("__agent__{name}__{ai}"),
+                display: agent.name.clone(),
                 indent: detail_indent,
                 tree: detail_tree,
                 color,
@@ -151,41 +159,13 @@ pub(super) fn build_items(
                 selectable: false,
                 session_id: Some(name.clone()),
                 kind: ItemKind::Agent {
-                    name: sm.agent.clone(),
-                    age: sm.claude_age,
+                    name: agent.name.clone(),
+                    age: agent.age,
+                    gerund: agent.gerund.clone(),
+                    ctx: agent.ctx.as_ref().map(|c| (c.pct, c.tokens.clone())),
+                    asking: agent.asking,
                 },
             });
-
-            if let Some(act) = &sm.claude_activity {
-                items.push(Item {
-                    id: format!("__activity__{name}"),
-                    display: act.clone(),
-                    indent: detail_indent,
-                    tree: detail_tree,
-                    color,
-                    dim_color,
-                    selectable: false,
-                    session_id: Some(name.clone()),
-                    kind: ItemKind::Activity(act.clone()),
-                });
-            }
-
-            if let Some(ctx) = &sm.claude_ctx {
-                items.push(Item {
-                    id: format!("__ctx__{name}"),
-                    display: String::new(),
-                    indent: detail_indent,
-                    tree: detail_tree,
-                    color,
-                    dim_color,
-                    selectable: false,
-                    session_id: Some(name.clone()),
-                    kind: ItemKind::ContextBar {
-                        pct: ctx.pct,
-                        tokens: ctx.tokens.clone(),
-                    },
-                });
-            }
         }
         if !sm.branch.is_empty() {
             items.push(Item {

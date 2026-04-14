@@ -7,11 +7,63 @@ use super::super::meta::{agent_color, agent_glyph};
 use super::super::overlay::RenameOverlay;
 use super::super::tree::{Item, ItemKind, Tree};
 use super::super::truncate;
-use crate::palette::{
-    CTX_EMPTY_COLOR, CTX_POS_COLORS, age_color, ctx_label_color, dim_color, format_age, seg_number,
-};
+use crate::palette::{age_color, ctx_label_color, dim_color, format_age};
+
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const TREE_COLOR: Color = Color::Rgb(0x2e, 0x2f, 0x40);
+
+// ── Agent activity animation ─────────────────────────────────
+// Claude's percolation palette (warm amber).
+const PERC_BASE: Color = Color::Rgb(0xD7, 0x87, 0x87);
+const PERC_SHINE: Color = Color::Rgb(0xFF, 0xAF, 0x87);
+/// Width of the travelling shine window (in characters).
+const PERC_WIDTH: usize = 3;
+/// Milliseconds per percolation step (shine slides one char right).
+const PERC_MS: u128 = 80;
+/// Milliseconds for one full glyph brightness cycle (dim → bright → dim).
+const GLYPH_PULSE_MS: u128 = 2000;
+/// Floor/ceiling for glyph brightness pulse — avoids full black or full white.
+const PULSE_MIN: f32 = 0.15;
+const PULSE_MAX: f32 = 1.3;
+/// Fast pulse for "asking" attention state.
+const ASK_PULSE_MS: u128 = 800;
+const ASK_COLOR: Color = Color::Rgb(0xF9, 0xE2, 0xAF); // yellow — attention
+
+const CODEX_VERBS: &[&str] = &["Codexing…", "Working…", "Thingamabobbing…"];
+const OPENCODE_VERBS: &[&str] = &["Opencodding…", "Opendoing…", "Shming Shmopenig…"];
+
+/// Scale an RGB color's brightness by `factor`. 0.0 = black, 1.0 = original,
+/// 1.5 = 50% brighter (clamped to 255).
+fn scale_brightness(c: Color, factor: f32) -> Color {
+    let (r, g, b) = match c {
+        Color::Rgb(r, g, b) => (r, g, b),
+        _ => (0xff, 0xff, 0xff),
+    };
+    let s = |v: u8| ((v as f32 * factor).round().clamp(0.0, 255.0)) as u8;
+    Color::Rgb(s(r), s(g), s(b))
+}
+
+/// Linear blend of two RGB colors. `t` = 0 → a, `t` = 1 → b.
+fn blend_color(a: Color, b: Color, t: f32) -> Color {
+    let (ar, ag, ab) = match a {
+        Color::Rgb(r, g, b) => (r, g, b),
+        _ => (0xff, 0xff, 0xff),
+    };
+    let (br, bg, bb) = match b {
+        Color::Rgb(r, g, b) => (r, g, b),
+        _ => (0xff, 0xff, 0xff),
+    };
+    let mix = |x: u8, y: u8| ((x as f32) * (1.0 - t) + (y as f32) * t).round() as u8;
+    Color::Rgb(mix(ar, br), mix(ag, bg), mix(ab, bb))
+}
+
+/// Triangle wave `lo → hi → lo` over `period_ms`.
+fn triangle_wave(now_ms: u128, period_ms: u128, lo: f32, hi: f32) -> f32 {
+    let t = (now_ms % period_ms) as f32 / period_ms as f32;
+    let tri = 1.0 - (2.0 * t - 1.0).abs(); // 0→1→0
+    lo + tri * (hi - lo)
+}
 
 pub(in crate::sidebar) fn tree_prefix_spans(
     tree: Tree,
@@ -149,38 +201,151 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Agent { name, age } => {
-            let color = if is_cur { agent_color(name) } else { SURFACE1 };
+        ItemKind::Agent {
+            name,
+            age,
+            gerund,
+            ctx,
+            asking,
+        } => {
+            let color = if is_cur {
+                agent_color(name)
+            } else {
+                dim_color(agent_color(name))
+            };
             let age_str = age.map(format_age).unwrap_or_default();
-            let age_width = if age_str.is_empty() {
-                0
-            } else {
-                age_str.chars().count() + 1 // " " separator
-            };
-            let name_w = content_w.saturating_sub(age_width);
-            let disp = match agent_glyph(name) {
-                Some(g) => g.to_string(),
-                None => truncate(name, name_w).to_string(),
-            };
-            let style = if is_cur {
-                Style::default().fg(color).bg(row_bg)
-            } else {
-                Style::default().fg(color).italic().bg(row_bg)
-            };
             let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            line.push(Span::styled(disp, style));
-            if !age_str.is_empty() {
-                let a_color = if is_cur {
-                    age.map(age_color).unwrap_or(SURFACE1)
-                } else {
-                    age.map(|d| dim_color(age_color(d))).unwrap_or(SURFACE1)
-                };
-                line.push(Span::styled(" ", Style::default().bg(row_bg)));
+
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
+
+            let glyph_str = agent_glyph(name).unwrap_or(name).to_string();
+            let agent_col = agent_color(name);
+
+            if *asking {
+                // ── Asking: loud attention pulse ──
+                let pulse = triangle_wave(now_ms, ASK_PULSE_MS, 0.0, 1.0);
+                let glyph_fg = blend_color(agent_col, ASK_COLOR, pulse);
                 line.push(Span::styled(
-                    age_str,
-                    Style::default().fg(a_color).bg(row_bg),
+                    glyph_str,
+                    Style::default().fg(glyph_fg).bg(row_bg),
                 ));
+                line.push(Span::styled(
+                    " Waiting…",
+                    Style::default().fg(ASK_COLOR).bg(row_bg),
+                ));
+            } else if gerund.is_some() {
+                // ── Active: glyph brightness pulse + percolating gerund ──
+                let perc_step = (now_ms / PERC_MS) as usize;
+                let brightness =
+                    triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
+                line.push(Span::styled(
+                    glyph_str,
+                    Style::default()
+                        .fg(scale_brightness(agent_col, brightness))
+                        .bg(row_bg),
+                ));
+                line.push(Span::styled(" ", Style::default().bg(row_bg)));
+
+                let (base, shine) = if name == "claude" {
+                    (PERC_BASE, PERC_SHINE)
+                } else {
+                    (
+                        scale_brightness(agent_col, 0.6),
+                        scale_brightness(agent_col, 1.5),
+                    )
+                };
+
+                let word: &str = match name.as_str() {
+                    "codex" => {
+                        let idx = (now_ms / 8000) as usize % CODEX_VERBS.len();
+                        CODEX_VERBS[idx]
+                    }
+                    "opencode" => {
+                        let idx = (now_ms / 8000) as usize % OPENCODE_VERBS.len();
+                        OPENCODE_VERBS[idx]
+                    }
+                    _ => gerund.as_ref().unwrap(),
+                };
+
+                let chars: Vec<char> = word.chars().collect();
+                let cycle = chars.len() + PERC_WIDTH;
+                let pos = perc_step % cycle;
+                for (i, ch) in chars.iter().enumerate() {
+                    let in_shine =
+                        i >= pos.saturating_sub(PERC_WIDTH) && i < pos;
+                    let fg = if in_shine { shine } else { base };
+                    line.push(Span::styled(
+                        ch.to_string(),
+                        Style::default().fg(fg).bg(row_bg),
+                    ));
+                }
+            } else {
+                // ── Idle ──
+                line.push(Span::styled(
+                    glyph_str,
+                    Style::default().fg(color).bg(row_bg),
+                ));
+                let show_age = age.is_some_and(|d| d >= Duration::from_secs(300));
+                if show_age {
+                    line.push(Span::styled(
+                        " Idle for ",
+                        Style::default().fg(SURFACE1).bg(row_bg),
+                    ));
+                    let a_color = if is_cur {
+                        age.map(age_color).unwrap_or(SURFACE1)
+                    } else {
+                        age.map(|d| dim_color(age_color(d))).unwrap_or(SURFACE1)
+                    };
+                    line.push(Span::styled(
+                        format!("{age_str}."),
+                        Style::default().fg(a_color).bg(row_bg),
+                    ));
+                } else {
+                    line.push(Span::styled(
+                        " Idle.",
+                        Style::default().fg(SURFACE1).bg(row_bg),
+                    ));
+                }
+            }
+
+            // Right-aligned section: [ctx] [age]
+            // Compute right-side width, insert padding, then render right spans.
+            let mut right: Vec<Span<'static>> = Vec::new();
+            if let Some((pct, tokens)) = ctx {
+                // pct=0 means "no usage data" (e.g. codex) — show tokens only.
+                if *pct > 0 {
+                    let label_color = if is_cur {
+                        ctx_label_color(*pct)
+                    } else {
+                        dim_color(ctx_label_color(*pct))
+                    };
+                    right.push(Span::styled(
+                        format!("{pct}\u{066A}"),
+                        Style::default().fg(label_color).bg(row_bg),
+                    ));
+                    if !tokens.is_empty() {
+                        right.push(Span::styled(" ", Style::default().bg(row_bg)));
+                    }
+                }
+                if !tokens.is_empty() {
+                    let tok_color = if is_cur { OVERLAY0 } else { SURFACE1 };
+                    right.push(Span::styled(
+                        tokens.clone(),
+                        Style::default().fg(tok_color).bg(row_bg),
+                    ));
+                }
+            }
+            if !right.is_empty() {
+                let right_w: usize = right.iter().map(|s| s.width()).sum();
+                let left_w: usize = line.iter().map(|s| s.width()).sum();
+                let pad = w.saturating_sub(left_w + right_w + 1);
+                line.push(Span::styled(" ".repeat(pad.max(1)), Style::default().bg(row_bg)));
+                line.extend(right);
+                line.push(Span::styled(" ", Style::default().bg(row_bg)));
             }
             f.render_widget(
                 Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
@@ -214,87 +379,6 @@ pub(in crate::sidebar) fn render_item(
             ));
             f.render_widget(
                 Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
-                row,
-            );
-        }
-        ItemKind::Activity(text) => {
-            let disp = truncate(text, content_w);
-            let color = if is_cur { SUBTEXT0 } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
-            line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            line.push(Span::styled(
-                disp,
-                Style::default().fg(color).italic().bg(row_bg),
-            ));
-            f.render_widget(
-                Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
-                row,
-            );
-        }
-        ItemKind::ContextBar { pct, tokens } => {
-            // Build bar: 12 cells, per-position gradient colors matching statusline.py
-            const BAR_WIDTH: usize = 12;
-            let fill = (*pct as f32) * BAR_WIDTH as f32 / 100.0;
-            let full = fill.floor() as usize;
-            let frac = fill - full as f32;
-
-            let mut spans: Vec<Span<'_>> = Vec::with_capacity(BAR_WIDTH + 6);
-            spans.push(bar_span(item, is_sel, row_bg));
-            spans.extend(tree_prefix_spans(item.tree, indent, row_bg));
-
-            for (i, &pos_color) in CTX_POS_COLORS.iter().enumerate().take(BAR_WIDTH) {
-                let (level, ch) = if i < full {
-                    (1.0f32, '\u{25A0}') // ■
-                } else if i == full && frac > 0.0 {
-                    if frac < 0.5 {
-                        (frac, '\u{25E7}') // ◧
-                    } else {
-                        (frac, '\u{25A0}') // ■
-                    }
-                } else {
-                    (0.0, '\u{25A1}') // □
-                };
-                let color = if level > 0.0 {
-                    if is_cur {
-                        pos_color
-                    } else {
-                        dim_color(pos_color)
-                    }
-                } else if is_cur {
-                    CTX_EMPTY_COLOR
-                } else {
-                    SURFACE1
-                };
-                spans.push(Span::styled(
-                    ch.to_string(),
-                    Style::default().fg(color).bg(row_bg),
-                ));
-            }
-
-            // Label: seg digits + ٪ colored by threshold
-            let label_color = if is_cur {
-                ctx_label_color(*pct)
-            } else {
-                dim_color(ctx_label_color(*pct))
-            };
-            spans.push(Span::styled(" ", Style::default().bg(row_bg)));
-            spans.push(Span::styled(
-                format!("{}\u{066A}", seg_number(*pct as u32)),
-                Style::default().fg(label_color).bg(row_bg),
-            ));
-
-            // Tokens
-            if !tokens.is_empty() {
-                spans.push(Span::styled(" ", Style::default().bg(row_bg)));
-                let tok_color = if is_cur { OVERLAY0 } else { SURFACE1 };
-                spans.push(Span::styled(
-                    tokens.clone(),
-                    Style::default().fg(tok_color).bg(row_bg),
-                ));
-            }
-
-            f.render_widget(
-                Paragraph::new(Line::from(spans)).style(Style::default().bg(row_bg)),
                 row,
             );
         }

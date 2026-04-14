@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use ratatui::prelude::*;
 
-use crate::palette::{BLUE, GREEN, MAUVE, PEACH, SUBTEXT0};
+use crate::palette::{BLUE, MAUVE, PEACH, SUBTEXT0};
 use crate::tmux::tmux;
 
-use super::claude::{ClaudeCtx, query_claude_ages, query_claude_scrapes};
+use super::claude::{AgentCtx, query_agent_scrapes, query_claude_ages};
 
 // ── Process info ─────────────────────────────────────────────
 
@@ -38,10 +38,15 @@ fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>) {
 
 // ── Agent detection ──────────────────────────────────────────
 
+/// Low-saturation purple for opencode's identity color.
+const OPENCODE_COLOR: Color = Color::Rgb(0x9A, 0x8F, 0xBF);
+/// Sky blue matching codex's usage bar provider color.
+const CODEX_AGENT_COLOR: Color = Color::Rgb(0x74, 0xC7, 0xEC);
+
 const AGENTS: &[(&str, Color)] = &[
     ("claude", PEACH),
-    ("codex", GREEN),
-    ("opencode", BLUE),
+    ("codex", CODEX_AGENT_COLOR),
+    ("opencode", OPENCODE_COLOR),
     ("aider", MAUVE),
     ("cursor-agent", BLUE),
     ("gemini", BLUE),
@@ -61,36 +66,68 @@ pub(super) fn agent_glyph(name: &str) -> Option<&'static str> {
     match name {
         "claude" => Some("\u{e861}"),
         "codex" => Some("\u{e7cf}"),
-        "opencode" => Some("\u{f113a}"),
+        "opencode" => Some("\u{f0b16}"),
         _ => None,
     }
 }
 
+struct PaneInfo {
+    session: String,
+    pane_id: String,
+    pid: u32,
+}
+
+/// Returns (session, pane_id, agent_name) for every agent found across all panes.
 fn query_agents(
-    pane_pids: &HashMap<String, u32>,
+    all_panes: &[PaneInfo],
     parent_of: &HashMap<u32, u32>,
     name_of: &HashMap<u32, String>,
-) -> HashMap<String, String> {
+) -> Vec<(String, String, String)> {
     let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
     for (&c, &p) in parent_of {
         children.entry(p).or_default().push(c);
     }
 
-    let mut result = HashMap::new();
-    for (session, &pane_pid) in pane_pids {
-        let mut stack = vec![pane_pid];
-        let mut visited = HashSet::new();
-        'walk: while let Some(pid) = stack.pop() {
+    let mut result: Vec<(String, String, String)> = Vec::new();
+
+    for pane in all_panes {
+        let mut stack = vec![pane.pid];
+        let mut visited: HashSet<u32> = HashSet::new();
+        // Track which pids we've claimed for an agent so we skip their subtrees.
+        let mut skip_subtree: HashSet<u32> = HashSet::new();
+
+        while let Some(pid) = stack.pop() {
             if !visited.insert(pid) {
+                continue;
+            }
+            // If this pid belongs to an agent subtree we already claimed, skip it
+            // (but still walk siblings — skip_subtree only blocks the *children*).
+            if skip_subtree.contains(&pid) {
                 continue;
             }
             if let Some(name) = name_of.get(&pid) {
                 let lower = name.to_ascii_lowercase();
-                for (agent, _) in AGENTS {
-                    if lower == *agent {
-                        result.insert(session.clone(), (*agent).to_string());
-                        break 'walk;
+                let agent_match = AGENTS.iter().find(|(a, _)| lower == *a);
+                if let Some((agent_name, _)) = agent_match {
+                    let key = (pane.session.clone(), pane.pane_id.clone());
+                    // Dedup: same (session, pane_id, agent_name) should appear once.
+                    let already = result
+                        .iter()
+                        .any(|(s, p, n)| s == &key.0 && p == &key.1 && n == *agent_name);
+                    if !already {
+                        result.push((
+                            pane.session.clone(),
+                            pane.pane_id.clone(),
+                            (*agent_name).to_string(),
+                        ));
                     }
+                    // Mark children of this agent pid as skip so nested tools
+                    // aren't double-detected as separate agents.
+                    if let Some(kids) = children.get(&pid) {
+                        skip_subtree.extend(kids);
+                    }
+                    // Don't push children onto main stack either.
+                    continue;
                 }
             }
             if let Some(kids) = children.get(&pid) {
@@ -98,6 +135,7 @@ fn query_agents(
             }
         }
     }
+
     result
 }
 
@@ -165,13 +203,20 @@ fn query_ports(
 
 // ── Rich metadata ────────────────────────────────────────────
 
+#[derive(Clone)]
+pub(super) struct AgentInstance {
+    pub(super) name: String,
+    pub(super) pane_id: String,
+    pub(super) gerund: Option<String>,
+    pub(super) ctx: Option<AgentCtx>,
+    pub(super) age: Option<Duration>,
+    pub(super) asking: bool,
+}
+
 #[derive(Default, Clone)]
 pub(super) struct SessionMeta {
     pub(super) branch: String,
-    pub(super) agent: String,
-    pub(super) claude_ctx: Option<ClaudeCtx>,
-    pub(super) claude_age: Option<Duration>,
-    pub(super) claude_activity: Option<String>,
+    pub(super) agents: Vec<AgentInstance>,
     pub(super) attention: bool,
     pub(super) ports: Vec<u16>,
     pub(super) status: String,
@@ -201,7 +246,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_active}\t#{pane_active}\t#{pane_current_path}\t#{pane_pid}",
+        "#{session_name}\t#{window_active}\t#{pane_active}\t#{pane_current_path}\t#{pane_pid}\t#{pane_id}",
         ";",
         "display-message",
         "-p",
@@ -214,7 +259,9 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     tmux_calls += 1;
 
     let mut cwds: HashMap<String, String> = HashMap::new();
-    let mut pane_pids: HashMap<String, u32> = HashMap::new();
+    // Active-pane pids for port detection (only the active pane per session).
+    let mut active_pane_pids: HashMap<String, u32> = HashMap::new();
+    let mut all_panes: Vec<PaneInfo> = Vec::new();
     let mut attn: HashMap<String, bool> = HashMap::new();
     let mut statuses: HashMap<String, String> = HashMap::new();
     let mut progresses: HashMap<String, u8> = HashMap::new();
@@ -224,10 +271,26 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
 
     for line in panes_section.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 5 && parts[1] == "1" && parts[2] == "1" {
-            cwds.insert(parts[0].to_string(), parts[3].to_string());
-            if let Ok(pid) = parts[4].parse::<u32>() {
-                pane_pids.insert(parts[0].to_string(), pid);
+        if parts.len() < 6 {
+            continue;
+        }
+        let session = parts[0].to_string();
+        let window_active = parts[1] == "1";
+        let pane_active = parts[2] == "1";
+        let cwd = parts[3];
+        let pid_str = parts[4];
+        let pane_id = parts[5].to_string();
+
+        if let Ok(pid) = pid_str.parse::<u32>() {
+            all_panes.push(PaneInfo {
+                session: session.clone(),
+                pane_id,
+                pid,
+            });
+
+            if window_active && pane_active {
+                cwds.insert(session.clone(), cwd.to_string());
+                active_pane_pids.insert(session, pid);
             }
         }
     }
@@ -252,15 +315,18 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     }
 
     let (parent_of, name_of) = build_process_info();
-    let agents_map = query_agents(&pane_pids, &parent_of, &name_of);
+    let agent_hits = query_agents(&all_panes, &parent_of, &name_of);
 
-    let claude_sessions: Vec<String> = agents_map
-        .iter()
-        .filter(|(_, name)| name.as_str() == "claude")
-        .map(|(s, _)| s.clone())
-        .collect();
-    let (claude_scrape_map, scrape_calls) = query_claude_scrapes(&claude_sessions);
+    let (scrape_map, scrape_calls) = query_agent_scrapes(&agent_hits);
     tmux_calls += scrape_calls;
+
+    let claude_sessions: Vec<String> = agent_hits
+        .iter()
+        .filter(|(_, _, name)| name == "claude")
+        .map(|(s, _, _)| s.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
     let claude_age_map = query_claude_ages(&claude_sessions, &cwds);
 
     let mut branch_cache: HashMap<String, String> = HashMap::new();
@@ -270,20 +336,38 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         }
     }
 
-    let ports_map = query_ports(&pane_pids, &parent_of);
+    let ports_map = query_ports(&active_pane_pids, &parent_of);
 
     let mut result = HashMap::new();
     for name in sessions {
         let cwd = cwds.get(name).cloned().unwrap_or_default();
         let branch = branch_cache.get(&cwd).cloned().unwrap_or_default();
+
+        let session_agents: Vec<AgentInstance> = agent_hits
+            .iter()
+            .filter(|(s, _, _)| s == name)
+            .map(|(s, pane_id, agent_name)| {
+                let scrape = scrape_map.get(&(s.clone(), pane_id.clone()));
+                AgentInstance {
+                    name: agent_name.clone(),
+                    pane_id: pane_id.clone(),
+                    gerund: scrape.and_then(|sc| sc.gerund.clone()),
+                    ctx: scrape.and_then(|sc| sc.ctx.clone()),
+                    age: if agent_name == "claude" {
+                        claude_age_map.get(s).copied()
+                    } else {
+                        None
+                    },
+                    asking: scrape.is_some_and(|sc| sc.asking),
+                }
+            })
+            .collect();
+
         result.insert(
             name.clone(),
             SessionMeta {
                 branch,
-                agent: agents_map.get(name).cloned().unwrap_or_default(),
-                claude_ctx: claude_scrape_map.get(name).and_then(|s| s.ctx.clone()),
-                claude_age: claude_age_map.get(name).copied(),
-                claude_activity: claude_scrape_map.get(name).and_then(|s| s.activity.clone()),
+                agents: session_agents,
                 attention: *attn.get(name).unwrap_or(&false),
                 ports: ports_map.get(name).cloned().unwrap_or_default(),
                 status: statuses.get(name).cloned().unwrap_or_default(),

@@ -8,11 +8,11 @@ config.color_scheme = "tokyonight"
 -- Font: non-NF Maple as primary so cell metrics are text-sized. Font Awesome 7
 -- Brands picks up brand icons (Maple non-NF has no PUA overlap with FA brands),
 -- then Maple Mono NF covers the rest of the Nerd Font glyph set.
+-- · ✢ * ✶ ✻ ✽
 config.font = wezterm.font_with_fallback({
 	"Maple Mono",
 	"Font Awesome 7 Brands",
 	"Maple Mono NF",
-	"IosevkaTerm Nerd Font Mono",
 })
 config.font_size = 11
 config.warn_about_missing_glyphs = false
@@ -21,7 +21,7 @@ config.underline_position = "-0.25cell"
 config.underline_thickness = "3px"
 config.enable_kitty_keyboard = true
 
--- Window
+-- Window [info]
 config.window_decorations = "RESIZE|MACOS_FORCE_SQUARE_CORNERS|MACOS_FORCE_DISABLE_SHADOW"
 config.window_frame = {
 	border_left_width = 0,
@@ -167,7 +167,7 @@ local function open_sidebar(window, pane)
 	window:perform_action(
 		act.SplitPane({
 			direction = "Left",
-			size = { Cells = 41 },
+			size = { Cells = 45 },
 			command = {
 				args = { mux_bin, "sidebar" },
 				set_environment_variables = {
