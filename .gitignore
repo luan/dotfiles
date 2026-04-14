@@ -9,7 +9,7 @@ secrets
 **/zed/embeddings
 xdg-configs/fish/fish_variables
 xdg-configs/tmux/plugins/
-xdg-configs/tmux/scripts/tmux-session
+xdg-configs/tmux/scripts/mux
 .claude/settings.local.json
 bin/.claude/settings.local.json
 nvim

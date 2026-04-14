@@ -45,12 +45,13 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 
 `xdg-configs/tmux/` has extensive session management scripts in `scripts/`. Plugins managed by tpm. The tmux config lives at `~/.config/tmux/tmux.conf` (XDG path, not `~/.tmux.conf`).
 
-When changing `tmux-session`, run `just tmux-session` to rebuild, copy, and codesign the runtime binary.
+When changing `mux` (xdg-configs/tmux/mux/), run `just mux` to rebuild, copy, and codesign the runtime binary.
 
 ## Conventions
 
 - Branch prefix: `luan/`
 - Lazygit default branch prefix: `luan/`
 - Fish shell is the primary shell (zsh/bash present but fish is configured)
+- **Terminal emulator: WezTerm** (`xdg-configs/wezterm/wezterm.lua`). Ghostty config exists but is **not** in active use — edits to terminal-level keybindings (Cmd+*, CSI relays, sidebar wiring) go in the WezTerm config, not Ghostty.
 - Catppuccin Mocha is the theme across tools (tmux, zed, lazygit)
 - `.stow-local-ignore` skips `.DS_Store` files

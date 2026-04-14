@@ -1,62 +1,14 @@
 use std::collections::HashMap;
 
-use crate::color::{compute_color, is_static};
 use crate::group::{GroupMeta, session_group, session_suffix};
+use crate::palette::{group_glyph, num_glyph};
 use crate::tmux::{SystemInfo, WindowInfo};
 
-const NUM_SELECTED: &[char] = &[
-    '\u{F03A4}', // 1
-    '\u{F03A7}', // 2
-    '\u{F03AA}', // 3
-    '\u{F03AD}', // 4
-    '\u{F03B1}', // 5
-    '\u{F03B3}', // 6
-    '\u{F03B6}', // 7
-    '\u{F03B9}', // 8
-    '\u{F03BC}', // 9
-    '\u{F03BF}', // 9+
-];
-const NUM_UNSELECTED: &[char] = &[
-    '\u{F03A6}', // 1
-    '\u{F03A9}', // 2
-    '\u{F03AC}', // 3
-    '\u{F03AE}', // 4
-    '\u{F03B0}', // 5
-    '\u{F03B5}', // 6
-    '\u{F03B8}', // 7
-    '\u{F03BB}', // 8
-    '\u{F03BE}', // 9
-    '\u{F03C1}', // 9+
-];
-
-const GROUP_SELECTED: &[char] = &[
-    '\u{F0F0F}',
-    '\u{F0F10}',
-    '\u{F0F11}',
-    '\u{F0F12}',
-    '\u{F0F13}',
-    '\u{F0F14}',
-    '\u{F0F15}',
-    '\u{F0F16}',
-    '\u{F0F17}',
-    '\u{F0FEA}',
-];
-const GROUP_UNSELECTED: &[char] = &[
-    '\u{F03A5}',
-    '\u{F03A8}',
-    '\u{F03AB}',
-    '\u{F03B2}',
-    '\u{F03AF}',
-    '\u{F03B4}',
-    '\u{F03B7}',
-    '\u{F03BA}',
-    '\u{F03BD}',
-    '\u{F03C0}',
-];
-
-// Catppuccin Mocha palette
-const SURFACE0: &str = "#313244";
-const SURFACE1: &str = "#45475a";
+// Catppuccin Mocha palette (hex strings for tmux format strings)
+const SURFACE0: &str = "#141421";
+const SURFACE1: &str = "#272738";
+const PILL_A: &str = "#272738";
+const PILL_B: &str = "#141421";
 const OVERLAY2: &str = "#9399b2";
 const SUBTEXT0: &str = "#a6adc8";
 const TEXT: &str = "#cdd6f4";
@@ -68,35 +20,12 @@ const RED: &str = "#f38ba8";
 const PL_LEFT: char = '\u{E0B6}'; //
 const PL_RIGHT: char = '\u{E0B4}'; //
 
-fn num_glyph(idx: usize, selected: bool) -> char {
-    let table = if selected {
-        NUM_SELECTED
-    } else {
-        NUM_UNSELECTED
-    };
-    if idx < table.len() {
-        table[idx]
-    } else {
-        table[table.len() - 1]
-    }
+pub(crate) struct BarOutput {
+    pub(crate) left: String,
+    pub(crate) colors: Vec<(String, String)>,
 }
 
-fn group_glyph(count: usize, selected: bool) -> char {
-    let table = if selected {
-        GROUP_SELECTED
-    } else {
-        GROUP_UNSELECTED
-    };
-    let idx = count.clamp(1, table.len()) - 1;
-    table[idx]
-}
-
-pub struct BarOutput {
-    pub left: String,
-    pub colors: Vec<(String, String)>,
-}
-
-pub fn render_bar(
+pub(crate) fn render_bar(
     sessions: &[String],
     cur_session: &str,
     meta: &GroupMeta,
@@ -131,10 +60,39 @@ pub fn render_bar(
 
 const ARROW_RIGHT: char = '\u{E0B0}'; //
 
-pub fn render_windows(windows: &[WindowInfo], cur_color: &str) -> String {
+/// Blend a `#rrggbb` hex toward CRUST so active-window session colors don't
+/// flashbang behind the window number.
+fn dim_hex(hex: &str) -> String {
+    let bytes = hex.trim_start_matches('#');
+    if bytes.len() != 6 {
+        return hex.to_string();
+    }
+    let Ok(r) = u8::from_str_radix(&bytes[0..2], 16) else {
+        return hex.to_string();
+    };
+    let Ok(g) = u8::from_str_radix(&bytes[2..4], 16) else {
+        return hex.to_string();
+    };
+    let Ok(b) = u8::from_str_radix(&bytes[4..6], 16) else {
+        return hex.to_string();
+    };
+    // 60% session color + 40% CRUST
+    let mix = |v: u8, t: u8| ((v as u32 * 60 + t as u32 * 40) / 100) as u8;
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        mix(r, 0x11),
+        mix(g, 0x11),
+        mix(b, 0x1b)
+    )
+}
+
+pub(crate) fn render_windows(windows: &[WindowInfo], cur_color: &str) -> String {
     if windows.is_empty() {
         return String::new();
     }
+
+    let cur_bg = dim_hex(cur_color);
+    let text_bg_for = |active: bool| if active { SURFACE1 } else { SURFACE0 };
 
     let mut out = String::new();
     let last = windows.len() - 1;
@@ -149,24 +107,28 @@ pub fn render_windows(windows: &[WindowInfo], cur_color: &str) -> String {
             w.name.clone()
         };
 
-        // Left cap: first window gets bg=default, others merge with previous SURFACE1
-        let left_bg = if is_first { "default" } else { SURFACE1 };
+        // Left cap merges with previous window's text pill.
+        let left_bg: &str = if is_first {
+            "default"
+        } else {
+            text_bg_for(windows[i - 1].active)
+        };
 
-        // Number section colors
-        let (num_fg, num_bg) = if w.active {
-            (CRUST, cur_color)
+        let text_bg = text_bg_for(w.active);
+        let (num_fg, num_bg): (&str, &str) = if w.active {
+            (CRUST, cur_bg.as_str())
         } else {
             (OVERLAY2, SURFACE0)
         };
 
         out.push_str(&format!(
-            "#[range=user|w:{}]#[fg={num_bg},bg={left_bg}]{PL_LEFT}#[fg={num_fg},bg={num_bg}] {} #[fg={num_bg},bg={SURFACE1}]{ARROW_RIGHT}#[fg={TEXT},bg={SURFACE1}] {display} ",
+            "#[range=user|w:{}]#[fg={num_bg},bg={left_bg}]{PL_LEFT}#[fg={num_fg},bg={num_bg}] {} #[fg={num_bg},bg={text_bg}]{ARROW_RIGHT}#[fg={TEXT},bg={text_bg}] {display} ",
             w.index, w.index,
         ));
 
         // Right edge: last window gets PL_RIGHT, others flat
         if is_last {
-            out.push_str(&format!("#[fg={SURFACE1},bg=default]{PL_RIGHT}"));
+            out.push_str(&format!("#[fg={text_bg},bg=default]{PL_RIGHT}"));
         }
 
         out.push_str("#[norange]");
@@ -178,43 +140,11 @@ pub fn render_windows(windows: &[WindowInfo], cur_color: &str) -> String {
 
 // ── Sessions ──────────────────────────────────────────────────
 
-pub fn compute_all_colors(sessions: &[String], meta: &GroupMeta) -> Vec<(String, String, String)> {
-    let mut gpos_counter: HashMap<&str, usize> = HashMap::new();
-    let mut orphan_idx = 0usize;
-    let mut result = Vec::new();
-
-    for name in sessions {
-        let group = session_group(name);
-        let gtotal = if group.is_empty() {
-            0
-        } else {
-            *meta.counts.get(group).unwrap_or(&0)
-        };
-
-        let (color, dim_c) = if is_static(name) {
-            compute_color(name, 0, 0, 0, 0)
-        } else if !group.is_empty() {
-            let gpos = *gpos_counter.get(group).unwrap_or(&0);
-            let gidx = *meta.group_idx.get(group).unwrap_or(&0);
-            let r = compute_color(name, gidx, meta.dynamic_total, gpos, gtotal);
-            *gpos_counter.entry(group).or_default() += 1;
-            r
-        } else {
-            let r = compute_color(
-                name,
-                meta.dynamic_groups + orphan_idx,
-                meta.dynamic_total,
-                0,
-                0,
-            );
-            orphan_idx += 1;
-            r
-        };
-
-        result.push((name.clone(), color, dim_c));
-    }
-
-    result
+pub(crate) fn compute_all_colors(
+    sessions: &[String],
+    meta: &GroupMeta,
+) -> Vec<(String, String, String)> {
+    crate::color::compute_session_colors(sessions, meta)
 }
 
 fn render_sessions_narrow(
@@ -332,13 +262,14 @@ fn render_sessions_full(
 
 // ── System Info ───────────────────────────────────────────────
 
-const SEP: &str = "#[fg=#585b70]│#[fg=default]";
+// Diagonal powerline-extra glyph between alternating-bg sections.
+const DIAG: char = '\u{E0B8}';
 
 fn colored(text: &str, color: &str) -> String {
     format!("#[fg={color}]{text}")
 }
 
-pub fn render_system_info(info: &SystemInfo) -> String {
+pub(crate) fn render_system_info(info: &SystemInfo) -> String {
     use crate::tmux::BatteryState;
 
     let mut sections: Vec<String> = Vec::new();
@@ -363,7 +294,7 @@ pub fn render_system_info(info: &SystemInfo) -> String {
         SUBTEXT0
     };
     sections.push(colored(
-        &format!(" \u{F0EE0} {:.1} ", info.cpu_load),
+        &format!(" \u{F4BC} {:.1} ", info.cpu_load),
         cpu_color,
     ));
 
@@ -375,10 +306,7 @@ pub fn render_system_info(info: &SystemInfo) -> String {
     } else {
         SUBTEXT0
     };
-    sections.push(colored(
-        &format!(" \u{F035B} {}% ", info.mem_pct),
-        mem_color,
-    ));
+    sections.push(colored(&format!(" \u{EFC5} {}% ", info.mem_pct), mem_color));
 
     // Battery
     if let Some(pct) = info.battery_pct {
@@ -396,9 +324,9 @@ pub fn render_system_info(info: &SystemInfo) -> String {
                 };
                 let time_str =
                     if !info.battery_time.is_empty() && !info.battery_time.starts_with('(') {
-                        format!(" {}", info.battery_time)
+                        format!(" {} ", info.battery_time)
                     } else {
-                        String::new()
+                        " ".to_string()
                     };
                 sections.push(format!(
                     "{}{}",
@@ -415,9 +343,33 @@ pub fn render_system_info(info: &SystemInfo) -> String {
         info.date, info.clock
     ));
 
-    // Wrap all sections in one continuous pill with thin separators
-    let inner = sections.join(SEP);
-    format!(
-        "#[fg={SURFACE1}]{PL_LEFT}#[bg={SURFACE1}]{inner}#[fg={SURFACE1},bg=default]{PL_RIGHT}#[default]"
-    )
+    // Assemble sections with alternating pill backgrounds and a diagonal
+    // separator between each pair — replaces the drawn vertical divider with
+    // a shape that carries the grouping information on its own. Anchor on the
+    // last section so the rightmost pill is always PILL_B; battery presence
+    // otherwise flips the colour pattern across the whole bar.
+    let n = sections.len();
+    let bg_for = |i: usize| {
+        if (n - 1 - i).is_multiple_of(2) {
+            PILL_B
+        } else {
+            PILL_A
+        }
+    };
+    let first_bg = bg_for(0);
+
+    let mut out = format!("#[fg={first_bg},bg=default]{PL_LEFT}");
+    for (i, section) in sections.iter().enumerate() {
+        let bg = bg_for(i);
+        out.push_str(&format!("#[bg={bg}]{section}"));
+        if i + 1 < sections.len() {
+            let next_bg = bg_for(i + 1);
+            out.push_str(&format!("#[fg={bg},bg={next_bg}]{DIAG}"));
+        }
+    }
+    // No right cap: the rounded glyph leaves visible default-bg space in its
+    // unfilled half, which reads as an awkward gap between the last pill and
+    // the terminal edge. Let the pill end flush with its trailing padding.
+    out.push_str("#[default]");
+    out
 }

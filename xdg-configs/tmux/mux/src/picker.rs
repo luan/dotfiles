@@ -3,8 +3,6 @@ use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
-use nucleo_matcher::pattern::{Atom, CaseMatching, Normalization};
-use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::prelude::*;
 use ratatui::widgets::{
     Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
@@ -37,25 +35,25 @@ fn picker_bg() -> Color {
 }
 
 #[derive(Clone)]
-pub struct PickerItem {
-    pub id: String,
-    pub display: String,
-    pub style: Style,
-    pub selectable: bool,
-    pub color: Option<Color>,
-    pub dim_color: Option<Color>,
-    pub right_label: String,
+pub(crate) struct PickerItem {
+    pub(crate) id: String,
+    pub(crate) display: String,
+    pub(crate) style: Style,
+    pub(crate) selectable: bool,
+    pub(crate) color: Option<Color>,
+    pub(crate) dim_color: Option<Color>,
+    pub(crate) right_label: String,
 }
 
 #[derive(Clone)]
-pub struct PickerConfig {
-    pub prompt: String,
-    pub footer: String,
-    pub placeholder: String,
-    pub initial_id: Option<String>,
+pub(crate) struct PickerConfig {
+    pub(crate) prompt: String,
+    pub(crate) footer: String,
+    pub(crate) placeholder: String,
+    pub(crate) initial_id: Option<String>,
 }
 
-pub enum PickerAction {
+pub(crate) enum PickerAction {
     Selected(String),
     Custom(String, String),
     Cancelled,
@@ -71,11 +69,10 @@ struct PickerState {
 
 struct FilteredItem {
     idx: usize,
-    score: u16,
     indices: Vec<u32>,
 }
 
-pub fn run_picker(
+pub(crate) fn run_picker(
     items: Vec<PickerItem>,
     config: PickerConfig,
     custom_keys: HashMap<(KeyCode, KeyModifiers), String>,
@@ -242,39 +239,23 @@ fn refilter(items: &[PickerItem], state: &mut PickerState) {
         for (i, _) in items.iter().enumerate() {
             state.filtered.push(FilteredItem {
                 idx: i,
-                score: 0,
                 indices: Vec::new(),
             });
         }
     } else {
-        let mut matcher = Matcher::new(Config::DEFAULT);
-        let atom = Atom::new(
-            &state.input,
-            CaseMatching::Ignore,
-            Normalization::Smart,
-            nucleo_matcher::pattern::AtomKind::Fuzzy,
-            false,
-        );
-        let mut buf = Vec::new();
-        let needle = atom.needle_text();
-        for (i, item) in items.iter().enumerate() {
-            if !item.selectable {
-                continue;
-            }
-            let haystack = Utf32Str::new(&item.display, &mut buf);
-            let mut indices = Vec::new();
-            if let Some(score) = matcher.fuzzy_indices(haystack, needle, &mut indices) {
-                state.filtered.push(FilteredItem {
-                    idx: i,
-                    score,
-                    indices,
-                });
-            }
-            buf.clear();
+        let selectable: Vec<(usize, &PickerItem)> = items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.selectable)
+            .collect();
+        let matches =
+            crate::filter::fuzzy_match(&selectable, &state.input, |(_, item)| item.display.clone());
+        for (match_idx, _score) in matches {
+            state.filtered.push(FilteredItem {
+                idx: selectable[match_idx].0,
+                indices: Vec::new(),
+            });
         }
-        state
-            .filtered
-            .sort_by(|a, b| b.score.cmp(&a.score).then(a.idx.cmp(&b.idx)));
 
         // Re-insert headers: a header is shown if any item directly after it (before next header) is in the filtered set
         let filtered_indices: HashSet<usize> = state.filtered.iter().map(|f| f.idx).collect();
@@ -296,7 +277,6 @@ fn refilter(items: &[PickerItem], state: &mut PickerState) {
                 pos,
                 FilteredItem {
                     idx: header_idx,
-                    score: 0,
                     indices: Vec::new(),
                 },
             );
@@ -583,21 +563,21 @@ fn draw(f: &mut Frame, items: &[PickerItem], config: &PickerConfig, state: &mut 
 }
 
 // Text input widget for session name / worktree name
-pub struct TextInputConfig {
-    pub prompt: String,
-    pub initial: String,
-    pub placeholder: String,
+pub(crate) struct TextInputConfig {
+    pub(crate) prompt: String,
+    pub(crate) initial: String,
+    pub(crate) placeholder: String,
     /// Fixed prefix displayed before the editable text (e.g., "repo/").
     /// The user cannot edit or delete this prefix.
-    pub prefix: String,
+    pub(crate) prefix: String,
 }
 
-pub enum TextInputAction {
+pub(crate) enum TextInputAction {
     Confirmed(String),
     Cancelled,
 }
 
-pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
+pub(crate) fn run_text_input(config: TextInputConfig) -> TextInputAction {
     let mut input = config.initial.clone();
     let mut cursor = input.len();
 
@@ -735,15 +715,15 @@ pub fn run_text_input(config: TextInputConfig) -> TextInputAction {
 
 // ── Confirm dialog ──────────────────────────────────────────────────
 
-pub struct ConfirmConfig {
+pub(crate) struct ConfirmConfig {
     /// Lines to display above the prompt (checklist items, warnings, etc.)
-    pub body: Vec<ConfirmLine>,
+    pub(crate) body: Vec<ConfirmLine>,
     /// The question to ask (e.g., "Remove worktree and kill session?")
-    pub prompt: String,
+    pub(crate) prompt: String,
 }
 
 #[derive(Clone)]
-pub enum ConfirmLine {
+pub(crate) enum ConfirmLine {
     Ok(String),
     Warn(String),
     Error(String),
@@ -752,7 +732,7 @@ pub enum ConfirmLine {
 
 /// Render a confirmation dialog with body lines and a y/n prompt.
 /// Returns `true` if the user pressed Enter/y, `false` on Esc/n.
-pub fn run_confirm(config: ConfirmConfig) -> bool {
+pub(crate) fn run_confirm(config: ConfirmConfig) -> bool {
     terminal::enable_raw_mode().expect("enable raw mode");
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, EnterAlternateScreen).expect("enter alt screen");
@@ -847,7 +827,7 @@ pub fn run_confirm(config: ConfirmConfig) -> bool {
 }
 
 /// Show a styled status message in the alternate screen while `f` runs.
-pub fn run_with_status<T, F: FnOnce() -> T>(message: &str, f: F) -> T {
+pub(crate) fn run_with_status<T, F: FnOnce() -> T>(message: &str, f: F) -> T {
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, EnterAlternateScreen).expect("enter alt screen");
     let backend = CrosstermBackend::new(stdout);
