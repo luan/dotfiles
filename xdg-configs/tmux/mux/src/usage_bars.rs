@@ -50,6 +50,9 @@ pub(crate) struct Bar {
     pub(crate) provider: Color,
     /// Dollar overage for this bar's window (Claude only). None = don't render.
     pub(crate) overage: Option<f64>,
+    /// Cache hit rate in [0.0, 1.0] for this bar's window (Claude only).
+    /// None = don't render.
+    pub(crate) hit_rate: Option<f64>,
 }
 
 /// Claude-specific overage data read from
@@ -94,6 +97,36 @@ fn load_overage() -> Option<ClaudeOverage> {
         month,
         total,
     })
+}
+
+/// Cache hit rate in [0.0, 1.0] over the event window `ts > since_ts`, read
+/// from claude-statusline's `events` table. `since_ts` is typically the bar's
+/// `reset_ts - window_secs` (start of the current billing window).
+fn load_hit_rate(since_ts: i64) -> Option<f64> {
+    let path = crate::tmux::home().join(".local/state/claude-statusline/usage.db");
+    if !path.exists() {
+        return None;
+    }
+    let query = format!(
+        "SELECT SUM(cache_read_tokens) * 1.0 / \
+         NULLIF(SUM(cache_read_tokens + cache_creation_tokens + input_tokens), 0) \
+         FROM events WHERE ts > {since_ts};"
+    );
+    let out = Command::new("sqlite3")
+        .arg(path.as_os_str())
+        .arg("-readonly")
+        .arg(&query)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let line = String::from_utf8_lossy(&out.stdout);
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse().ok()
 }
 
 fn fmt_usd(v: f64) -> String {
@@ -241,7 +274,8 @@ fn load_dual_sqlite(db_path: &std::path::Path) -> Vec<DualSample> {
     if !db_path.exists() {
         return Vec::new();
     }
-    let query = "SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC;";
+    let query =
+        "SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC;";
     let Ok(out) = Command::new("sqlite3")
         .arg(db_path.as_os_str())
         .arg("-readonly")
@@ -338,8 +372,7 @@ fn load_simple(path: &std::path::Path) -> Vec<SimpleSample> {
         let (Some(t), Some(p), Some(r)) = (it.next(), it.next(), it.next()) else {
             continue;
         };
-        let (Ok(ts), Ok(pct), Ok(reset)) =
-            (t.parse::<i64>(), p.parse::<f64>(), r.parse::<i64>())
+        let (Ok(ts), Ok(pct), Ok(reset)) = (t.parse::<i64>(), p.parse::<f64>(), r.parse::<i64>())
         else {
             continue;
         };
@@ -409,6 +442,7 @@ fn dual_window_bars(
             last_ts,
             provider,
             overage: None,
+            hit_rate: None,
         },
         Bar {
             label: format!("{label_prefix} 7d"),
@@ -419,6 +453,7 @@ fn dual_window_bars(
             last_ts,
             provider,
             overage: None,
+            hit_rate: None,
         },
     ]
 }
@@ -441,6 +476,7 @@ fn copilot_bars() -> Vec<Bar> {
         last_ts,
         provider: COPILOT_COLOR,
         overage: None,
+        hit_rate: None,
     }]
 }
 
@@ -467,6 +503,13 @@ pub(crate) fn collect() -> Snapshot {
         {
             b.overage = Some(ov.seven_d);
         }
+    }
+    // Cache hit rate over each bar's window start (reset_ts - window).
+    if let Some(b) = claude.get_mut(0) {
+        b.hit_rate = load_hit_rate(b.reset_ts - FIVE_HOURS);
+    }
+    if let Some(b) = claude.get_mut(1) {
+        b.hit_rate = load_hit_rate(b.reset_ts - SEVEN_DAYS);
     }
     bars.extend(claude);
     bars.extend(copilot_bars());
@@ -631,7 +674,20 @@ fn draw_bar(
     } else {
         over_txt.chars().count() + 1 // " " separator before the amount
     };
-    let left_len = 1 + b.display.chars().count() + 2 + pct_txt.chars().count() + over_block_w;
+    // Hide near-perfect cache rates — 99%+ is the boring healthy baseline,
+    // only the shortfall earns pixels.
+    let hit_txt = b
+        .hit_rate
+        .filter(|r| *r < 0.99)
+        .map(|r| format!("󰆼{}%", (r * 100.0).round() as i64))
+        .unwrap_or_default();
+    let hit_block_w = if hit_txt.is_empty() {
+        0
+    } else {
+        hit_txt.chars().count() + 1 // " " separator
+    };
+    let left_len =
+        1 + b.display.chars().count() + 2 + pct_txt.chars().count() + over_block_w + hit_block_w;
     let right_len = if !pace_txt.is_empty() && !reset_txt.is_empty() {
         pace_txt.chars().count() + 1 + reset_txt.chars().count() + 1
     } else {
@@ -655,6 +711,13 @@ fn draw_bar(
         stats.push(Span::styled(
             over_txt,
             Style::default().fg(dim(over_color, bg, mix)).bg(bg),
+        ));
+    }
+    if !hit_txt.is_empty() {
+        stats.push(Span::styled(" ".to_string(), Style::default().bg(bg)));
+        stats.push(Span::styled(
+            hit_txt,
+            Style::default().fg(dim(DIM, bg, mix)).bg(bg),
         ));
     }
     stats.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
