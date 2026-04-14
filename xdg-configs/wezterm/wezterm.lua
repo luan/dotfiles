@@ -5,8 +5,12 @@ local config = wezterm.config_builder()
 -- Theme
 config.color_scheme = "tokyonight"
 
--- Font (Nerd Font fallback for status bar glyphs)
+-- Font: non-NF Maple as primary so cell metrics are text-sized. Font Awesome 7
+-- Brands picks up brand icons (Maple non-NF has no PUA overlap with FA brands),
+-- then Maple Mono NF covers the rest of the Nerd Font glyph set.
 config.font = wezterm.font_with_fallback({
+	"Maple Mono",
+	"Font Awesome 7 Brands",
 	"Maple Mono NF",
 	"IosevkaTerm Nerd Font Mono",
 })
@@ -39,7 +43,6 @@ config.show_tab_index_in_tab_bar = false
 config.tab_bar_at_bottom = false
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
 config.window_background_opacity = 1.0
-config.inactive_pane_hsb = { brightness = 1.0 }
 config.colors = { split = "#1A1B26" }
 config.scrollback_lines = 10000000
 config.enable_scroll_bar = false
@@ -63,6 +66,10 @@ config.default_cursor_style = "BlinkingBar"
 
 -- Disable default keybindings, build from scratch
 config.disable_default_key_bindings = true
+
+-- Shared paths
+local PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+local mux_bin = os.getenv("HOME") .. "/.config/tmux/scripts/mux"
 
 -- Helpers
 local tmux_prefix = "\x00" -- Ctrl+Space
@@ -108,11 +115,14 @@ local function update_notched(window)
 	wezterm.background_child_process({
 		"/bin/sh",
 		"-c",
-		"export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin; "
+		"export PATH="
+			.. PATH
+			.. "; "
 			.. "tmux set-option -g @notched "
 			.. val
 			.. " >/dev/null 2>&1; "
-			.. "~/.config/tmux/scripts/tmux-session update '' "
+			.. mux_bin
+			.. " update '' "
 			.. "\"$(tmux display -p '#{client_width}' 2>/dev/null)\" "
 			.. ">/dev/null 2>&1",
 	})
@@ -132,9 +142,7 @@ wezterm.on("window-config-reloaded", function(window)
 end)
 
 local function sidebar_enabled()
-	local f = io.popen(
-		"PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin tmux show-option -gv @sidebar_enabled 2>/dev/null"
-	)
+	local f = io.popen("PATH=" .. PATH .. " tmux show-option -gv @sidebar_enabled 2>/dev/null")
 	if not f then
 		return true
 	end
@@ -159,11 +167,11 @@ local function open_sidebar(window, pane)
 	window:perform_action(
 		act.SplitPane({
 			direction = "Left",
-			size = { Cells = 34 },
+			size = { Cells = 41 },
 			command = {
-				args = { os.getenv("HOME") .. "/.config/tmux/scripts/tmux-session", "sidebar" },
+				args = { mux_bin, "sidebar" },
 				set_environment_variables = {
-					PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+					PATH = PATH,
 				},
 			},
 		}),
@@ -174,14 +182,15 @@ end
 local function toggle_sidebar(window, pane)
 	local info = find_sidebar(pane:tab())
 	if info then
-		-- Restore the tmux session list in the status bar. The sidebar process
-		-- is about to be killed and won't run its own cleanup.
-		local tmux_session = os.getenv("HOME") .. "/.config/tmux/scripts/tmux-session"
 		os.execute(
-			"PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin "
+			"PATH="
+				.. PATH
+				.. " "
 				.. "tmux set-option -gu @sidebar_open 2>/dev/null; "
-				.. "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin "
-				.. tmux_session
+				.. "PATH="
+				.. PATH
+				.. " "
+				.. mux_bin
 				.. " update >/dev/null 2>&1 &"
 		)
 		info.pane:activate()
@@ -209,13 +218,7 @@ local function focus_sidebar(window, pane)
 		return
 	end
 	if info.is_active then
-		-- Sidebar focused — switch to the other pane
-		for _, p in ipairs(tab:panes_with_info()) do
-			if p.pane:get_user_vars().is_sidebar ~= "true" then
-				p.pane:activate()
-				return
-			end
-		end
+		window:perform_action(act.SendString("\x0f"), pane)
 	else
 		info.pane:activate()
 	end
@@ -245,68 +248,67 @@ config.keys = {
 	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(toggle_sidebar) },
 	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_sidebar) },
 
-	-- {{{ tmux relay: prefix + key
-	{ key = "1", mods = "SUPER", action = act.SendString(tmux_prefix .. "1") },
-	{ key = "2", mods = "SUPER", action = act.SendString(tmux_prefix .. "2") },
-	{ key = "3", mods = "SUPER", action = act.SendString(tmux_prefix .. "3") },
-	{ key = "4", mods = "SUPER", action = act.SendString(tmux_prefix .. "4") },
-	{ key = "5", mods = "SUPER", action = act.SendString(tmux_prefix .. "5") },
-	{ key = "6", mods = "SUPER", action = act.SendString(tmux_prefix .. "6") },
-	{ key = "7", mods = "SUPER", action = act.SendString(tmux_prefix .. "7") },
-	{ key = "8", mods = "SUPER", action = act.SendString(tmux_prefix .. "8") },
-	{ key = "9", mods = "SUPER", action = act.SendString(tmux_prefix .. "9") },
-	-- tmux-fzf (super+shift+f -> prefix+F)
-	{ key = "f", mods = "SUPER|SHIFT", action = act.SendString(tmux_prefix .. "F") },
-	-- Ditch session (super+alt+x -> prefix+X)
-	{ key = "x", mods = "SUPER|ALT", action = act.SendString(tmux_prefix .. "X") },
-	-- }}}
-
-	-- {{{ tmux relay: CSI sequences
-	-- Ctrl+Tab → toggle last session
-	{ key = "Tab", mods = "CTRL", action = act.SendString(csi("60~")) },
-	-- Cmd+; → attention session
-	{ key = ";", mods = "SUPER", action = act.SendString(csi("61~")) },
-	-- Cmd+N → new project session
-	{ key = "n", mods = "SUPER", action = act.SendString(csi("62~")) },
-	-- Cmd+P → session chooser
+	-- Cmd+P: sidebar-aware session chooser (conditional — not table-driven)
 	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
-	-- Cmd+Shift+N → session next
-	{ key = "n", mods = "SUPER|SHIFT", action = act.SendString(csi("64~")) },
-	-- Cmd+Shift+P → session prev
-	{ key = "p", mods = "SUPER|SHIFT", action = act.SendString(csi("65~")) },
-	-- Cmd+Shift+, → session move up
-	{ key = "mapped:<", mods = "SUPER|SHIFT", action = act.SendString(csi("66~")) },
-	-- Cmd+Shift+. → session move down
-	{ key = "mapped:>", mods = "SUPER|SHIFT", action = act.SendString(csi("67~")) },
-	-- Cmd+Ctrl+N → new worktree
-	{ key = "n", mods = "SUPER|CTRL", action = act.SendString(csi("68~")) },
-	-- Ctrl+Alt+[ → copy mode
-	{ key = "[", mods = "CTRL|ALT", action = act.SendString(csi("69~")) },
-	-- }}}
-
-	-- {{{ vim relay: CSI sequences
-	{ key = "j", mods = "SUPER", action = act.SendString(csi("90;1~")) },
-	{ key = "s", mods = "SUPER", action = act.SendString(csi("90;2~")) },
-	{ key = "c", mods = "SUPER|SHIFT", action = act.SendString(csi("90;3~")) },
-	{ key = "c", mods = "SUPER|ALT|SHIFT", action = act.SendString(csi("90;4~")) },
-	{ key = ".", mods = "SUPER", action = act.SendString(csi("90;6~")) },
-	{ key = "e", mods = "SUPER", action = act.SendString(csi("90;7~")) },
-	{ key = "b", mods = "SUPER", action = act.SendString(csi("90;8~")) },
-	{ key = "i", mods = "SUPER", action = act.SendString(csi("90;9~")) },
-	{ key = "l", mods = "SUPER", action = act.SendString(csi("90;10~")) },
-	{ key = "i", mods = "SUPER|SHIFT", action = act.SendString(csi("90;11~")) },
-	{ key = "k", mods = "SUPER", action = act.SendString(csi("90;12~")) },
-	{ key = "v", mods = "SUPER|ALT", action = act.SendString(csi("90;13~")) },
-	-- multicursor
-	{ key = "d", mods = "SUPER", action = act.SendString(csi("90;14~")) },
-	{ key = "d", mods = "SUPER|SHIFT", action = act.SendString(csi("90;15~")) },
-	{ key = "u", mods = "SUPER", action = act.SendString(csi("90;16~")) },
-	{ key = "u", mods = "SUPER|SHIFT", action = act.SendString(csi("90;17~")) },
-	{ key = "k", mods = "SUPER|ALT", action = act.SendString(csi("90;18~")) },
-	{ key = "j", mods = "SUPER|ALT", action = act.SendString(csi("90;19~")) },
-	{ key = "k", mods = "SUPER|ALT|SHIFT", action = act.SendString(csi("90;20~")) },
-	{ key = "j", mods = "SUPER|ALT|SHIFT", action = act.SendString(csi("90;21~")) },
-	-- }}}
 }
+
+-- {{{ tmux relay: prefix + key
+-- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf; Cmd+Alt+X ditches session
+local prefix_relay = {
+	{ key = "f", mods = "SUPER|SHIFT", suffix = "F" },
+	{ key = "x", mods = "SUPER|ALT", suffix = "X" },
+}
+for i = 1, 9 do
+	table.insert(prefix_relay, { key = tostring(i), mods = "SUPER", suffix = tostring(i) })
+end
+for _, r in ipairs(prefix_relay) do
+	table.insert(config.keys, { key = r.key, mods = r.mods, action = act.SendString(tmux_prefix .. r.suffix) })
+end
+-- }}}
+
+-- {{{ tmux relay: CSI user-key sequences
+local csi_relay = {
+	{ key = "Tab", mods = "CTRL", csi = "60~" },
+	{ key = ";", mods = "SUPER", csi = "61~" },
+	{ key = "n", mods = "SUPER", csi = "62~" },
+	{ key = "n", mods = "SUPER|SHIFT", csi = "64~" },
+	{ key = "p", mods = "SUPER|SHIFT", csi = "65~" },
+	{ key = "mapped:<", mods = "SUPER|SHIFT", csi = "66~" },
+	{ key = "mapped:>", mods = "SUPER|SHIFT", csi = "67~" },
+	{ key = "n", mods = "SUPER|CTRL", csi = "68~" },
+	{ key = "[", mods = "CTRL|ALT", csi = "69~" },
+}
+for _, r in ipairs(csi_relay) do
+	table.insert(config.keys, { key = r.key, mods = r.mods, action = act.SendString(csi(r.csi)) })
+end
+-- }}}
+
+-- {{{ vim relay: CSI sequences
+local vim_relay = {
+	{ key = "j", mods = "SUPER", csi = "90;1~" },
+	{ key = "s", mods = "SUPER", csi = "90;2~" },
+	{ key = "c", mods = "SUPER|SHIFT", csi = "90;3~" },
+	{ key = "c", mods = "SUPER|ALT|SHIFT", csi = "90;4~" },
+	{ key = ".", mods = "SUPER", csi = "90;6~" },
+	{ key = "e", mods = "SUPER", csi = "90;7~" },
+	{ key = "b", mods = "SUPER", csi = "90;8~" },
+	{ key = "i", mods = "SUPER", csi = "90;9~" },
+	{ key = "l", mods = "SUPER", csi = "90;10~" },
+	{ key = "i", mods = "SUPER|SHIFT", csi = "90;11~" },
+	{ key = "k", mods = "SUPER", csi = "90;12~" },
+	{ key = "v", mods = "SUPER|ALT", csi = "90;13~" },
+	{ key = "d", mods = "SUPER", csi = "90;14~" },
+	{ key = "d", mods = "SUPER|SHIFT", csi = "90;15~" },
+	{ key = "u", mods = "SUPER", csi = "90;16~" },
+	{ key = "u", mods = "SUPER|SHIFT", csi = "90;17~" },
+	{ key = "k", mods = "SUPER|ALT", csi = "90;18~" },
+	{ key = "j", mods = "SUPER|ALT", csi = "90;19~" },
+	{ key = "k", mods = "SUPER|ALT|SHIFT", csi = "90;20~" },
+	{ key = "j", mods = "SUPER|ALT|SHIFT", csi = "90;21~" },
+}
+for _, r in ipairs(vim_relay) do
+	table.insert(config.keys, { key = r.key, mods = r.mods, action = act.SendString(csi(r.csi)) })
+end
+-- }}}
 
 return config
