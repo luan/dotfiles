@@ -75,9 +75,12 @@ struct SidebarState {
     pub(super) offset: usize,
     pub(super) hover: Option<String>,
     pub(super) meta: HashMap<String, SessionMeta>,
-    /// Sticky cache for Claude's activity line so it doesn't flicker between
-    /// refreshes. Cleared when the entry is older than ACTIVITY_GRACE.
-    pub(super) activity_cache: HashMap<String, (String, Instant)>,
+    /// Sticky cache for gerund text so it doesn't flicker between refreshes.
+    /// Cleared when the entry is older than ACTIVITY_GRACE.
+    pub(super) gerund_cache: HashMap<String, (String, Instant)>,
+    /// Persistent "last seen active" timestamps for non-claude agents.
+    /// Survives gerund_cache pruning so the age timer keeps ticking.
+    pub(super) last_active: HashMap<String, Instant>,
     pub(super) last_meta_refresh: Instant,
     pub(super) focused: bool,
     pub(super) notched: bool,
@@ -99,6 +102,8 @@ struct SidebarState {
     pub(super) last_bars_h: u16,
     /// Number of tmux process spawns during the most recent refresh().
     pub(super) tmux_call_count: u32,
+    /// When true, hidden sessions are included in the list.
+    pub(super) show_hidden: bool,
 }
 
 pub(super) const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
@@ -113,7 +118,8 @@ impl SidebarState {
             offset: 0,
             hover: None,
             meta: HashMap::new(),
-            activity_cache: HashMap::new(),
+            gerund_cache: HashMap::new(),
+            last_active: HashMap::new(),
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
             focused: true,
             notched: false,
@@ -127,6 +133,7 @@ impl SidebarState {
             last_bars_y: 0,
             last_bars_h: 0,
             tmux_call_count: 0,
+            show_hidden: false,
         }
     }
 
@@ -242,7 +249,7 @@ impl SidebarState {
         self.notched = lines.next().unwrap_or("") == "1";
         let cur = lines.next().unwrap_or("").to_string();
         let alive: HashSet<String> = lines.filter(|l| !l.is_empty()).map(String::from).collect();
-        let sessions = compute_order(&alive, false);
+        let sessions = compute_order(&alive, self.show_hidden);
 
         let meta_refreshed = self.last_meta_refresh.elapsed() >= Duration::from_secs(3);
         if meta_refreshed {
@@ -250,21 +257,41 @@ impl SidebarState {
             self.tmux_call_count += meta_calls;
             let now = Instant::now();
             for (session, m) in meta.iter_mut() {
-                match &m.claude_activity {
-                    Some(act) => {
-                        self.activity_cache
-                            .insert(session.clone(), (act.clone(), now));
+                for agent in m.agents.iter_mut() {
+                    let cache_key = format!("{}:{}", session, agent.pane_id);
+                    // Record last_active from the RAW gerund (before cache),
+                    // so the timestamp freezes when the agent truly stops.
+                    let raw_active = agent.gerund.is_some();
+                    if raw_active {
+                        self.last_active.insert(cache_key.clone(), now);
                     }
-                    None => {
-                        if let Some((cached, t)) = self.activity_cache.get(session)
-                            && now.duration_since(*t) < ACTIVITY_GRACE
-                        {
-                            m.claude_activity = Some(cached.clone());
+                    match &agent.gerund {
+                        Some(g) => {
+                            self.gerund_cache
+                                .insert(cache_key.clone(), (g.clone(), now));
                         }
+                        None => {
+                            if let Some((cached, t)) = self.gerund_cache.get(&cache_key)
+                                && now.duration_since(*t) < ACTIVITY_GRACE
+                            {
+                                agent.gerund = Some(cached.clone());
+                            }
+                        }
+                    }
+                    // Derive age from last_active for all agents (claude gets
+                    // JSONL mtime in query_session_meta, overwritten here only
+                    // if last_active is newer).
+                    if let Some(&t) = self.last_active.get(&cache_key) {
+                        let from_cache = now.duration_since(t);
+                        // For claude, keep the shorter of JSONL age and cache age.
+                        agent.age = Some(match agent.age {
+                            Some(existing) if existing < from_cache => existing,
+                            _ => from_cache,
+                        });
                     }
                 }
             }
-            self.activity_cache
+            self.gerund_cache
                 .retain(|_, (_, t)| now.duration_since(*t) < ACTIVITY_GRACE);
             self.meta = meta;
             self.last_meta_refresh = now;
@@ -479,14 +506,25 @@ pub(crate) fn cmd_sidebar() {
             })
             .ok();
 
-        // High-frequency redraw while any pulse is still mid-animation.
-        // Expired entries (elapsed >= PULSE_DURATION) are ignored here and
-        // pruned during the next refresh tick.
+        // High-frequency redraw while any animation is mid-flight: bar
+        // pulses OR gerund percolation.
         let pulse_active = state
             .pulse_starts
             .values()
             .any(|s| s.elapsed() < usage_bars::PULSE_DURATION);
-        let poll_timeout = if pulse_active { PULSE_POLL } else { IDLE_POLL };
+        let gerund_active = state
+            .gerund_cache
+            .values()
+            .any(|(_, t)| t.elapsed() < ACTIVITY_GRACE);
+        let any_asking = state
+            .meta
+            .values()
+            .any(|m| m.agents.iter().any(|a| a.asking));
+        let poll_timeout = if pulse_active || gerund_active || any_asking {
+            PULSE_POLL
+        } else {
+            IDLE_POLL
+        };
 
         if event::poll(poll_timeout).unwrap_or(false) {
             match event::read() {
@@ -651,10 +689,13 @@ pub(crate) fn cmd_sidebar() {
                         (KeyCode::Char('x'), _) => {
                             state.open_ditch_overlay();
                         }
-                        (KeyCode::Char('h'), _) => {
+                        (KeyCode::Char('h'), KeyModifiers::ALT) => {
                             if let Some(id) = state.selected_session_id() {
                                 spawn_subcmd(&mut terminal, &["hide-toggle", &id]);
                             }
+                        }
+                        (KeyCode::Char('h'), _) => {
+                            state.show_hidden = !state.show_hidden;
                         }
                         (KeyCode::Char('/'), _) => {
                             state.open_chooser();

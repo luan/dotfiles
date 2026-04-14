@@ -679,7 +679,7 @@ fn draw_bar(
     let hit_txt = b
         .hit_rate
         .filter(|r| *r < 0.99)
-        .map(|r| format!("󰆼{}%", (r * 100.0).round() as i64))
+        .map(|r| format!("󰆼 {}%", (r * 100.0).round() as i64))
         .unwrap_or_default();
     let hit_block_w = if hit_txt.is_empty() {
         0

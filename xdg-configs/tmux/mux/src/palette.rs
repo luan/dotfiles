@@ -98,48 +98,14 @@ pub(crate) fn hex_to_color(hex: &str) -> Color {
 
 use std::time::Duration;
 
-// Position-based gradient colors matching statusline.py's context_bar.
-pub(crate) const CTX_POS_COLORS: [Color; 12] = [
-    Color::Rgb(0x5f, 0x87, 0x5f),
-    Color::Rgb(0x5f, 0x87, 0x5f),
-    Color::Rgb(0x87, 0xd7, 0x87),
-    Color::Rgb(0x87, 0xd7, 0x87),
-    Color::Rgb(0xaf, 0x5f, 0x00),
-    Color::Rgb(0xaf, 0x5f, 0x00),
-    Color::Rgb(0xff, 0xaf, 0x5f),
-    Color::Rgb(0xff, 0xaf, 0x5f),
-    Color::Rgb(0xff, 0xaf, 0x5f),
-    Color::Rgb(0xaf, 0x5f, 0x5f),
-    Color::Rgb(0xff, 0x5f, 0x5f),
-    Color::Rgb(0xff, 0x5f, 0x5f),
-];
-pub(crate) const CTX_EMPTY_COLOR: Color = Color::Rgb(0x6c, 0x6c, 0x6c);
-
-fn seg_digit(n: u32) -> char {
-    char::from_u32(0x1FBF0 + n.min(9)).unwrap_or('0')
-}
-
-pub(crate) fn seg_number(n: u32) -> String {
-    if n == 0 {
-        return seg_digit(0).to_string();
-    }
-    let mut digits = Vec::new();
-    let mut x = n;
-    while x > 0 {
-        digits.push(x % 10);
-        x /= 10;
-    }
-    digits.iter().rev().map(|&d| seg_digit(d)).collect()
-}
 
 pub(crate) fn ctx_label_color(pct: u8) -> Color {
-    let full = (pct as usize * 12) / 100;
-    if full >= 7 {
-        Color::Rgb(0xff, 0x5f, 0x5f)
-    } else if full >= 3 {
-        Color::Rgb(0xff, 0xaf, 0x5f)
+    if pct >= 80 {
+        Color::Rgb(0xff, 0x5f, 0x5f) // red — nearly full
+    } else if pct >= 50 {
+        Color::Rgb(0xff, 0xaf, 0x5f) // orange — watch it
     } else {
-        Color::Rgb(0x87, 0xd7, 0x87)
+        Color::Rgb(0x87, 0xd7, 0x87) // green — plenty of room
     }
 }
 
