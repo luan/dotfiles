@@ -407,22 +407,24 @@ pub(crate) fn cmd_new_session() {
 
     if has_git || is_bare {
         let entries = list_worktrees(&selected_dir);
-        if auto_worktree {
+        let result = if auto_worktree {
             if let Some(wt_dir) = find_detached_worktree(&entries) {
                 final_dir = wt_dir;
+                WorktreeResult::NoWorktrees
             } else {
-                match phase_worktree_picker(&selected_dir, entries) {
-                    WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
-                    WorktreeResult::NoWorktrees => {}
-                    WorktreeResult::Cancelled => return,
-                }
+                phase_worktree_picker(entries.clone())
             }
         } else {
-            match phase_worktree_picker(&selected_dir, entries) {
-                WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
-                WorktreeResult::NoWorktrees => {}
-                WorktreeResult::Cancelled => return,
-            }
+            phase_worktree_picker(entries.clone())
+        };
+        match result {
+            WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
+            WorktreeResult::NewRequested => match prompt_and_create_worktree(&selected_dir, &entries) {
+                Some(dir) => final_dir = dir,
+                None => return,
+            },
+            WorktreeResult::NoWorktrees => {}
+            WorktreeResult::Cancelled => return,
         }
     }
 
@@ -470,22 +472,36 @@ pub(crate) fn cmd_new_worktree(args: &[String]) {
     };
 
     let entries = list_worktrees(&selected_dir);
-    let (final_dir, wt_branch) = match phase_worktree_picker(&selected_dir, entries) {
-        WorktreeResult::Selected { path, branch } => (path, branch),
-        WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
-    };
-
-    let (repo_name, default_suffix) = worktree_name_parts(&selected_dir, wt_branch.as_deref());
+    let (existing_dir, repo_name, default_suffix) =
+        match phase_worktree_picker(entries.clone()) {
+            WorktreeResult::Selected { path, branch } => {
+                let (r, s) = worktree_name_parts(&selected_dir, branch.as_deref());
+                (Some(path), r, s)
+            }
+            WorktreeResult::NewRequested => {
+                let common_dir = resolve_common_dir(&selected_dir);
+                let repo = common_dir
+                    .as_deref()
+                    .map(|cd| repo_root_name(&selected_dir, cd))
+                    .unwrap_or_default();
+                let suffix = common_dir
+                    .as_deref()
+                    .map(|cd| next_wt_suffix(&selected_dir, cd, &entries))
+                    .unwrap_or_else(|| "wt1".to_string());
+                (None, repo, suffix)
+            }
+            WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
+        };
 
     // Session name input — only the suffix is editable, prefix is static
-    let session_name = if repo_name.is_empty() {
+    let (session_name, suffix) = if repo_name.is_empty() {
         match run_text_input(TextInputConfig {
             prompt: "\u{f044}  Session".to_string(),
             initial: default_suffix,
             placeholder: "session name...".to_string(),
             prefix: String::new(),
         }) {
-            TextInputAction::Confirmed(s) if !s.is_empty() => s,
+            TextInputAction::Confirmed(s) if !s.is_empty() => (s.clone(), s),
             _ => return,
         }
     } else {
@@ -495,8 +511,26 @@ pub(crate) fn cmd_new_worktree(args: &[String]) {
             placeholder: "session name...".to_string(),
             prefix: String::new(),
         }) {
-            TextInputAction::Confirmed(s) if !s.is_empty() => format!("{repo_name}/{s}"),
+            TextInputAction::Confirmed(s) if !s.is_empty() => (format!("{repo_name}/{s}"), s),
             _ => return,
+        }
+    };
+
+    let final_dir = match existing_dir {
+        Some(p) => p,
+        None => {
+            let result = run_with_status(&format!("Creating worktree {suffix}..."), || {
+                create_new_worktree(&selected_dir, &suffix)
+            });
+            match result {
+                Ok((path, _)) => path,
+                Err(msg) => {
+                    run_with_status(&format!("Error: {msg}"), || {
+                        std::thread::sleep(Duration::from_secs(3));
+                    });
+                    return;
+                }
+            }
         }
     };
 
@@ -942,6 +976,7 @@ enum WorktreeResult {
         path: PathBuf,
         branch: Option<String>,
     },
+    NewRequested,
     NoWorktrees,
     Cancelled,
 }
@@ -1050,10 +1085,28 @@ pub(crate) fn resolve_common_dir(dir: &Path) -> Option<PathBuf> {
     Some(if p.is_absolute() { p } else { dir.join(p) })
 }
 
-pub(crate) fn next_wt_name(common_dir: &Path, entries: &[WtEntry]) -> String {
+pub(crate) fn repo_root_name(selected_dir: &Path, common_dir: &Path) -> String {
+    if selected_dir.extension().is_some_and(|e| e == "git") && selected_dir.is_dir() {
+        repo_display_name(selected_dir)
+    } else {
+        common_dir
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+}
+
+pub(crate) fn next_wt_suffix(
+    selected_dir: &Path,
+    common_dir: &Path,
+    entries: &[WtEntry],
+) -> String {
+    let repo = repo_root_name(selected_dir, common_dir);
+    let prefix = format!("{repo}.wt");
     let mut max_n = 0u32;
     let mut consider = |name: &str| {
-        if let Some(rest) = name.strip_prefix("wt")
+        if let Some(rest) = name.strip_prefix(&prefix)
             && let Ok(n) = rest.parse::<u32>()
         {
             max_n = max_n.max(n);
@@ -1067,7 +1120,8 @@ pub(crate) fn next_wt_name(common_dir: &Path, entries: &[WtEntry]) -> String {
             consider(&name);
         }
     }
-    if let Ok(rd) = fs::read_dir(common_dir) {
+    let parent = worktree_parent_dir(selected_dir, common_dir);
+    if let Ok(rd) = fs::read_dir(&parent) {
         for ent in rd.flatten() {
             consider(&ent.file_name().to_string_lossy());
         }
@@ -1084,6 +1138,7 @@ fn worktree_parent_dir(selected_dir: &Path, common_dir: &Path) -> PathBuf {
     } else {
         common_dir
             .parent()
+            .and_then(Path::parent)
             .map(Path::to_path_buf)
             .unwrap_or_else(|| selected_dir.to_path_buf())
     }
@@ -1137,14 +1192,54 @@ pub(crate) fn build_worktree_items(entries: &[WtEntry]) -> Vec<PickerItem> {
     items
 }
 
-pub(crate) fn create_new_worktree(
+pub(crate) fn prompt_and_create_worktree(
     selected_dir: &Path,
     entries: &[WtEntry],
+) -> Option<PathBuf> {
+    let common_dir = resolve_common_dir(selected_dir)?;
+    let default_suffix = next_wt_suffix(selected_dir, &common_dir, entries);
+    let repo = repo_root_name(selected_dir, &common_dir);
+    let prompt = if repo.is_empty() {
+        "\u{f044}  Worktree".to_string()
+    } else {
+        format!("\u{f044}  {repo}.")
+    };
+    let suffix = match run_text_input(TextInputConfig {
+        prompt,
+        initial: default_suffix,
+        placeholder: "worktree name...".to_string(),
+        prefix: String::new(),
+    }) {
+        TextInputAction::Confirmed(s) if !s.is_empty() => s,
+        _ => return None,
+    };
+    let result = run_with_status(&format!("Creating worktree {suffix}..."), || {
+        create_new_worktree(selected_dir, &suffix)
+    });
+    match result {
+        Ok((path, _)) => Some(path),
+        Err(msg) => {
+            run_with_status(&format!("Error: {msg}"), || {
+                std::thread::sleep(Duration::from_secs(3));
+            });
+            None
+        }
+    }
+}
+
+pub(crate) fn create_new_worktree(
+    selected_dir: &Path,
+    suffix: &str,
 ) -> Result<(PathBuf, String), String> {
     let Some(common_dir) = resolve_common_dir(selected_dir) else {
         return Err("not a git repo".to_string());
     };
-    let wt_name = next_wt_name(&common_dir, entries);
+    let repo = repo_root_name(selected_dir, &common_dir);
+    let wt_name = if repo.is_empty() {
+        suffix.to_string()
+    } else {
+        format!("{repo}.{suffix}")
+    };
     let wt_path = worktree_parent_dir(selected_dir, &common_dir).join(&wt_name);
     let wt_path_str = wt_path.to_string_lossy().to_string();
     let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
@@ -1168,7 +1263,7 @@ pub(crate) fn create_new_worktree(
     Ok((wt_path, wt_name))
 }
 
-fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> WorktreeResult {
+fn phase_worktree_picker(entries: Vec<WtEntry>) -> WorktreeResult {
     if entries.is_empty() {
         return WorktreeResult::NoWorktrees;
     }
@@ -1219,49 +1314,7 @@ fn phase_worktree_picker(selected_dir: &Path, entries: Vec<WtEntry>) -> Worktree
     match run_picker(items, config, HashMap::new()) {
         PickerAction::Selected(id) => {
             if id == "__new__" {
-                let Some(common_dir) = resolve_common_dir(selected_dir) else {
-                    run_with_status("Error: not a git repo", || {
-                        std::thread::sleep(Duration::from_secs(2));
-                    });
-                    return WorktreeResult::Cancelled;
-                };
-                let wt_name = next_wt_name(&common_dir, &entries);
-                let wt_path = worktree_parent_dir(selected_dir, &common_dir).join(&wt_name);
-                let wt_path_str = wt_path.to_string_lossy().to_string();
-                let dir_arg = selected_dir.to_str().unwrap_or(".").to_string();
-                let result: Result<(), String> =
-                    run_with_status(&format!("Creating worktree {wt_name}..."), || {
-                        let output = Command::new("git")
-                            .args(["-C", &dir_arg, "worktree", "add", "--detach", &wt_path_str])
-                            .stdin(Stdio::null())
-                            .stdout(Stdio::null())
-                            .output();
-                        match output {
-                            Ok(o) if o.status.success() => Ok(()),
-                            Ok(o) => {
-                                let msg = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                                Err(if msg.is_empty() {
-                                    format!("git exited with {}", o.status)
-                                } else {
-                                    msg
-                                })
-                            }
-                            Err(e) => Err(format!("failed to run git: {e}")),
-                        }
-                    });
-                match result {
-                    Ok(()) if wt_path.is_dir() => WorktreeResult::Selected {
-                        path: wt_path,
-                        branch: Some(wt_name),
-                    },
-                    Ok(()) => WorktreeResult::Cancelled,
-                    Err(msg) => {
-                        run_with_status(&format!("Error: {msg}"), || {
-                            std::thread::sleep(Duration::from_secs(3));
-                        });
-                        WorktreeResult::Cancelled
-                    }
-                }
+                WorktreeResult::NewRequested
             } else {
                 // Look up the branch from the original entries
                 let branch = entries
