@@ -1,5 +1,4 @@
 # Taps
-tap "homebrew/bundle"
 tap "moltenbits/tap"
 
 # CLI tools
@@ -76,11 +75,12 @@ cask "visual-studio-code"
 cask "vlc"
 cask "whatsapp"
 cask "zed@preview"
-cask "zoom"
 
 # Fonts
 cask "font-0xproto-nerd-font"
 cask "font-fontawesome"
+cask "font-maple-mono"
+cask "font-maple-mono-nf"
 cask "font-iosevka-nerd-font"
 cask "font-iosevka-term-nerd-font"
 cask "font-iosevka-term-slab-nerd-font"
