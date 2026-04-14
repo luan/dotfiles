@@ -8,8 +8,9 @@ use crate::picker::PickerItem;
 use crate::project::{
     DitchPlan, WtEntry, build_ditch_plan, build_project_items, build_worktree_items,
     create_new_worktree, create_session_at_dir, default_session_name, execute_ditch_action,
-    list_worktrees, rename_parts, rename_session, resolve_selected_dir_from_session,
-    toggle_favorite, touch_lru, worktree_name_parts,
+    list_worktrees, next_wt_suffix, rename_parts, rename_session, repo_root_name,
+    resolve_common_dir, resolve_selected_dir_from_session, toggle_favorite, touch_lru,
+    worktree_name_parts,
 };
 use crate::tmux::tmux;
 
@@ -76,6 +77,7 @@ pub(super) struct SessionNameOverlay {
     pub(super) cursor: usize,
     pub(super) default_on_empty: Option<String>,
     pub(super) final_dir: PathBuf,
+    pub(super) pending_worktree: Option<PathBuf>,
     pub(super) error: Option<String>,
 }
 
@@ -444,22 +446,36 @@ impl SidebarState {
                     return OverlayKeyResult::Keep;
                 };
 
-                let (final_dir, branch) = if item.id == "__new__" {
-                    match create_new_worktree(&worktree.selected_dir, &worktree.entries) {
-                        Ok((path, name)) => (path, Some(name)),
-                        Err(err) => {
-                            worktree.error = Some(err);
-                            return OverlayKeyResult::Keep;
-                        }
-                    }
-                } else {
-                    let branch = worktree
-                        .entries
-                        .iter()
-                        .find(|entry| entry.path == item.id)
-                        .and_then(|entry| entry.branch.clone());
-                    (PathBuf::from(&item.id), branch)
-                };
+                if item.id == "__new__" {
+                    let Some(common_dir) = resolve_common_dir(&worktree.selected_dir) else {
+                        worktree.error = Some("not a git repo".to_string());
+                        return OverlayKeyResult::Keep;
+                    };
+                    let repo_name = repo_root_name(&worktree.selected_dir, &common_dir);
+                    let default_suffix =
+                        next_wt_suffix(&worktree.selected_dir, &common_dir, &worktree.entries);
+                    let (title, prefix) = if repo_name.is_empty() {
+                        ("Worktree".to_string(), String::new())
+                    } else {
+                        (format!("{repo_name}."), format!("{repo_name}/"))
+                    };
+                    self.open_session_name_overlay(
+                        title,
+                        prefix,
+                        default_suffix.clone(),
+                        Some(default_suffix),
+                        worktree.selected_dir.clone(),
+                        Some(worktree.selected_dir.clone()),
+                    );
+                    return OverlayKeyResult::Keep;
+                }
+
+                let branch = worktree
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path == item.id)
+                    .and_then(|entry| entry.branch.clone());
+                let final_dir = PathBuf::from(&item.id);
 
                 match worktree.flow {
                     WorktreeFlow::NewSession => {
@@ -470,6 +486,7 @@ impl SidebarState {
                             default_name.clone(),
                             Some(default_name),
                             final_dir,
+                            None,
                         );
                     }
                     WorktreeFlow::NewWorktree => {
@@ -491,6 +508,7 @@ impl SidebarState {
                             default_suffix,
                             None,
                             final_dir,
+                            None,
                         );
                     }
                 }
@@ -525,6 +543,18 @@ impl SidebarState {
                 if suffix.is_empty() {
                     session.error = Some("session name required".to_string());
                     return OverlayKeyResult::Keep;
+                }
+                if let Some(selected_dir) = session.pending_worktree.clone() {
+                    match create_new_worktree(&selected_dir, &suffix) {
+                        Ok((path, _)) => {
+                            session.final_dir = path;
+                            session.pending_worktree = None;
+                        }
+                        Err(err) => {
+                            session.error = Some(err);
+                            return OverlayKeyResult::Keep;
+                        }
+                    }
                 }
                 let session_name = format!("{}{}", session.prefix, suffix);
                 if session_exists(&session_name) {
@@ -619,6 +649,7 @@ impl SidebarState {
                 default_name.clone(),
                 Some(default_name),
                 final_dir,
+                None,
             );
             return;
         }
@@ -641,6 +672,7 @@ impl SidebarState {
         initial: String,
         default_on_empty: Option<String>,
         final_dir: PathBuf,
+        pending_worktree: Option<PathBuf>,
     ) {
         self.overlay = Some(SidebarOverlay::SessionName(SessionNameOverlay {
             title,
@@ -649,6 +681,7 @@ impl SidebarState {
             input: initial,
             default_on_empty,
             final_dir,
+            pending_worktree,
             error: None,
         }));
     }
