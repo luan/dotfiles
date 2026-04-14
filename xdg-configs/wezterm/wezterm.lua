@@ -225,8 +225,18 @@ local function focus_sidebar(window, pane)
 end
 
 config.keys = {
-	-- Clipboard
-	{ key = "c", mods = "SUPER", action = act.CopyTo("Clipboard") },
+	-- Clipboard (Cmd+C: copy WezTerm selection if active, else send CSI to tmux for copy-mode copy)
+	{
+		key = "c",
+		mods = "SUPER",
+		action = wezterm.action_callback(function(window, pane)
+			if window:get_selection_text_for_pane(pane) ~= "" then
+				window:perform_action(act.CopyTo("Clipboard"), pane)
+			else
+				window:perform_action(act.SendString(csi("72~")), pane)
+			end
+		end),
+	},
 	{ key = "v", mods = "SUPER", action = act.PasteFrom("Clipboard") },
 
 	-- Font size
@@ -277,6 +287,9 @@ local csi_relay = {
 	{ key = "mapped:>", mods = "SUPER|SHIFT", csi = "67~" },
 	{ key = "n", mods = "SUPER|CTRL", csi = "68~" },
 	{ key = "[", mods = "CTRL|ALT", csi = "69~" },
+	{ key = "mapped:}", mods = "SUPER|SHIFT", csi = "70~" },
+	{ key = "mapped:{", mods = "SUPER|SHIFT", csi = "73~" },
+	{ key = "y", mods = "SUPER", csi = "71~" },
 }
 for _, r in ipairs(csi_relay) do
 	table.insert(config.keys, { key = r.key, mods = r.mods, action = act.SendString(csi(r.csi)) })
