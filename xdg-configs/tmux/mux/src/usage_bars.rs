@@ -9,7 +9,7 @@ use ratatui::prelude::*;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use std::process::Command;
+use rusqlite::{Connection, OpenFlags};
 
 const FIVE_HOURS: i64 = 5 * 3600;
 const SEVEN_DAYS: i64 = 7 * 24 * 3600;
@@ -65,68 +65,48 @@ pub(crate) struct ClaudeOverage {
     pub(crate) total: f64,
 }
 
-fn load_overage() -> Option<ClaudeOverage> {
+fn open_claude_db() -> Option<Connection> {
     let path = crate::tmux::home().join(".local/state/claude-statusline/usage.db");
     if !path.exists() {
         return None;
     }
+    Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()
+}
+
+fn load_overage() -> Option<ClaudeOverage> {
+    let conn = open_claude_db()?;
     // Pull the latest (max reset_ts) overage per kind in one query.
     let query = "SELECT \
          COALESCE((SELECT overage FROM windows WHERE kind='5h'    ORDER BY reset_ts DESC LIMIT 1), 0), \
          COALESCE((SELECT overage FROM windows WHERE kind='7d'    ORDER BY reset_ts DESC LIMIT 1), 0), \
          COALESCE((SELECT overage FROM windows WHERE kind='month' ORDER BY reset_ts DESC LIMIT 1), 0), \
-         COALESCE((SELECT overage FROM windows WHERE kind='total' ORDER BY reset_ts DESC LIMIT 1), 0);";
-    let out = Command::new("sqlite3")
-        .arg(path.as_os_str())
-        .arg("-readonly")
-        .arg(query)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let line = String::from_utf8_lossy(&out.stdout);
-    let mut parts = line.trim().split('|');
-    let five_h = parts.next()?.parse().ok()?;
-    let seven_d = parts.next()?.parse().ok()?;
-    let month = parts.next()?.parse().ok()?;
-    let total = parts.next()?.parse().ok()?;
-    Some(ClaudeOverage {
-        five_h,
-        seven_d,
-        month,
-        total,
+         COALESCE((SELECT overage FROM windows WHERE kind='total' ORDER BY reset_ts DESC LIMIT 1), 0)";
+    conn.query_row(query, [], |row| {
+        Ok(ClaudeOverage {
+            five_h: row.get(0)?,
+            seven_d: row.get(1)?,
+            month: row.get(2)?,
+            total: row.get(3)?,
+        })
     })
+    .ok()
 }
 
 /// Cache hit rate in [0.0, 1.0] over the event window `ts > since_ts`, read
 /// from claude-statusline's `events` table. `since_ts` is typically the bar's
 /// `reset_ts - window_secs` (start of the current billing window).
 fn load_hit_rate(since_ts: i64) -> Option<f64> {
-    let path = crate::tmux::home().join(".local/state/claude-statusline/usage.db");
-    if !path.exists() {
-        return None;
-    }
-    let query = format!(
-        "SELECT SUM(cache_read_tokens) * 1.0 / \
+    let conn = open_claude_db()?;
+    let query = "SELECT SUM(cache_read_tokens) * 1.0 / \
          NULLIF(SUM(cache_read_tokens + cache_creation_tokens + input_tokens), 0) \
-         FROM events WHERE ts > {since_ts};"
-    );
-    let out = Command::new("sqlite3")
-        .arg(path.as_os_str())
-        .arg("-readonly")
-        .arg(&query)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let line = String::from_utf8_lossy(&out.stdout);
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    trimmed.parse().ok()
+         FROM events WHERE ts > ?1";
+    conn.query_row(query, [since_ts], |row| row.get::<_, Option<f64>>(0))
+        .ok()
+        .flatten()
 }
 
 fn fmt_usd(v: f64) -> String {
@@ -274,38 +254,32 @@ fn load_dual_sqlite(db_path: &std::path::Path) -> Vec<DualSample> {
     if !db_path.exists() {
         return Vec::new();
     }
-    let query =
-        "SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC;";
-    let Ok(out) = Command::new("sqlite3")
-        .arg(db_path.as_os_str())
-        .arg("-readonly")
-        .arg(query)
-        .output()
+    let Ok(conn) = Connection::open_with_flags(
+        db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) = conn
+        .prepare("SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC")
     else {
         return Vec::new();
     };
-    if !out.status.success() {
+    let Ok(rows) = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, i64>(3)?,
+            row.get::<_, i64>(4)?,
+        ))
+    }) else {
         return Vec::new();
-    }
-    let text = String::from_utf8_lossy(&out.stdout);
+    };
     const SANE_MAX_TS: i64 = 4_102_444_800; // 2100-01-01 UTC
     let mut samples = Vec::with_capacity(256);
-    for line in text.lines() {
-        let mut it = line.split('|');
-        let (Some(t), Some(pp), Some(pr), Some(sp), Some(sr)) =
-            (it.next(), it.next(), it.next(), it.next(), it.next())
-        else {
-            continue;
-        };
-        let (Ok(ts), Ok(fh_used), Ok(fh_reset), Ok(sd_used), Ok(sd_reset)) = (
-            t.parse::<i64>(),
-            pp.parse::<i64>(),
-            pr.parse::<i64>(),
-            sp.parse::<i64>(),
-            sr.parse::<i64>(),
-        ) else {
-            continue;
-        };
+    for row in rows.flatten() {
+        let (ts, fh_used, fh_reset, sd_used, sd_reset) = row;
         if !(0..SANE_MAX_TS).contains(&fh_reset) || !(0..SANE_MAX_TS).contains(&sd_reset) {
             continue;
         }
@@ -779,7 +753,10 @@ pub(crate) fn draw(
     }
     let now = Instant::now();
     let last_claude = bars.iter().rposition(|b| b.label.starts_with("claude"));
-    let has_footer = overage.is_some() && last_claude.is_some();
+    let has_footer = overage
+        .map(|ov| ov.month > 0.0 || ov.total > 0.0)
+        .unwrap_or(false)
+        && last_claude.is_some();
     let mut y = area.y;
     let end_y = area.y + area.height;
     for (i, b) in bars.iter().enumerate() {
