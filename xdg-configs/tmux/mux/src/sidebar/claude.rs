@@ -147,12 +147,12 @@ fn is_opencode_asking(text: &str) -> bool {
 /// Returns just the word (e.g. "Churning"), stripping the spinner char and
 /// the trailing ellipsis.
 fn parse_gerund(text: &str) -> Option<String> {
-    // Only scan the bottom 12 lines — the active gerund sits just above the
-    // statusline. Stale gerunds from finished work scroll upward and should
-    // not match.
-    let lines: Vec<&str> = text.lines().collect();
-    let start = lines.len().saturating_sub(12);
-    for line in &lines[start..] {
+    // Scan the full captured text bottom-up and return the LAST (lowest) match.
+    // Tasks push the gerund line upward by a variable amount, so a fixed
+    // bottom-N window misses it. Bottom-up + first-match gives us the most
+    // recent active gerund without picking up stale ones higher in scrollback.
+    let mut result: Option<String> = None;
+    for line in text.lines() {
         let trimmed = line.trim();
         let mut chars = trimmed.chars();
         let Some(first) = chars.next() else {
@@ -169,22 +169,28 @@ fn parse_gerund(text: &str) -> Option<String> {
             | '\u{2736}' // ✶
             | '\u{2722}' // ✢
             | '\u{273D}' // ✽
+            | '\u{2733}' // ✳
         ) {
             continue;
         }
         if chars.next() != Some(' ') {
             continue;
         }
-        // Remaining text after "{spinner} "; grab word until '…' or whitespace.
+        // Text after "{spinner} " — e.g. "Churning…" or
+        // "Implementing foundation model + constants… (1m 28s · ↓ 2.1k tokens)".
+        // The trailing "…" marks active work; past-tense lines lack it.
         let rest: String = chars.collect();
-        // The trailing "…" marks an in-progress gerund ("Churning…").
-        // Past-tense verbs ("Cogitated for 3m") lack it and aren't animated.
+        if !rest.contains('\u{2026}') {
+            continue;
+        }
+        // Extract the first word as the gerund verb, append … for display.
         let word = rest.split_whitespace().next().unwrap_or("");
-        if word.ends_with('\u{2026}') && word.len() >= 3 {
-            return Some(word.to_string());
+        if word.len() >= 2 {
+            let verb = word.trim_end_matches('\u{2026}');
+            result = Some(format!("{verb}…"));
         }
     }
-    None
+    result
 }
 
 /// Codex shows "• Working" (U+2022 + space + "Working") when active.
@@ -403,4 +409,83 @@ fn most_recent_jsonl_mtime(dir: &std::path::Path) -> Option<std::time::SystemTim
         });
     }
     best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gerund_near_bottom() {
+        let text = "\
+some output
+✻ Churning…
+18٪ 139k/1.0m";
+        assert_eq!(parse_gerund(text), Some("Churning…".to_string()));
+    }
+
+    #[test]
+    fn gerund_pushed_up_by_tasks() {
+        // Tasks sit between the gerund and the statusline, pushing the
+        // gerund well above the bottom 12 lines.
+        let mut lines = vec!["some output"];
+        lines.push("✻ Reading…");
+        for _ in 0..20 {
+            lines.push("  ├ Task in progress");
+        }
+        lines.push("");
+        lines.push("18٪ 139k/1.0m");
+        let text = lines.join("\n");
+        assert_eq!(parse_gerund(&text), Some("Reading…".to_string()));
+    }
+
+    #[test]
+    fn past_tense_ignored() {
+        let text = "\
+✻ Cogitated for 3m
+18٪ 139k/1.0m";
+        assert_eq!(parse_gerund(text), None);
+    }
+
+    #[test]
+    fn latest_gerund_wins() {
+        let text = "\
+✻ Reading…
+some middle output
+✻ Writing…
+18٪ 139k/1.0m";
+        assert_eq!(parse_gerund(text), Some("Writing…".to_string()));
+    }
+
+    #[test]
+    fn no_gerund_when_idle() {
+        let text = "\
+> some prompt
+18٪ 139k/1.0m";
+        assert_eq!(parse_gerund(text), None);
+    }
+
+    #[test]
+    fn multi_word_gerund_extracts_first_word() {
+        // Real example: subagent dispatch shows full description after verb.
+        let text = "\
+✢ Implementing foundation model + constants… (1m 28s · ↓ 2.1k tokens)
+  ◼ Phase 1: Foundation
+  ◻ Phase 2: Entity Provenance
+18٪ 139k/1.0m";
+        assert_eq!(parse_gerund(text), Some("Implementing…".to_string()));
+    }
+
+    #[test]
+    fn all_spinner_chars_recognized() {
+        for spinner in ['·', '•', '✻', '⋆', '✦', '✧', '✶', '✢', '✽', '✳'] {
+            let text = format!("{spinner} Thinking…");
+            assert_eq!(
+                parse_gerund(&text),
+                Some("Thinking…".to_string()),
+                "spinner {spinner:?} (U+{:04X}) not recognized",
+                spinner as u32,
+            );
+        }
+    }
 }
