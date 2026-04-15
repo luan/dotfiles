@@ -19,7 +19,7 @@ use tracing::debug;
 use crate::usage_bars;
 
 mod claude;
-mod meta;
+pub(crate) mod meta;
 mod overlay;
 mod render;
 mod tree;
@@ -335,6 +335,10 @@ impl SidebarState {
         }
 
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
+        // External session switches (e.g. MRU-cycle via Ctrl+Tab) should drag
+        // the cursor along, not just the "current session" highlight — staying
+        // put would leave the selection orphaned on a stale session.
+        let current_changed = cur != self.current;
 
         self.items = build_items(&sessions, &cur, &self.meta);
         self.current = cur;
@@ -342,8 +346,9 @@ impl SidebarState {
 
         let session_count = self.items.len() as u64;
 
-        // When unfocused, always track current session
-        if !self.focused {
+        // When unfocused, or when the active session changed from under us,
+        // track the current session.
+        if !self.focused || current_changed {
             self.snap_to_current();
             debug!(
                 duration_ms = t0.elapsed().as_millis() as u64,
