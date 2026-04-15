@@ -14,19 +14,23 @@ use super::render_at;
 const TREE_COLOR: Color = Color::Rgb(0x2e, 0x2f, 0x40);
 
 pub(in crate::sidebar) fn overlay_height(overlay: &SidebarOverlay, max_list_h: u16) -> u16 {
+    // Picker overlays reserve one extra row for the breathing-room pad drawn
+    // above the list in `render_picker_overlay`.
     let desired = match overlay {
         SidebarOverlay::Rename(rename) => 1 + u16::from(rename.error.is_some()),
         SidebarOverlay::SessionName(session) => 1 + u16::from(session.error.is_some()),
-        SidebarOverlay::Project(project) => 1 + min(project.items.len(), 4) as u16,
+        SidebarOverlay::Project(project) => 1 + PICKER_TOP_PAD + min(project.items.len(), 4) as u16,
         SidebarOverlay::Worktree(worktree) => {
-            u16::from(worktree.error.is_some()) + worktree.items.len() as u16
+            u16::from(worktree.error.is_some()) + PICKER_TOP_PAD + worktree.items.len() as u16
         }
         SidebarOverlay::Ditch(list) => {
-            u16::from(list.error.is_some()) + min(list.items.len(), 4) as u16
+            u16::from(list.error.is_some()) + PICKER_TOP_PAD + min(list.items.len(), 4) as u16
         }
     };
     desired.clamp(1, max_list_h.max(1))
 }
+
+const PICKER_TOP_PAD: u16 = 1;
 
 pub(in crate::sidebar) fn render_overlay(
     f: &mut Frame,
@@ -202,6 +206,7 @@ fn render_picker_overlay(f: &mut Frame, area: Rect, ctx: &mut PickerOverlayCtx<'
     let chunks = Layout::vertical([
         Constraint::Length(if ctx.filter.is_some() { 1 } else { 0 }),
         Constraint::Length(if ctx.error.is_some() { 1 } else { 0 }),
+        Constraint::Length(PICKER_TOP_PAD),
         Constraint::Min(1),
     ])
     .split(area);
@@ -251,7 +256,7 @@ fn render_picker_overlay(f: &mut Frame, area: Rect, ctx: &mut PickerOverlayCtx<'
         );
     }
 
-    let list_area = chunks[2];
+    let list_area = chunks[3];
     let visible_height = list_area.height as usize;
     if visible_height == 0 {
         return;
