@@ -82,9 +82,15 @@ pub(crate) struct WindowInfo {
     pub(crate) zoomed: bool,
 }
 
-pub(crate) fn query_windows() -> Vec<WindowInfo> {
+pub(crate) fn query_windows(session: &str) -> Vec<WindowInfo> {
+    // Always pin to the explicit session — without `-t`, tmux uses whatever
+    // session the calling client/hook is associated with, which means
+    // attention-triggered updates render the attention session's windows
+    // instead of the one the user is actually viewing.
     let raw = tmux(&[
         "list-windows",
+        "-t",
+        session,
         "-F",
         "#{window_index}\t#{window_name}\t#{?window_active,1,0}\t#{?window_zoomed_flag,1,0}",
     ]);

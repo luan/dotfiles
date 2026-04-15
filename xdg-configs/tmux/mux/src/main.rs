@@ -10,6 +10,7 @@ mod color;
 mod filter;
 mod group;
 mod logging;
+mod mru;
 mod order;
 mod palette;
 mod picker;
@@ -76,7 +77,7 @@ fn cmd_update_with_args(args: &[String]) {
         .map_or("#FFFFFF", |(_, c)| c.as_str());
 
     let bar = render_bar(&sessions, current, &meta, &st.attn, client_width);
-    let windows = query_windows();
+    let windows = query_windows(current);
     let win_str = render_windows(&windows, cur_color);
 
     // If the sidebar is open, hide the session list in the status bar
@@ -694,6 +695,8 @@ fn main() {
         "update" => cmd_update_with_args(&rest),
         "click" => cmd_click(&rest),
         "sidebar" => sidebar::cmd_sidebar(),
+        "mru-cycle" => mru::cmd_mru_cycle(&rest),
+        "mru-overlay" => mru::cmd_mru_overlay(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
         "log" => logging::cmd_log(&rest),

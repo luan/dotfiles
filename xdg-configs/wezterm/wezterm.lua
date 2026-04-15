@@ -203,6 +203,16 @@ local function toggle_sidebar(window, pane)
 	end
 end
 
+-- Ctrl+Tab works everywhere — the sidebar is a non-tmux pane, so CSI relays
+-- that target tmux user-keys never reach it. Spawning mux directly bypasses
+-- tmux entirely; mux itself uses `tmux switch-client` to move sessions.
+local function mru_cycle(back)
+	local arg = back and " mru-cycle --back" or " mru-cycle"
+	return wezterm.action_callback(function(_window, _pane)
+		os.execute("PATH=" .. PATH .. " " .. mux_bin .. arg .. " >/dev/null 2>&1 &")
+	end)
+end
+
 local function cmd_p_handler(window, pane)
 	local info = find_sidebar(pane:tab())
 	if info then
@@ -263,6 +273,10 @@ config.keys = {
 
 	-- Cmd+P: sidebar-aware session chooser (conditional — not table-driven)
 	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
+
+	-- Browser-style MRU session cycling (works from any pane)
+	{ key = "Tab", mods = "CTRL", action = mru_cycle(false) },
+	{ key = "Tab", mods = "CTRL|SHIFT", action = mru_cycle(true) },
 }
 
 -- {{{ tmux relay: prefix + key
@@ -281,7 +295,6 @@ end
 
 -- {{{ tmux relay: CSI user-key sequences
 local csi_relay = {
-	{ key = "Tab", mods = "CTRL", csi = "60~" },
 	{ key = ";", mods = "SUPER", csi = "61~" },
 	{ key = "n", mods = "SUPER", csi = "62~" },
 	{ key = "n", mods = "SUPER|SHIFT", csi = "64~" },
