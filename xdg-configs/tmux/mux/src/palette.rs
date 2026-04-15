@@ -98,7 +98,6 @@ pub(crate) fn hex_to_color(hex: &str) -> Color {
 
 use std::time::Duration;
 
-
 pub(crate) fn ctx_label_color(pct: u8) -> Color {
     if pct >= 80 {
         Color::Rgb(0xff, 0x5f, 0x5f) // red — nearly full

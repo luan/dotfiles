@@ -93,7 +93,10 @@ pub(in crate::sidebar) fn footer_hints(width: usize, show_hidden: bool) -> Vec<L
     }
 }
 
-pub(in crate::sidebar) fn chooser_footer_hints(width: usize, show_hidden: bool) -> Vec<Line<'static>> {
+pub(in crate::sidebar) fn chooser_footer_hints(
+    width: usize,
+    show_hidden: bool,
+) -> Vec<Line<'static>> {
     let opt_h = format!("{KEY_OPT} h");
     let opt_jk = format!("{KEY_OPT} jk");
     let h_long = if show_hidden { " show" } else { " hide" };
