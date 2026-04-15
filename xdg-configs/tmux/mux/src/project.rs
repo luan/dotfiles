@@ -291,8 +291,16 @@ pub(crate) fn resolve_selected_dir_from_session(target: Option<&str>) -> Option<
         PathBuf::from(&pane_path).join(&common_dir)
     };
 
+    // Query the common git dir, not the pane's cwd: worktrees of a bare repo
+    // have a non-bare working tree, so `-C <worktree>` would report false and
+    // we'd climb to the wrong parent (e.g. `~/src` for `~/src/repo.git/wt2`).
     let is_bare = Command::new("git")
-        .args(["-C", &pane_path, "rev-parse", "--is-bare-repository"])
+        .args([
+            "--git-dir",
+            &common_dir,
+            "rev-parse",
+            "--is-bare-repository",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -419,10 +427,12 @@ pub(crate) fn cmd_new_session() {
         };
         match result {
             WorktreeResult::Selected { path: dir, .. } => final_dir = dir,
-            WorktreeResult::NewRequested => match prompt_and_create_worktree(&selected_dir, &entries) {
-                Some(dir) => final_dir = dir,
-                None => return,
-            },
+            WorktreeResult::NewRequested => {
+                match prompt_and_create_worktree(&selected_dir, &entries) {
+                    Some(dir) => final_dir = dir,
+                    None => return,
+                }
+            }
             WorktreeResult::NoWorktrees => {}
             WorktreeResult::Cancelled => return,
         }
@@ -472,26 +482,25 @@ pub(crate) fn cmd_new_worktree(args: &[String]) {
     };
 
     let entries = list_worktrees(&selected_dir);
-    let (existing_dir, repo_name, default_suffix) =
-        match phase_worktree_picker(entries.clone()) {
-            WorktreeResult::Selected { path, branch } => {
-                let (r, s) = worktree_name_parts(&selected_dir, branch.as_deref());
-                (Some(path), r, s)
-            }
-            WorktreeResult::NewRequested => {
-                let common_dir = resolve_common_dir(&selected_dir);
-                let repo = common_dir
-                    .as_deref()
-                    .map(|cd| repo_root_name(&selected_dir, cd))
-                    .unwrap_or_default();
-                let suffix = common_dir
-                    .as_deref()
-                    .map(|cd| next_wt_suffix(&selected_dir, cd, &entries))
-                    .unwrap_or_else(|| "wt1".to_string());
-                (None, repo, suffix)
-            }
-            WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
-        };
+    let (existing_dir, repo_name, default_suffix) = match phase_worktree_picker(entries.clone()) {
+        WorktreeResult::Selected { path, branch } => {
+            let (r, s) = worktree_name_parts(&selected_dir, branch.as_deref());
+            (Some(path), r, s)
+        }
+        WorktreeResult::NewRequested => {
+            let common_dir = resolve_common_dir(&selected_dir);
+            let repo = common_dir
+                .as_deref()
+                .map(|cd| repo_root_name(&selected_dir, cd))
+                .unwrap_or_default();
+            let suffix = common_dir
+                .as_deref()
+                .map(|cd| next_wt_suffix(&selected_dir, cd, &entries))
+                .unwrap_or_else(|| "wt1".to_string());
+            (None, repo, suffix)
+        }
+        WorktreeResult::NoWorktrees | WorktreeResult::Cancelled => return,
+    };
 
     // Session name input — only the suffix is editable, prefix is static
     let (session_name, suffix) = if repo_name.is_empty() {

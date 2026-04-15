@@ -293,6 +293,18 @@ fn build_sidebar_worktree_items(entries: &[WtEntry]) -> (Vec<PickerItem>, usize)
         }
     }
 
+    // Keep "+ New worktree" pinned at the top, then non-live entries, then
+    // live ones. Live worktrees already host a session — most `w` presses want
+    // to create or resume an inactive one, so push the live rows out of the way.
+    if items.len() > 1 {
+        let tail = items.split_off(1);
+        let (idle, live): (Vec<_>, Vec<_>) = tail
+            .into_iter()
+            .partition(|item| item.right_label != "live");
+        items.extend(idle);
+        items.extend(live);
+    }
+
     let selected = items
         .iter()
         .enumerate()
