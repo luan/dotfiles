@@ -138,59 +138,101 @@ fn is_codex_asking(text: &str) -> bool {
 /// OpenCode: "select", "submit", and "dismiss" all present + no context.
 fn is_opencode_asking(text: &str) -> bool {
     let combined: String = text.lines().collect();
-    combined.contains("select")
-        && combined.contains("submit")
-        && combined.contains("dismiss")
+    combined.contains("select") && combined.contains("submit") && combined.contains("dismiss")
 }
 
 /// Extract the gerund verb from an activity line like "✻ Churning…".
 /// Returns just the word (e.g. "Churning"), stripping the spinner char and
 /// the trailing ellipsis.
 fn parse_gerund(text: &str) -> Option<String> {
-    // Scan the full captured text bottom-up and return the LAST (lowest) match.
-    // Tasks push the gerund line upward by a variable amount, so a fixed
-    // bottom-N window misses it. Bottom-up + first-match gives us the most
-    // recent active gerund without picking up stale ones higher in scrollback.
-    let mut result: Option<String> = None;
-    for line in text.lines() {
+    // Claude's idle input box is bounded by two ─ separators with `❯ …`
+    // between them. Active state: gerund sits ABOVE the top separator,
+    // separated only by optional blanks and indented task/subagent
+    // lines. Stale scrollback (e.g. `· Running SessionStart hooks…`
+    // lingering after `/compact`): real content like echoed prompts and
+    // tool output sits between the stale line and the input box.
+    //
+    // Scan up from the top separator (falling back to the bottom of the
+    // text when no separators are present, for legacy test fixtures).
+    // Skip blanks, the statusline, and indented continuation lines. The
+    // FIRST real unindented line must itself match the gerund pattern,
+    // otherwise we treat the pane as idle and return None.
+    let lines: Vec<&str> = text.lines().collect();
+    let scan_until = match lines.iter().rposition(|l| is_input_separator(l.trim())) {
+        Some(bottom) => lines[..bottom]
+            .iter()
+            .rposition(|l| is_input_separator(l.trim()))
+            .unwrap_or(bottom),
+        None => lines.len(),
+    };
+
+    for line in lines[..scan_until].iter().rev() {
         let trimmed = line.trim();
-        let mut chars = trimmed.chars();
-        let Some(first) = chars.next() else {
-            continue;
-        };
-        if !matches!(
-            first,
-            '\u{00B7}'  // ·
-            | '\u{2022}'  // •
-            | '\u{273B}'  // ✻
-            | '\u{22C6}'  // ⋆
-            | '\u{2726}'  // ✦
-            | '\u{2727}'  // ✧
-            | '\u{2736}' // ✶
-            | '\u{2722}' // ✢
-            | '\u{273D}' // ✽
-            | '\u{2733}' // ✳
-        ) {
+        if trimmed.is_empty() {
             continue;
         }
-        if chars.next() != Some(' ') {
+        // Statusline (`٪` U+066A) can appear when test fixtures omit the
+        // input-box separators; skip past it to reach the gerund above.
+        if trimmed.contains('\u{066A}') {
             continue;
         }
-        // Text after "{spinner} " — e.g. "Churning…" or
-        // "Implementing foundation model + constants… (1m 28s · ↓ 2.1k tokens)".
-        // The trailing "…" marks active work; past-tense lines lack it.
-        let rest: String = chars.collect();
-        if !rest.contains('\u{2026}') {
+        // Indented lines are task/subagent or tool-output continuations;
+        // they belong to the unindented line above.
+        if line.starts_with(' ') || line.starts_with('\t') {
             continue;
         }
-        // Extract the first word as the gerund verb, append … for display.
-        let word = rest.split_whitespace().next().unwrap_or("");
-        if word.len() >= 2 {
-            let verb = word.trim_end_matches('\u{2026}');
-            result = Some(format!("{verb}…"));
-        }
+        return gerund_from_line(trimmed);
     }
-    result
+    None
+}
+
+fn gerund_from_line(line: &str) -> Option<String> {
+    let mut chars = line.chars();
+    let first = chars.next()?;
+    if !matches!(
+        first,
+        '\u{00B7}'  // ·
+        | '\u{2022}'  // •
+        | '\u{273B}'  // ✻
+        | '\u{22C6}'  // ⋆
+        | '\u{2726}'  // ✦
+        | '\u{2727}'  // ✧
+        | '\u{2736}' // ✶
+        | '\u{2722}' // ✢
+        | '\u{273D}' // ✽
+        | '\u{2733}' // ✳
+    ) {
+        return None;
+    }
+    if chars.next() != Some(' ') {
+        return None;
+    }
+    // Text after "{spinner} " — e.g. "Churning…" or
+    // "Implementing foundation model + constants… (1m 28s · ↓ 2.1k tokens)".
+    // The trailing "…" marks active work; past-tense lines lack it.
+    let rest: String = chars.collect();
+    if !rest.contains('\u{2026}') {
+        return None;
+    }
+    let word = rest.split_whitespace().next().unwrap_or("");
+    if word.len() < 2 {
+        return None;
+    }
+    let verb = word.trim_end_matches('\u{2026}');
+    Some(format!("{verb}…"))
+}
+
+/// Claude's idle input box is bordered by long runs of U+2500 ─. A line
+/// made entirely of that char (20+ of them) reliably marks the divider.
+fn is_input_separator(line: &str) -> bool {
+    let mut count = 0usize;
+    for c in line.chars() {
+        if c != '\u{2500}' {
+            return false;
+        }
+        count += 1;
+    }
+    count >= 20
 }
 
 /// Codex shows "• Working" (U+2022 + space + "Working") when active.
@@ -474,6 +516,65 @@ some middle output
   ◻ Phase 2: Entity Provenance
 18٪ 139k/1.0m";
         assert_eq!(parse_gerund(text), Some("Implementing…".to_string()));
+    }
+
+    #[test]
+    fn stale_hook_line_above_input_box_ignored() {
+        // Post-/compact state: the "· Running SessionStart hooks…" line
+        // lingers deep in scrollback with real content (echoed prompts,
+        // tool output, intro splash) between it and the input box — so
+        // the first unindented line above the top separator is NOT the
+        // gerund, and the pane is correctly read as idle.
+        let sep: String = "\u{2500}".repeat(100);
+        let text = format!(
+            "\
+· Running SessionStart hooks…… (1m 23s)
+
+▐▛███▜▌   Claude Code v2.1.109
+▝▜█████▛▘  Opus 4.6 (1M context)
+
+✻ Conversation compacted (ctrl+o for history)
+
+❯ /pr-fix-comments --auto
+
+⏺ All 5 PRs clean — no unresolved comments this cycle.
+
+{sep}
+❯
+{sep}
+  2.1.109 opus 4.6 1m | 8٪ 79k/1.0m"
+        );
+        assert_eq!(parse_gerund(&text), None);
+    }
+
+    #[test]
+    fn active_gerund_above_input_box_detected() {
+        // Active state: gerund sits directly above the top separator,
+        // with only a blank line between.
+        let sep: String = "\u{2500}".repeat(100);
+        let text = format!(
+            "\
+⏺ Bash(echo hi)
+  ⎿  hi
+
+✢ Wibbling… (2m 42s · ↓ 1.9k tokens · thought for 12s)
+
+{sep}
+❯
+{sep}
+  2.1.109 opus 4.6 1m | 10٪ 97k/1.0m"
+        );
+        assert_eq!(parse_gerund(&text), Some("Wibbling…".to_string()));
+    }
+
+    #[test]
+    fn conversation_compacted_line_does_not_match() {
+        // The visible "✻ Conversation compacted (ctrl+o for history)"
+        // line itself lacks an ellipsis and must not be read as activity.
+        let text = "\
+✻ Conversation compacted (ctrl+o for history)
+18٪ 79k/1.0m";
+        assert_eq!(parse_gerund(text), None);
     }
 
     #[test]

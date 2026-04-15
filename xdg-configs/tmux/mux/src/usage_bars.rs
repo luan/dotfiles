@@ -260,9 +260,9 @@ fn load_dual_sqlite(db_path: &std::path::Path) -> Vec<DualSample> {
     ) else {
         return Vec::new();
     };
-    let Ok(mut stmt) = conn
-        .prepare("SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC")
-    else {
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT ts, fh_used, fh_reset, sd_used, sd_reset FROM usage_samples ORDER BY ts ASC",
+    ) else {
         return Vec::new();
     };
     let Ok(rows) = stmt.query_map([], |row| {

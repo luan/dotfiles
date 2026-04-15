@@ -240,8 +240,7 @@ pub(in crate::sidebar) fn render_item(
             } else if gerund.is_some() {
                 // ── Active: glyph brightness pulse + percolating gerund ──
                 let perc_step = (now_ms / PERC_MS) as usize;
-                let brightness =
-                    triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
+                let brightness = triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
                 line.push(Span::styled(
                     glyph_str,
                     Style::default()
@@ -275,8 +274,7 @@ pub(in crate::sidebar) fn render_item(
                 let cycle = chars.len() + PERC_WIDTH;
                 let pos = perc_step % cycle;
                 for (i, ch) in chars.iter().enumerate() {
-                    let in_shine =
-                        i >= pos.saturating_sub(PERC_WIDTH) && i < pos;
+                    let in_shine = i >= pos.saturating_sub(PERC_WIDTH) && i < pos;
                     let fg = if in_shine { shine } else { base };
                     line.push(Span::styled(
                         ch.to_string(),
@@ -343,7 +341,10 @@ pub(in crate::sidebar) fn render_item(
                 let right_w: usize = right.iter().map(|s| s.width()).sum();
                 let left_w: usize = line.iter().map(|s| s.width()).sum();
                 let pad = w.saturating_sub(left_w + right_w + 1);
-                line.push(Span::styled(" ".repeat(pad.max(1)), Style::default().bg(row_bg)));
+                line.push(Span::styled(
+                    " ".repeat(pad.max(1)),
+                    Style::default().bg(row_bg),
+                ));
                 line.extend(right);
                 line.push(Span::styled(" ", Style::default().bg(row_bg)));
             }

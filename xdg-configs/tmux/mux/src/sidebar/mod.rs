@@ -315,12 +315,10 @@ impl SidebarState {
             // (old == None) — that's initialization, not a change.
             if let (Some(old), Some(new)) = (&self.overage, &snap.overage) {
                 if old.five_h != new.five_h {
-                    self.pulse_starts
-                        .insert("over:claude 5h".into(), pulse_now);
+                    self.pulse_starts.insert("over:claude 5h".into(), pulse_now);
                 }
                 if old.seven_d != new.seven_d {
-                    self.pulse_starts
-                        .insert("over:claude 7d".into(), pulse_now);
+                    self.pulse_starts.insert("over:claude 7d".into(), pulse_now);
                 }
                 if old.month != new.month {
                     self.pulse_starts.insert("over:mo".into(), pulse_now);
@@ -329,8 +327,9 @@ impl SidebarState {
                     self.pulse_starts.insert("over:total".into(), pulse_now);
                 }
             }
-            self.pulse_starts
-                .retain(|_, started| pulse_now.duration_since(*started) < usage_bars::PULSE_DURATION);
+            self.pulse_starts.retain(|_, started| {
+                pulse_now.duration_since(*started) < usage_bars::PULSE_DURATION
+            });
             self.usage_bars_cache = snap.bars;
             self.overage = snap.overage;
         }
@@ -614,9 +613,7 @@ pub(crate) fn cmd_sidebar() {
                                 focus_main_pane();
                                 continue;
                             }
-                            (KeyCode::Char('h'), m)
-                                if m.contains(KeyModifiers::ALT) =>
-                            {
+                            (KeyCode::Char('h'), m) if m.contains(KeyModifiers::ALT) => {
                                 if let Some(id) = state.selected_session_id() {
                                     toggle_hidden(&id);
                                     state.force_refresh();
@@ -696,9 +693,7 @@ pub(crate) fn cmd_sidebar() {
                         (KeyCode::Char('x'), _) => {
                             state.open_ditch_overlay();
                         }
-                        (KeyCode::Char('h'), m)
-                            if m.contains(KeyModifiers::ALT) =>
-                        {
+                        (KeyCode::Char('h'), m) if m.contains(KeyModifiers::ALT) => {
                             if let Some(id) = state.selected_session_id() {
                                 toggle_hidden(&id);
                                 state.force_refresh();
@@ -789,4 +784,3 @@ fn focus_main_pane() {
         .stderr(Stdio::null())
         .spawn();
 }
-

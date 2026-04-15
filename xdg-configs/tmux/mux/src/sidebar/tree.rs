@@ -9,7 +9,9 @@ use crate::palette::{group_glyph, hex_to_color, num_glyph};
 use super::meta::SessionMeta;
 
 pub(super) enum ItemKind {
-    Session { attention: bool },
+    Session {
+        attention: bool,
+    },
     Group,
     Branch,
     Agent {
