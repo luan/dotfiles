@@ -197,6 +197,9 @@ local function toggle_sidebar(window, pane)
 		window:perform_action(act.CloseCurrentPane({ confirm = false }), info.pane)
 	else
 		open_sidebar(window, pane)
+		-- SplitPane focuses the new sidebar; bounce focus back so cmd+shift+e
+		-- reveals the sidebar without yanking you out of your working pane.
+		pane:activate()
 	end
 end
 
