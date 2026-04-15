@@ -710,6 +710,15 @@ pub(crate) fn cmd_sidebar() {
                         {
                             state.select_by_number(c);
                         }
+                        (KeyCode::Char(c), m)
+                            if !m.intersects(
+                                KeyModifiers::CONTROL
+                                    | KeyModifiers::ALT
+                                    | KeyModifiers::SUPER,
+                            ) =>
+                        {
+                            forward_char_to_main(c);
+                        }
                         _ => {}
                     }
                 }
@@ -783,4 +792,41 @@ fn focus_main_pane() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn();
+}
+
+/// Bounce an accidental keystroke to the neighbouring pane so typing `ls` in
+/// the sidebar by mistake still lands where the user expected.
+fn forward_char_to_main(c: char) {
+    let Ok(out) = Command::new("wezterm")
+        .args(["cli", "get-pane-direction", "Right"])
+        .output()
+    else {
+        return;
+    };
+    if !out.status.success() {
+        return;
+    }
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if id.is_empty() {
+        return;
+    }
+    let _ = Command::new("wezterm")
+        .args(["cli", "activate-pane", "--pane-id", &id])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let mut buf = [0u8; 4];
+    let text = c.encode_utf8(&mut buf);
+    let _ = Command::new("wezterm")
+        .args([
+            "cli",
+            "send-text",
+            "--no-paste",
+            "--pane-id",
+            &id,
+            text,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }

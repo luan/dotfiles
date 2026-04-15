@@ -606,12 +606,16 @@ fn draw_bar(
     b: &Bar,
     pulse: Option<f32>,
     over_pulse: Option<f32>,
+    reference_ts: i64,
 ) {
     if rect.height < ROWS_PER_BAR || rect.width < 12 {
         return;
     }
     let now = now_ts();
-    let age = now - b.last_ts;
+    // Recency decay is relative to the freshest provider, so waking up after a
+    // long idle doesn't dim everything — only providers that are stale compared
+    // to the one you just used fade out.
+    let age = (reference_ts - b.last_ts).max(0);
     let mix = recency_mix(age);
     let glyph_mix = glyph_recency_mix(age);
     let remaining = (b.reset_ts - now).max(0);
@@ -752,6 +756,11 @@ pub(crate) fn draw(
         return;
     }
     let now = Instant::now();
+    let reference_ts = bars
+        .iter()
+        .map(|b| b.last_ts)
+        .max()
+        .unwrap_or_else(now_ts);
     let last_claude = bars.iter().rposition(|b| b.label.starts_with("claude"));
     let has_footer = overage
         .map(|ov| ov.month > 0.0 || ov.total > 0.0)
@@ -772,7 +781,7 @@ pub(crate) fn draw(
         let pulse = pulses.get(&b.label).and_then(|s| pulse_factor(*s, now));
         let over_key = format!("over:{}", b.label);
         let over_pulse = pulses.get(&over_key).and_then(|s| pulse_factor(*s, now));
-        draw_bar(f, row, bg, b, pulse, over_pulse);
+        draw_bar(f, row, bg, b, pulse, over_pulse, reference_ts);
         y += ROWS_PER_BAR;
         if has_footer && Some(i) == last_claude {
             if y + 1 > end_y {
