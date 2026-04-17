@@ -225,6 +225,7 @@ pub(super) struct SessionMeta {
 
 fn git_branch(dir: &str) -> String {
     Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"])
         .stderr(Stdio::null())
         .output()

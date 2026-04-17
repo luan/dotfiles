@@ -279,6 +279,7 @@ pub(crate) fn resolve_selected_dir_from_session(target: Option<&str>) -> Option<
     }
 
     let common_dir = Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(["-C", &pane_path, "rev-parse", "--git-common-dir"])
         .output()
         .ok()
@@ -295,6 +296,7 @@ pub(crate) fn resolve_selected_dir_from_session(target: Option<&str>) -> Option<
     // have a non-bare working tree, so `-C <worktree>` would report false and
     // we'd climb to the wrong parent (e.g. `~/src` for `~/src/repo.git/wt2`).
     let is_bare = Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args([
             "--git-dir",
             &common_dir,
@@ -562,6 +564,7 @@ pub(crate) fn cmd_new_worktree(args: &[String]) {
 
 fn git_str(dir: &Path, args: &[&str]) -> Option<String> {
     Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(args)
         .current_dir(dir)
         .stdout(Stdio::piped())
@@ -574,12 +577,44 @@ fn git_str(dir: &Path, args: &[&str]) -> Option<String> {
 
 fn git_ok(dir: &Path, args: &[&str]) -> bool {
     Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(args)
         .current_dir(dir)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .is_ok_and(|s| s.success())
+}
+
+// Remove a stale `.git/index.lock` left behind when a prior git process
+// (ours or someone else's) was SIGKILLed mid-write. Age gate avoids racing
+// an active operation.
+fn cleanup_stale_index_lock(dir: &str) {
+    let Some(git_dir_bytes) = git_output(Path::new(dir), &["rev-parse", "--git-dir"]) else {
+        return;
+    };
+    let git_dir = String::from_utf8_lossy(&git_dir_bytes).trim().to_string();
+    if git_dir.is_empty() {
+        return;
+    }
+    let git_dir_path = if Path::new(&git_dir).is_absolute() {
+        PathBuf::from(&git_dir)
+    } else {
+        PathBuf::from(dir).join(&git_dir)
+    };
+    let lock = git_dir_path.join("index.lock");
+    let Ok(meta) = fs::metadata(&lock) else {
+        return;
+    };
+    let Ok(modified) = meta.modified() else {
+        return;
+    };
+    let Ok(age) = modified.elapsed() else {
+        return;
+    };
+    if age > Duration::from_secs(60) {
+        let _ = fs::remove_file(&lock);
+    }
 }
 
 pub(crate) fn build_ditch_plan(session: &str) -> Option<DitchPlan> {
@@ -831,6 +866,7 @@ pub(crate) fn execute_ditch_action(plan: &DitchPlan, id: &str) -> Result<(), Str
     match id {
         "kill" => {}
         "detach" => {
+            cleanup_stale_index_lock(dir_str);
             let _ = Command::new("git")
                 .args(["-C", dir_str, "checkout", "--detach"])
                 .stdout(Stdio::null())
@@ -872,11 +908,13 @@ pub(crate) fn ditch_item(id: &str, display: &str, color: Color) -> PickerItem {
 }
 
 fn discard_changes(dir: &str) {
+    cleanup_stale_index_lock(dir);
     let _ = Command::new("git")
         .args(["-C", dir, "checkout", "--", "."])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+    cleanup_stale_index_lock(dir);
     let _ = Command::new("git")
         .args(["-C", dir, "reset", "HEAD", "--", "."])
         .stdout(Stdio::null())
@@ -1009,6 +1047,7 @@ pub(crate) struct WtEntry {
 
 fn git_output(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
     let mut child = Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(args)
         .current_dir(dir)
         .stdout(Stdio::piped())

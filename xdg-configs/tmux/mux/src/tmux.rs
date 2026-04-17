@@ -250,6 +250,7 @@ fn parse_battery(raw: &str) -> (Option<u32>, BatteryState, String) {
 
 pub(crate) fn git_toplevel(dir: &str) -> Option<String> {
     Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .args(["-C", dir, "rev-parse", "--show-toplevel"])
         .output()
         .ok()
