@@ -18,7 +18,9 @@ use ratatui::widgets::Paragraph;
 
 use crate::group::GroupMeta;
 use crate::order::compute_order;
-use crate::palette::{BASE, MANTLE, OVERLAY0, PEACH, SUBTEXT0, SURFACE0, SURFACE1, TEXT, hex_to_color};
+use crate::palette::{
+    BASE, MANTLE, OVERLAY0, PEACH, SUBTEXT0, SURFACE0, SURFACE1, TEXT, hex_to_color,
+};
 use crate::sidebar::meta::{AgentBadge, SessionBadges, query_session_badges};
 use crate::status::compute_all_colors;
 use crate::tmux::tmux;
@@ -333,10 +335,7 @@ fn draw(
     badges: &HashMap<String, SessionBadges>,
 ) {
     let area = f.area();
-    f.render_widget(
-        Paragraph::new("").style(Style::default().bg(MANTLE)),
-        area,
-    );
+    f.render_widget(Paragraph::new("").style(Style::default().bg(MANTLE)), area);
 
     if area.height < 5 {
         return;
@@ -464,7 +463,10 @@ fn build_chip(
             Span::styled(" ".to_string(), Style::default().bg(chip_bg)),
             Span::styled(
                 clip(name, name_max),
-                Style::default().fg(name_fg).bg(chip_bg).add_modifier(name_mod),
+                Style::default()
+                    .fg(name_fg)
+                    .bg(chip_bg)
+                    .add_modifier(name_mod),
             ),
         ],
         chip_bg,
@@ -560,9 +562,7 @@ fn draw_hint(f: &mut ratatui::Frame, area: Rect, s: &State) {
     let total = s.order.len();
     let cur = s.index.rem_euclid(total as isize) as usize + 1;
     let txt = format!(" {}/{}    ⇥ cycle    ⇧⇥ back    ⎋ release ", cur, total);
-    let pad = (area.width as usize)
-        .saturating_sub(txt.chars().count())
-        / 2;
+    let pad = (area.width as usize).saturating_sub(txt.chars().count()) / 2;
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" ".repeat(pad), Style::default().bg(MANTLE)),

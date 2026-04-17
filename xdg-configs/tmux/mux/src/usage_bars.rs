@@ -756,11 +756,7 @@ pub(crate) fn draw(
         return;
     }
     let now = Instant::now();
-    let reference_ts = bars
-        .iter()
-        .map(|b| b.last_ts)
-        .max()
-        .unwrap_or_else(now_ts);
+    let reference_ts = bars.iter().map(|b| b.last_ts).max().unwrap_or_else(now_ts);
     let last_claude = bars.iter().rposition(|b| b.label.starts_with("claude"));
     let has_footer = overage
         .map(|ov| ov.month > 0.0 || ov.total > 0.0)

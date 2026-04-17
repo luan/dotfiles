@@ -717,9 +717,7 @@ pub(crate) fn cmd_sidebar() {
                         }
                         (KeyCode::Char(c), m)
                             if !m.intersects(
-                                KeyModifiers::CONTROL
-                                    | KeyModifiers::ALT
-                                    | KeyModifiers::SUPER,
+                                KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER,
                             ) =>
                         {
                             forward_char_to_main(c);
@@ -823,14 +821,7 @@ fn forward_char_to_main(c: char) {
     let mut buf = [0u8; 4];
     let text = c.encode_utf8(&mut buf);
     let _ = Command::new("wezterm")
-        .args([
-            "cli",
-            "send-text",
-            "--no-paste",
-            "--pane-id",
-            &id,
-            text,
-        ])
+        .args(["cli", "send-text", "--no-paste", "--pane-id", &id, text])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
