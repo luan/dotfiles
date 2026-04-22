@@ -1,0 +1,1 @@
+open -W --stdout "$(tty)" --stderr "$(tty)" "$@"

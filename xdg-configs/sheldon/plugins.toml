@@ -1,0 +1,12 @@
+shell = "zsh"
+
+# Order matters: fzf-tab must wrap completion widgets BEFORE autosuggestions
+# wraps them; syntax-highlighting must load LAST so it sees final ZLE state.
+[plugins.fzf-tab]
+github = "Aloxaf/fzf-tab"
+
+[plugins.zsh-autosuggestions]
+github = "zsh-users/zsh-autosuggestions"
+
+[plugins.zsh-syntax-highlighting]
+github = "zsh-users/zsh-syntax-highlighting"
