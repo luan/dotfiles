@@ -70,6 +70,30 @@ brew:
 sheldon:
     sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
 
+# Set Homebrew zsh as login shell (registers in /etc/shells if missing; needs sudo for that step)
+chsh-zsh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ZSH_BIN="/opt/homebrew/bin/zsh"
+
+    if [ ! -x "$ZSH_BIN" ]; then
+        echo "✗ $ZSH_BIN not found — run 'just brew' first" >&2
+        exit 1
+    fi
+
+    if ! grep -qxF "$ZSH_BIN" /etc/shells; then
+        echo "→ Registering $ZSH_BIN in /etc/shells (sudo)"
+        echo "$ZSH_BIN" | sudo tee -a /etc/shells >/dev/null
+    fi
+
+    current=$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')
+    if [ "$current" = "$ZSH_BIN" ]; then
+        echo "✓ Login shell already $ZSH_BIN"
+    else
+        echo "→ Changing login shell: $current → $ZSH_BIN"
+        chsh -s "$ZSH_BIN"
+    fi
+
 # Apply macOS system defaults
 macos-defaults:
     source "{{ dotfiles_dir }}/macos-defaults.sh"
