@@ -23,7 +23,7 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 ## Architecture
 
 **Stow layout** — two stow directories, each targeting a different destination:
-- `xdg-configs/` → stowed to `~/.config/` (fish, tmux, lazygit, ghostty, zed)
+- `xdg-configs/` → stowed to `~/.config/` (zsh, sheldon, tmux, lazygit, ghostty, wezterm, zed, zellij; fish deprecated)
 - `bin/` → stowed to `~/bin/` (custom scripts: ralph, bd-loop, loop-format.py)
 
 **External repos** — independent git repos cloned separately, symlinked into dotfiles root for convenience. These are **not submodules** — they have their own git history and remotes. Commits to these repos must be made from within them.
@@ -53,7 +53,7 @@ When changing `mux` (xdg-configs/tmux/mux/), run `just mux` to rebuild, copy, an
 
 - Branch prefix: `luan/`
 - Lazygit default branch prefix: `luan/`
-- Fish shell is the primary shell (zsh/bash present but fish is configured)
+- Zsh is the primary shell (ZDOTDIR points at `xdg-configs/zsh/`). Fish retained in repo pending deletion — see `xdg-configs/fish/DEPRECATION.md`
 - **Terminal emulator: WezTerm** (`xdg-configs/wezterm/wezterm.lua`). Ghostty config exists but is **not** in active use — edits to terminal-level keybindings (Cmd+*, CSI relays, sidebar wiring) go in the WezTerm config, not Ghostty.
 - Catppuccin Mocha is the theme across tools (tmux, zed, lazygit)
 - `.stow-local-ignore` skips `.DS_Store` files

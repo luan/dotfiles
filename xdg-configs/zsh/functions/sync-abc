@@ -1,0 +1,1 @@
+just run --user-data-dir=~/scratch/sync/sync-a && just run --user-data-dir=~/scratch/sync/sync-b && just run --user-data-dir=~/scratch/sync/sync-c

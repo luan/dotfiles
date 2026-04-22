@@ -11,6 +11,7 @@ link:
     stow -R bin -t "{{ env("HOME") }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
     ln -sfn "$HOME/.claude" "{{ dotfiles_dir }}/dot-claude"
+    ln -sfn "{{ dotfiles_dir }}/xdg-configs/zsh/.zshenv" "{{ env("HOME") }}/.zshenv"
 
 # Unlink stow configs + remove convenience symlinks
 unlink:
@@ -18,6 +19,7 @@ unlink:
     stow -D bin -t "{{ env("HOME") }}/bin"
     rm -f "{{ dotfiles_dir }}/nvim"
     rm -f "{{ dotfiles_dir }}/dot-claude"
+    rm -f "{{ env("HOME") }}/.zshenv"
 
 # Clone external repos if not already present
 repos:
@@ -63,6 +65,10 @@ pull:
 # Install Homebrew packages from Brewfile
 brew:
     brew bundle --file="{{ dotfiles_dir }}/Brewfile"
+
+# Resolve and lock sheldon plugins (called during setup)
+sheldon:
+    sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
 
 # Apply macOS system defaults
 macos-defaults:
@@ -159,5 +165,5 @@ mux:
     codesign --force --sign - "{{ config_dir }}/tmux/scripts/mux"
     @echo "✓ mux built"
 
-# Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, mux
-setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude mux
+# Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, mux, sheldon
+setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude mux sheldon

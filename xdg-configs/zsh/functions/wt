@@ -1,0 +1,4 @@
+# worktrunk shell integration — lazily replaces this function on first call.
+unfunction wt
+eval "$(command wt config shell init zsh)"
+wt "$@"

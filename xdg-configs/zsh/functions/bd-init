@@ -1,0 +1,51 @@
+# Initialize beads with dolt backend in stealth mode.
+
+emulate -L zsh
+setopt local_options err_return no_unset
+
+local -a opt_prefix opt_help
+zparseopts -D -E -F - \
+  p:=opt_prefix -prefix:=opt_prefix \
+  h=opt_help -help=opt_help || return 1
+
+if (( ${#opt_help} )); then
+  print -- "bd-init - Initialize beads (dolt, stealth, no hooks)"
+  print -- ""
+  print -- "USAGE:"
+  print -- "  bd-init [-p prefix]"
+  print -- ""
+  print -- "OPTIONS:"
+  print -- "  -p, --prefix <name>   Issue prefix (default: directory name)"
+  print -- ""
+  print -- "Runs bd init --backend dolt --stealth --skip-hooks and"
+  print -- "applies the issue_prefix workaround for dolt backend."
+  return 0
+fi
+
+if ! command -v bd >/dev/null; then
+  print -u2 -- "Error: bd is not installed"
+  return 1
+fi
+
+if ! git rev-parse --git-dir &>/dev/null; then
+  print -u2 -- "Error: not a git repository"
+  return 1
+fi
+
+if [[ -d .beads ]]; then
+  print -u2 -- "Error: .beads already exists"
+  return 1
+fi
+
+local prefix
+if (( ${#opt_prefix} )); then
+  prefix="${opt_prefix[2]}"
+else
+  prefix="$(basename "$PWD")"
+fi
+
+echo n | bd init --backend dolt --stealth --prefix "$prefix" --skip-hooks || return 1
+bd config set issue_prefix "$prefix" || return 1
+
+print -- ""
+print -- "Ready. Try: bd create \"My first issue\" -p 1 --description \"...\""

@@ -1,0 +1,3 @@
+# echo mirrors the fish version — prints the exact command before launch for copy-paste debugging.
+echo open -W --stdout "$(tty)" --stderr "$(tty)" ./build/dia-debug/bin/DiaDev.app --args --enable-remote-telemetry "$@"
+open -W --stdout "$(tty)" --stderr "$(tty)" ./build/dia-debug/bin/DiaDev.app --args --enable-remote-telemetry "$@"
