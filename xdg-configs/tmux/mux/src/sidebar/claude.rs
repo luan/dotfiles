@@ -314,21 +314,20 @@ fn parse_context(text: &str) -> Option<AgentCtx> {
     None
 }
 
-/// Parse "258K window" from codex statusline — just the window size, no usage.
-/// The "used" value in codex isn't context usage (that's a separate progress
-/// bar we can't parse), so we only report the total window.
+/// Parse Codex's statusline, e.g.
+/// `Context 82% left · 258K window`, into used context + window.
 fn parse_codex_ctx(text: &str) -> Option<AgentCtx> {
-    for line in text.lines() {
+    for line in text.lines().rev() {
         let trimmed = line.trim();
-        if !trimmed.contains("window") {
-            continue;
-        }
-        let parts: Vec<&str> = trimmed.split_whitespace().collect();
-        let window_idx = parts.iter().position(|&w| w == "window");
-        if let Some(wi) = window_idx
-            && wi > 0
-        {
-            let window = parse_k_number(parts[wi - 1])?;
+        if let Some(window) = parse_codex_window(trimmed) {
+            if let Some(left_pct) = parse_codex_context_left(trimmed) {
+                let used_pct = 100_u8.saturating_sub(left_pct);
+                let used = window * (used_pct as f64 / 100.0);
+                return Some(AgentCtx {
+                    pct: used_pct,
+                    tokens: fmt_tokens(used, window),
+                });
+            }
             return Some(AgentCtx {
                 pct: 0,
                 tokens: fmt_compact(window),
@@ -336,6 +335,40 @@ fn parse_codex_ctx(text: &str) -> Option<AgentCtx> {
         }
     }
     None
+}
+
+fn parse_codex_window(line: &str) -> Option<f64> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let window_idx = parts.iter().position(|&w| w == "window")?;
+    if window_idx == 0 {
+        return None;
+    }
+    parse_k_number(parts[window_idx - 1])
+}
+
+fn parse_codex_context_left(line: &str) -> Option<u8> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    for (i, part) in parts.iter().enumerate() {
+        if !part.trim_end_matches(':').eq_ignore_ascii_case("context") {
+            continue;
+        }
+        if !parts
+            .get(i + 2)
+            .is_some_and(|p| p.eq_ignore_ascii_case("left"))
+        {
+            continue;
+        }
+        return parse_ascii_percent(parts.get(i + 1)?);
+    }
+    None
+}
+
+fn parse_ascii_percent(s: &str) -> Option<u8> {
+    let pct = s
+        .trim_matches(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .parse::<f64>()
+        .ok()?;
+    Some(pct.round().clamp(0.0, 100.0) as u8)
 }
 
 /// Parse "20.1K (2%)" into AgentCtx — scans from the bottom of the pane.
@@ -588,5 +621,33 @@ some middle output
                 spinner as u32,
             );
         }
+    }
+
+    #[test]
+    fn codex_ctx_parses_context_left_and_window() {
+        let text = "\
+› Implement {feature}
+
+  ~/dotfiles · gpt-5.5 xhigh · main · Context 82% left · 258K window · 5h 59% · weekly 0%";
+        let ctx = parse_codex_ctx(text).unwrap();
+        assert_eq!(ctx.pct, 18);
+        assert_eq!(ctx.tokens, "46.4k/258k");
+    }
+
+    #[test]
+    fn codex_ctx_uses_bottommost_statusline() {
+        let text = "\
+~/old · Context 20% left · 258K window
+~/new · Context 82% left · 258K window";
+        let ctx = parse_codex_ctx(text).unwrap();
+        assert_eq!(ctx.pct, 18);
+        assert_eq!(ctx.tokens, "46.4k/258k");
+    }
+
+    #[test]
+    fn codex_ctx_falls_back_to_window_only() {
+        let ctx = parse_codex_ctx("~/dotfiles · gpt-5.5 xhigh · 258K window").unwrap();
+        assert_eq!(ctx.pct, 0);
+        assert_eq!(ctx.tokens, "258k");
     }
 }

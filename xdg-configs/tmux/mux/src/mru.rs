@@ -28,6 +28,9 @@ use crate::tmux::tmux;
 const TIMEOUT_MS: u128 = 1500;
 const OVERLAY_GRACE_MS: u128 = 400;
 const HEARTBEAT_FRESH_MS: u128 = 300;
+/// Show the overlay only once the user has lingered this long on a single
+/// press. Quick tap-and-release stays silent — it's just a session toggle.
+const OVERLAY_REVEAL_MS: u64 = 300;
 /// Wait this long after the latest press before trusting Ctrl-is-up as a
 /// "release" signal — otherwise the brief gap between keydowns while the user
 /// is still tapping Tab (with Ctrl held) could be misread as a release.
@@ -223,8 +226,10 @@ pub(crate) fn cmd_mru_cycle(args: &[String]) {
 
     // Cache-hit path skips the tmux round-trip entirely — rapid Ctrl+Tab
     // presses only pay for switch-client. Cache-miss batches current+list.
-    let (order, mut index) = match load() {
-        Some(s) if now.saturating_sub(s.ts_ms) <= TIMEOUT_MS => (s.order, s.index),
+    let prior = load();
+    let was_cycling = matches!(&prior, Some(s) if now.saturating_sub(s.ts_ms) <= TIMEOUT_MS);
+    let (order, mut index) = match prior {
+        Some(s) if was_cycling => (s.order, s.index),
         _ => {
             let (current, order) = fetch_current_and_order();
             if current.is_empty() {
@@ -246,13 +251,72 @@ pub(crate) fn cmd_mru_cycle(args: &[String]) {
         index,
         order,
     });
-    if !overlay_alive() {
-        // Touch the heartbeat now so a second Ctrl+Tab fired while tmux is
-        // still starting the popup (~100-300ms) sees it alive and skips a
-        // duplicate spawn. The overlay takes over the heartbeat once it runs.
+
+    if overlay_alive() {
+        return;
+    }
+    if was_cycling {
+        // Second press while still holding Ctrl — reveal the overlay now.
         let _ = fs::write(heartbeat_path(), now.to_string());
         spawn_overlay(&target);
+    } else {
+        // First press — defer; a quick tap-and-release shouldn't flash UI.
+        let _ = Command::new(self_exe().unwrap_or_else(|| "mux".into()))
+            .args(["mru-reveal", &now.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
     }
+}
+
+/// Waits up to OVERLAY_REVEAL_MS while Ctrl stays down, then spawns the
+/// overlay. Polls in short ticks so we can invalidate the snapshot the
+/// instant Ctrl comes up — otherwise a quick tap-retap would cycle from a
+/// stale MRU order even though the user "released" between presses.
+pub(crate) fn cmd_mru_reveal(args: &[String]) {
+    let Some(cycle_ts) = args.first().and_then(|s| s.parse::<u128>().ok()) else {
+        return;
+    };
+    let tick = Duration::from_millis(20);
+    let start = now_ms();
+    loop {
+        // Another cycle press would bump state.ts_ms or spawn the overlay;
+        // either way the defer has nothing left to do.
+        let Some(s) = load() else {
+            return;
+        };
+        if s.ts_ms != cycle_ts {
+            return;
+        }
+        if !ctrl_down() {
+            // User released — kill the snapshot so the next press re-scores
+            // MRU from tmux, giving the session we just landed on its
+            // rightful slot as most-recent.
+            let _ = fs::remove_file(state_path());
+            return;
+        }
+        if now_ms().saturating_sub(start) >= OVERLAY_REVEAL_MS as u128 {
+            break;
+        }
+        thread::sleep(tick);
+    }
+
+    if overlay_alive() {
+        return;
+    }
+    let Some(s) = load() else {
+        return;
+    };
+    let target = s
+        .order
+        .get(s.index.rem_euclid(s.order.len() as isize) as usize)
+        .cloned()
+        .unwrap_or_default();
+    if target.is_empty() {
+        return;
+    }
+    let _ = fs::write(heartbeat_path(), now_ms().to_string());
+    spawn_overlay(&target);
 }
 
 // ── Overlay ────────────────────────────────────────────────────────────────
@@ -312,6 +376,9 @@ pub(crate) fn cmd_mru_overlay() {
     let _ = execute!(term.backend_mut(), LeaveAlternateScreen);
     let _ = terminal::disable_raw_mode();
     let _ = fs::remove_file(heartbeat_path());
+    // Drop the cycle snapshot so the next Ctrl+Tab re-scores MRU — by then
+    // tmux has promoted the session we just landed on to most-recent.
+    let _ = fs::remove_file(state_path());
 }
 
 fn build_color_map(sessions: &[String]) -> HashMap<String, Color> {

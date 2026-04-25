@@ -56,10 +56,11 @@ fn cmd_order(args: &[String]) {
 
 fn cmd_update_with_args(args: &[String]) {
     let st = query_state();
-    let current = args
+    let initiating = args
         .first()
         .filter(|s| !s.is_empty())
-        .map_or(&st.current, |s| s);
+        .cloned()
+        .unwrap_or_else(|| st.current.clone());
     let client_width: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(200);
 
     let sessions = compute_order(&st.alive, false);
@@ -71,18 +72,6 @@ fn cmd_update_with_args(args: &[String]) {
             .map(|(n, col, _)| (n.clone(), col.clone()))
             .collect()
     };
-    let cur_color = pre_colors
-        .iter()
-        .find(|(n, _)| n == current)
-        .map_or("#FFFFFF", |(_, c)| c.as_str());
-
-    let bar = render_bar(&sessions, current, &meta, &st.attn, client_width);
-    let windows = query_windows(current);
-    let win_str = render_windows(&windows, cur_color);
-
-    // If the sidebar is open, hide the session list in the status bar
-    let sidebar_open = tmux_cmd(&["show-option", "-gv", "@sidebar_open"]) == "1";
-    let left = if sidebar_open { "" } else { bar.left.as_str() };
 
     // When the terminal is fullscreened on a notched MacBook display, paint
     // the status-bar background solid black so the notch area reads as an
@@ -93,31 +82,26 @@ fn cmd_update_with_args(args: &[String]) {
     let two_row = notched && tmux_cmd(&["show-option", "-gv", "@two_row_status"]) != "0";
     let status_style = if notched { "bg=#000000" } else { "bg=default" };
 
-    // Build status-format[0]: normally sessions=left, windows=centre,
-    // system-info=right. When notched, the centre is behind the display cutout
-    // so windows shift to the left segment (after sessions).
-    let status_fmt = if notched {
-        format!(
-            "#[bg=#000000]#[align=left]{left}{win}#[align=right]#{{@sysinfo}}",
-            left = left,
-            win = win_str,
-        )
+    // status-format[0] is a server-global option — baking session-specific
+    // content into it leaks the initiating session's windows onto every
+    // other client. Instead, keep the template global and read the
+    // per-session rendered strings from session-local options so each
+    // client draws its own bar. Sidebar-open is evaluated live so toggling
+    // it propagates without needing a re-render per session.
+    let content_fmt: &str = if notched {
+        "#[bg=#000000]#[align=left]#{?@sidebar_open,,#{@mux_left}}#{@mux_win}#[align=right]#{@sysinfo}"
     } else {
-        format!(
-            "#[align=left]{left}#[align=centre]{win}#[align=right]#{{@sysinfo}}",
-            left = left,
-            win = win_str,
-        )
+        "#[align=left]#{?@sidebar_open,,#{@mux_left}}#[align=centre]#{@mux_win}#[align=right]#{@sysinfo}"
     };
 
     let mut tmux_args: Vec<String> = vec![
         "set-option".into(),
         "-t".into(),
-        current.clone(),
+        initiating.clone(),
         "-u".into(),
         "@attention".into(),
     ];
-    for (name, color) in &bar.colors {
+    for (name, color) in &pre_colors {
         tmux_args.extend([
             ";".into(),
             "set-option".into(),
@@ -127,14 +111,36 @@ fn cmd_update_with_args(args: &[String]) {
             color.clone(),
         ]);
     }
-    tmux_args.extend([
-        ";".into(),
-        "set".into(),
-        "-t".into(),
-        current.clone(),
-        "@session_color".into(),
-        cur_color.into(),
-    ]);
+
+    // Render per-session bar and windows so each session sees itself
+    // highlighted in the session list and its own window list.
+    for session in &sessions {
+        let cur_color = pre_colors
+            .iter()
+            .find(|(n, _)| n == session)
+            .map_or("#FFFFFF", |(_, c)| c.as_str());
+        let bar = render_bar(&sessions, session, &meta, &st.attn, client_width);
+        let windows = query_windows(session);
+        let win_str = render_windows(&windows, cur_color);
+
+        tmux_args.extend([
+            ";".into(),
+            "set-option".into(),
+            "-t".into(),
+            session.clone(),
+            "@mux_left".into(),
+            bar.left,
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set-option".into(),
+            "-t".into(),
+            session.clone(),
+            "@mux_win".into(),
+            win_str,
+        ]);
+    }
+
     tmux_args.extend([
         ";".into(),
         "set".into(),
@@ -164,7 +170,7 @@ fn cmd_update_with_args(args: &[String]) {
             "set".into(),
             "-g".into(),
             "status-format[1]".into(),
-            status_fmt,
+            content_fmt.into(),
         ]);
     } else {
         tmux_args.extend([
@@ -185,7 +191,7 @@ fn cmd_update_with_args(args: &[String]) {
             "set".into(),
             "-g".into(),
             "status-format[0]".into(),
-            status_fmt,
+            content_fmt.into(),
         ]);
     }
     tmux_args.extend([";".into(), "refresh-client".into(), "-S".into()]);
@@ -194,7 +200,7 @@ fn cmd_update_with_args(args: &[String]) {
     tmux_cmd(&refs);
 
     let _ = Command::new("grrr")
-        .args(["clear", &format!("claude-{current}")])
+        .args(["clear", &format!("claude-{initiating}")])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn();
@@ -696,6 +702,7 @@ fn main() {
         "click" => cmd_click(&rest),
         "sidebar" => sidebar::cmd_sidebar(),
         "mru-cycle" => mru::cmd_mru_cycle(&rest),
+        "mru-reveal" => mru::cmd_mru_reveal(&rest),
         "mru-overlay" => mru::cmd_mru_overlay(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
