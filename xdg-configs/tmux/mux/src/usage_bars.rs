@@ -432,6 +432,44 @@ fn dual_window_bars(
     ]
 }
 
+fn latest_dual_window_bars(
+    samples: &[DualSample],
+    label_prefix: &str,
+    glyph: &str,
+    provider: Color,
+) -> Vec<Bar> {
+    let Some(last) = samples.last() else {
+        return Vec::new();
+    };
+    let p_change = last_change_ts(samples.iter().map(|s| (s.ts, s.p_pct, s.p_reset)));
+    let s_change = last_change_ts(samples.iter().map(|s| (s.ts, s.s_pct, s.s_reset)));
+    let last_ts = p_change.max(s_change);
+    vec![
+        Bar {
+            label: format!("{label_prefix} 5h"),
+            display: format!("{glyph} 5h"),
+            pct: last.p_pct,
+            window_secs: FIVE_HOURS,
+            reset_ts: last.p_reset,
+            last_ts,
+            provider,
+            overage: None,
+            hit_rate: None,
+        },
+        Bar {
+            label: format!("{label_prefix} 7d"),
+            display: format!("{glyph} 7d"),
+            pct: last.s_pct,
+            window_secs: SEVEN_DAYS,
+            reset_ts: last.s_reset,
+            last_ts,
+            provider,
+            overage: None,
+            hit_rate: None,
+        },
+    ]
+}
+
 fn copilot_bars() -> Vec<Bar> {
     let samples = load_simple(&copilot_log());
     let Some(last) = samples.last() else {
@@ -487,7 +525,7 @@ pub(crate) fn collect() -> Snapshot {
     }
     bars.extend(claude);
     bars.extend(copilot_bars());
-    bars.extend(dual_window_bars(
+    bars.extend(latest_dual_window_bars(
         &codex_samples,
         "codex",
         CODEX_GLYPH,
@@ -862,4 +900,69 @@ fn draw_claude_overage_footer(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(bg)),
         rect,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latest_dual_window_bars_ignore_reset_jitter() {
+        let samples = vec![
+            DualSample {
+                ts: 100,
+                p_pct: 7.0,
+                p_reset: 1005,
+                s_pct: 95.0,
+                s_reset: 2001,
+            },
+            DualSample {
+                ts: 200,
+                p_pct: 40.0,
+                p_reset: 1004,
+                s_pct: 100.0,
+                s_reset: 2000,
+            },
+        ];
+
+        let bars = latest_dual_window_bars(&samples, "codex", CODEX_GLYPH, CODEX_COLOR);
+
+        assert_eq!(bars.len(), 2);
+        assert_eq!(bars[0].pct, 40.0);
+        assert_eq!(bars[0].reset_ts, 1004);
+        assert_eq!(bars[1].pct, 100.0);
+        assert_eq!(bars[1].reset_ts, 2000);
+    }
+
+    #[test]
+    fn dual_window_bars_keep_claude_peak_within_window() {
+        let samples = vec![
+            DualSample {
+                ts: 100,
+                p_pct: 20.0,
+                p_reset: 1000,
+                s_pct: 10.0,
+                s_reset: 2000,
+            },
+            DualSample {
+                ts: 200,
+                p_pct: 30.0,
+                p_reset: 1000,
+                s_pct: 15.0,
+                s_reset: 2000,
+            },
+            DualSample {
+                ts: 300,
+                p_pct: 25.0,
+                p_reset: 1000,
+                s_pct: 12.0,
+                s_reset: 2000,
+            },
+        ];
+
+        let bars = dual_window_bars(&samples, "claude", CLAUDE_GLYPH, CLAUDE_COLOR);
+
+        assert_eq!(bars[0].pct, 30.0);
+        assert_eq!(bars[1].pct, 15.0);
+    }
 }
