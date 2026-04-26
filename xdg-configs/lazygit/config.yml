@@ -1,7 +1,7 @@
 gui:
   nerdFontsVersion: "3"
   filterMode: fuzzy
-  sidePanelWidth: 0.35
+  sidePanelWidth: 0.33
   timeFormat: "2006-01-02"
   shortTimeFormat: 15:04
   authorColors:
@@ -11,27 +11,37 @@ gui:
     "^luan/pu": "#33FCcc"
     "^luan/el": "#a33CFc"
     "^luan/[^pe][^rul]": "#FF9CFF"
-  # spinner:
-  #   # The frames of the spinner animation.
-  #   frames:
-  #     - 
-  #     - 
-  #     - 
-  #     - 
-  #     - 
-  #     - 
-  #
-  #   # The "speed" of the spinner in milliseconds.
-  #   rate: 50
+  border: single
+  spinner:
+    # The frames of the spinner animation.
+    frames:
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+
+    # The "speed" of the spinner in milliseconds.
+    rate: 50
 git:
   overrideGpg: true
   branchPrefix: "luan/"
+  log:
+    order: default
   pagers:
     - colorArg: always
       pager: delta -s --dark --paging=never --24-bit-color=never
 keybinding:
   universal:
     openFile: O
+    focusMainView: ";"
+    jumpToBlock:
+      - "0"
+      - ":"
+      - "<c-b>"
+      - "<c-l>"
+      - "<c-s>"
 customCommands:
   - key: R
     description: "Open commit(s) in review.nvim"
