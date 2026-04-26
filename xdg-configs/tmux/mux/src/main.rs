@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::env;
 use std::process::{Command, Stdio};
 
-use serde::Deserialize;
 use tracing::{debug, error};
 
 mod chooser;
@@ -32,14 +31,26 @@ use tmux::{
     query_state, query_system_info, query_system_info_with, query_windows, tmux as tmux_cmd,
 };
 
-#[derive(Deserialize)]
-struct WeztermPane {
-    window_id: u64,
-    tab_id: u64,
-    pane_id: u64,
-    title: String,
-    is_active: bool,
-    left_col: usize,
+/// Probe macOS for whether a terminal window is fullscreened on a notched
+/// display, then write the result to `@notched`. The Swift helper
+/// (`~/bin/notch-state`, built by `just mux`) requires no special permissions
+/// and works for both Ghostty and WezTerm — Ghostty has no scripting hooks of
+/// its own, so this gives both terminals the same notch behaviour. Silently
+/// no-ops if the helper is missing or fails, leaving `@notched` untouched so
+/// any prior value (e.g. WezTerm's Lua-set value) still applies.
+fn probe_and_sync_notched() {
+    let bin = tmux::home().join("bin/notch-state");
+    let Ok(output) = Command::new(&bin).output() else {
+        return;
+    };
+    if !output.status.success() {
+        return;
+    }
+    let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if val != "0" && val != "1" {
+        return;
+    }
+    tmux_cmd(&["set-option", "-g", "@notched", &val]);
 }
 
 fn cmd_order(args: &[String]) {
@@ -55,13 +66,22 @@ fn cmd_order(args: &[String]) {
 }
 
 fn cmd_update_with_args(args: &[String]) {
+    probe_and_sync_notched();
     let st = query_state();
     let initiating = args
         .first()
         .filter(|s| !s.is_empty())
         .cloned()
         .unwrap_or_else(|| st.current.clone());
-    let client_width: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(200);
+    let client_width: usize = args
+        .get(1)
+        .and_then(|s| s.parse().ok())
+        .or_else(|| {
+            tmux_cmd(&["display-message", "-p", "#{client_width}"])
+                .parse()
+                .ok()
+        })
+        .unwrap_or(200);
 
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
@@ -81,6 +101,17 @@ fn cmd_update_with_args(args: &[String]) {
     let notched = tmux_cmd(&["show-option", "-gv", "@notched"]) == "1";
     let two_row = notched && tmux_cmd(&["show-option", "-gv", "@two_row_status"]) != "0";
     let status_style = if notched { "bg=#000000" } else { "bg=default" };
+    let sidebar_width: usize = tmux_cmd(&["show-option", "-gqv", "@sidebar_width"])
+        .parse()
+        .unwrap_or(45);
+    let notch_width: usize = tmux_cmd(&["show-option", "-gqv", "@notch_width"])
+        .parse()
+        .unwrap_or(48);
+    // The status bar spans the full tmux client, while the tmux-native sidebar
+    // consumes the left pane plus one separator column. When the sidebar is
+    // open, centre the window list over the remaining main-pane region instead
+    // of over the whole client/notch.
+    let sidebar_offset = sidebar_width.saturating_add(1).min(client_width);
 
     // status-format[0] is a server-global option — baking session-specific
     // content into it leaks the initiating session's windows onto every
@@ -89,9 +120,9 @@ fn cmd_update_with_args(args: &[String]) {
     // client draws its own bar. Sidebar-open is evaluated live so toggling
     // it propagates without needing a re-render per session.
     let content_fmt: &str = if notched {
-        "#[bg=#000000]#[align=left]#{?@sidebar_open,,#{@mux_left}}#{@mux_win}#[align=right]#{@sysinfo}"
+        "#[bg=#000000]#{?@sidebar_open,#[align=left]#{@mux_win_main},#[align=left]#{@mux_left}#{@mux_win}}#[align=right]#{@sysinfo}"
     } else {
-        "#[align=left]#{?@sidebar_open,,#{@mux_left}}#[align=centre]#{@mux_win}#[align=right]#{@sysinfo}"
+        "#{?@sidebar_open,#[align=left]#{@mux_win_main},#[align=left]#{@mux_left}#[align=centre]#{@mux_win}}#[align=right]#{@sysinfo}"
     };
 
     let mut tmux_args: Vec<String> = vec![
@@ -122,6 +153,16 @@ fn cmd_update_with_args(args: &[String]) {
         let bar = render_bar(&sessions, session, &meta, &st.attn, client_width);
         let windows = query_windows(session);
         let win_str = render_windows(&windows, cur_color);
+        let win_main_str = if notched {
+            status::render_windows_left_of_notch(
+                &win_str,
+                client_width,
+                sidebar_offset,
+                notch_width,
+            )
+        } else {
+            status::render_windows_centered_in_main(&win_str, client_width, sidebar_offset)
+        };
 
         tmux_args.extend([
             ";".into(),
@@ -138,6 +179,14 @@ fn cmd_update_with_args(args: &[String]) {
             session.clone(),
             "@mux_win".into(),
             win_str,
+        ]);
+        tmux_args.extend([
+            ";".into(),
+            "set-option".into(),
+            "-t".into(),
+            session.clone(),
+            "@mux_win_main".into(),
+            win_main_str,
         ]);
     }
 
@@ -515,58 +564,7 @@ fn dispatch_sidebar_picker(action: &str) -> bool {
         _ => return false,
     };
 
-    let Ok(output) = Command::new("wezterm")
-        .args(["cli", "list", "--format", "json"])
-        .stderr(Stdio::null())
-        .output()
-    else {
-        return false;
-    };
-
-    if !output.status.success() {
-        return false;
-    }
-
-    let Ok(panes) = serde_json::from_slice::<Vec<WeztermPane>>(&output.stdout) else {
-        return false;
-    };
-
-    let Some(active) = panes.iter().find(|pane| pane.is_active) else {
-        return false;
-    };
-
-    let Some(sidebar) = panes
-        .iter()
-        .filter(|pane| {
-            pane.window_id == active.window_id
-                && pane.tab_id == active.tab_id
-                && pane.pane_id != active.pane_id
-                && pane.left_col < active.left_col
-                && pane.title == "mux"
-        })
-        .min_by_key(|pane| pane.left_col)
-    else {
-        return false;
-    };
-
-    let pane_id = sidebar.pane_id.to_string();
-
-    if !Command::new("wezterm")
-        .args(["cli", "activate-pane", "--pane-id", &pane_id])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-    {
-        return false;
-    }
-
-    Command::new("wezterm")
-        .args(["cli", "send-text", "--no-paste", "--pane-id", &pane_id, key])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+    sidebar::send_key_to_current_sidebar(key)
 }
 
 fn open_picker_popup(action: &str) {
@@ -700,7 +698,8 @@ fn main() {
         "picker" => cmd_picker(&rest),
         "update" => cmd_update_with_args(&rest),
         "click" => cmd_click(&rest),
-        "sidebar" => sidebar::cmd_sidebar(),
+        "sidebar" if rest.is_empty() => sidebar::cmd_sidebar(),
+        "sidebar" => sidebar::cmd_sidebar_control(&rest),
         "mru-cycle" => mru::cmd_mru_cycle(&rest),
         "mru-reveal" => mru::cmd_mru_reveal(&rest),
         "mru-overlay" => mru::cmd_mru_overlay(),

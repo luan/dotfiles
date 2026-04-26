@@ -185,8 +185,13 @@ dot-claude:
 # Build mux binary (Rust)
 mux:
     cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
-    cp "{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux" "{{ config_dir }}/tmux/scripts/mux"
-    codesign --force --sign - "{{ config_dir }}/tmux/scripts/mux"
+    mkdir -p "{{ env("HOME") }}/bin" "{{ config_dir }}/tmux/scripts"
+    cp "{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux" "{{ env("HOME") }}/bin/mux"
+    codesign --force --sign - "{{ env("HOME") }}/bin/mux"
+    rm -f "{{ config_dir }}/tmux/scripts/mux"
+    ln -s "{{ env("HOME") }}/bin/mux" "{{ config_dir }}/tmux/scripts/mux"
+    swiftc -O -o "{{ env("HOME") }}/bin/notch-state" "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/notch-state.swift"
+    codesign --force --sign - "{{ env("HOME") }}/bin/notch-state"
     @echo "✓ mux built"
 
 # Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, mux, sheldon

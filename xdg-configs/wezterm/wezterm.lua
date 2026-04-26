@@ -121,8 +121,7 @@ local function update_notched(window)
 			.. "tmux set-option -g @notched "
 			.. val
 			.. " >/dev/null 2>&1; "
-			.. mux_bin
-			.. " update '' "
+			.. "mux update '' "
 			.. "\"$(tmux display -p '#{client_width}' 2>/dev/null)\" "
 			.. ">/dev/null 2>&1",
 	})
@@ -141,71 +140,12 @@ wezterm.on("window-config-reloaded", function(window)
 	update_notched(window)
 end)
 
-local function sidebar_enabled()
-	local f = io.popen("PATH=" .. PATH .. " tmux show-option -gv @sidebar_enabled 2>/dev/null")
-	if not f then
-		return true
-	end
-	local out = f:read("*a") or ""
-	f:close()
-	return out:gsub("%s+$", "") ~= "0"
-end
-
-local function find_sidebar(tab)
-	for _, info in ipairs(tab:panes_with_info()) do
-		if info.pane:get_user_vars().is_sidebar == "true" then
-			return info
-		end
-	end
-	return nil
-end
-
-local function open_sidebar(window, pane)
-	if not sidebar_enabled() then
-		return
-	end
-	window:perform_action(
-		act.SplitPane({
-			direction = "Left",
-			size = { Cells = 45 },
-			command = {
-				args = { mux_bin, "sidebar" },
-				set_environment_variables = {
-					PATH = PATH,
-				},
-			},
-		}),
-		pane
-	)
-end
-
 local function toggle_sidebar(window, pane)
-	local info = find_sidebar(pane:tab())
-	if info then
-		os.execute(
-			"PATH="
-				.. PATH
-				.. " "
-				.. "tmux set-option -gu @sidebar_open 2>/dev/null; "
-				.. "PATH="
-				.. PATH
-				.. " "
-				.. mux_bin
-				.. " update >/dev/null 2>&1 &"
-		)
-		info.pane:activate()
-		window:perform_action(act.CloseCurrentPane({ confirm = false }), info.pane)
-	else
-		open_sidebar(window, pane)
-		-- SplitPane focuses the new sidebar; bounce focus back so cmd+shift+e
-		-- reveals the sidebar without yanking you out of your working pane.
-		pane:activate()
-	end
+	window:perform_action(act.SendString(csi("74~")), pane)
 end
 
--- Ctrl+Tab works everywhere — the sidebar is a non-tmux pane, so CSI relays
--- that target tmux user-keys never reach it. Spawning mux directly bypasses
--- tmux entirely; mux itself uses `tmux switch-client` to move sessions.
+-- Ctrl+Tab works even when focus is in a tmux-native sidebar pane by spawning
+-- mux directly; mux itself uses `tmux switch-client` to move sessions.
 local function mru_cycle(back)
 	local arg = back and " mru-cycle --back" or " mru-cycle"
 	return wezterm.action_callback(function(_window, _pane)
@@ -214,27 +154,11 @@ local function mru_cycle(back)
 end
 
 local function cmd_p_handler(window, pane)
-	local info = find_sidebar(pane:tab())
-	if info then
-		info.pane:activate()
-		window:perform_action(act.SendString("/"), info.pane)
-	else
-		window:perform_action(act.SendString(csi("63~")), pane)
-	end
+	window:perform_action(act.SendString(csi("63~")), pane)
 end
 
 local function focus_sidebar(window, pane)
-	local tab = pane:tab()
-	local info = find_sidebar(tab)
-	if not info then
-		open_sidebar(window, pane)
-		return
-	end
-	if info.is_active then
-		window:perform_action(act.SendString("\x0f"), pane)
-	else
-		info.pane:activate()
-	end
+	window:perform_action(act.SendString(csi("75~")), pane)
 end
 
 config.keys = {
@@ -271,7 +195,7 @@ config.keys = {
 	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(toggle_sidebar) },
 	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_sidebar) },
 
-	-- Cmd+P: sidebar-aware session chooser (conditional — not table-driven)
+	-- Cmd+P: sidebar-aware session chooser (mux dispatches to an open sidebar)
 	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
 
 	-- Browser-style MRU session cycling (works from any pane)

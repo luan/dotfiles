@@ -9,22 +9,27 @@ shell-integration-features = ssh-terminfo
 shell-integration-features = ssh-env
 
 font-family = ""
-# font-family = "IosevkaTerm Nerd Font"
-# font-family = "JetBrainsMono Nerd Font Mono"
-# font-family = "CaskaydiaMono Nerd Font Mono"
+font-family = "Maple Mono"
+font-family = "Font Awesome 7 Brands"
 font-family = "Maple Mono NF"
 
-# font-style = "Light"
-# font-style-italic = "Light Italic"
-# font-style-bold = "SemiBold"
-# font-style-bold-italic = "SemiBold Italic"
-font-size = 13
+font-size = 11.75
 
 adjust-cell-height = 45%
 adjust-font-baseline = 3
 adjust-underline-position = 25%
 adjust-underline-thickness = 1
 
+window-decoration = "none"
+window-padding-balance = true
+window-padding-color = "extend-always"
+
+fullscreen = "non-native"
+macos-non-native-fullscreen = true
+macos-window-shadow = false
+macos-titlebar-style = "hidden"
+
+copy-on-select = true
 mouse-hide-while-typing = true
 
 background-opacity = 1
@@ -48,125 +53,47 @@ keybind = super+9=text:\x009
 keybind = super+shift+f=text:\x00F
 # session prev (super+shift+p)
 keybind = super+shift+p=csi:65~
+keybind = super+shift+[=csi:65~
 # session move up/down (super+shift+</> via CSI relay)
 keybind = super+shift+comma=csi:66~
 keybind = super+shift+period=csi:67~
 # session next (super+shift+n)
 keybind = super+shift+n=csi:64~
+keybind = super+shift+]=csi:64~
 # Ditch session safely (super+alt+x -> prefix+X for tmux)
 keybind = super+alt+x=text:\x00X
 # vim stuff
-keybind = super+j=csi:90;1
-keybind = super+s=csi:90;2
-keybind = super+shift+c=csi:90;3
-keybind = super+alt+shift+c=csi:90;4
-keybind = super+o=csi:90;5
-keybind = super+.=csi:90;6
-keybind = super+e=csi:90;7
-keybind = super+b=csi:90;8
-keybind = super+i=csi:90;9
-keybind = super+l=csi:90;10
-keybind = super+shift+i=csi:90;11
-keybind = super+k=csi:90;12
-keybind = super+alt+v=csi:90;13
+keybind = super+j=csi:90;1~
+keybind = super+s=csi:90;2~
+keybind = super+shift+c=csi:90;3~
+keybind = super+alt+shift+c=csi:90;4~
+# tmux-native sidebar focus (super+o)
+keybind = super+y=csi:71~
+keybind = super+o=csi:75~
+keybind = super+.=csi:90;6~
+keybind = super+e=csi:90;7~
+keybind = super+b=csi:90;8~
+keybind = super+i=csi:90;9~
+keybind = super+l=csi:90;10~
+keybind = super+shift+i=csi:90;11~
+keybind = super+k=csi:90;12~
+keybind = super+alt+v=csi:90;13~
 # multicursor
-keybind = super+d=csi:90;14
-keybind = super+shift+d=csi:90;15
-keybind = super+u=csi:90;16
-keybind = super+shift+u=csi:90;17
-keybind = super+alt+k=csi:90;18
-keybind = super+alt+j=csi:90;19
-keybind = super+alt+shift+k=csi:90;20
-keybind = super+alt+shift+j=csi:90;21
+keybind = super+d=csi:90;14~
+keybind = super+shift+d=csi:90;15~
+keybind = super+u=csi:90;16~
+keybind = super+shift+u=csi:90;17~
+keybind = super+alt+k=csi:90;18~
+keybind = super+alt+j=csi:90;19~
+keybind = super+alt+shift+k=csi:90;20~
+keybind = super+alt+shift+j=csi:90;21~
 # session toggle relay (ctrl+tab)
 keybind = ctrl+tab=csi:60~
 # attention session relay (super+;)
 keybind = super+semicolon=csi:61~
+# tmux-native sidebar toggle (super+shift+e)
+keybind = super+shift+e=csi:74~
 # }}}
-
-# # {{{ final bindings
-#
-# # scrollback navigation
-# keybind = cmd+shift+k=jump_to_prompt:-1
-# keybind = cmd+shift+j=jump_to_prompt:+1
-#
-# keybind = alt+shift+left_bracket=write_scrollback_file:open
-#
-# keybind = cmd+physical:one=goto_tab:1
-# keybind = cmd+physical:two=goto_tab:2
-# keybind = cmd+physical:three=goto_tab:3
-# keybind = cmd+physical:four=goto_tab:4
-# keybind = cmd+physical:five=goto_tab:5
-# keybind = cmd+physical:six=goto_tab:6
-# keybind = cmd+physical:seven=goto_tab:7
-# keybind = cmd+physical:eight=goto_tab:8
-# keybind = cmd+physical:nine=last_tab
-#
-# keybind = cmd+shift+left_bracket=previous_tab
-# keybind = cmd+shift+right_bracket=next_tab
-#
-# keybind = cmd+right=text:\x05
-# keybind = cmd+left=text:\x01
-# keybind = cmd+backspace=text:\x15
-#
-# keybind = alt+right=esc:f
-# keybind = alt+left=esc:b
-#
-# keybind = shift+up=adjust_selection:up
-# keybind = shift+down=adjust_selection:down
-# keybind = shift+left=adjust_selection:left
-# keybind = shift+right=adjust_selection:right
-# keybind = shift+page_up=adjust_selection:page_up
-# keybind = shift+page_down=adjust_selection:page_down
-# keybind = shift+home=adjust_selection:home
-# keybind = shift+end=adjust_selection:end
-# # }}} final bindngs
-#
-# # {{{ tmux emulation
-# # Pane navigation (M-H/J/K/L from tmux)
-# keybind = alt+shift+h=goto_split:left
-# keybind = alt+shift+j=goto_split:down  
-# keybind = alt+shift+k=goto_split:up
-# keybind = alt+shift+l=goto_split:right
-# keybind = alt+shift+o=goto_split:next
-#
-# # Window management (M-N/P/Tab from tmux)
-# keybind = alt+shift+n=next_tab
-# keybind = alt+shift+p=previous_tab
-#
-# # Pane/Split controls (from tmux prefix-v/-)
-# keybind = ctrl+space>v=new_split:right
-# keybind = ctrl+space>s=new_split:down
-# keybind = ctrl+space>c=new_tab
-#
-# # Pane management (M-X/Z from tmux)
-# keybind = ctrl+space>x=close_surface
-# keybind = alt+shift+z=toggle_split_zoom
-#
-# # Copy mode emulation (C-M-[ from tmux)
-# keybind = ctrl+alt+left_bracket=select_all
-# keybind = ctrl+alt+right_bracket=paste_from_clipboard
-#
-# # tmux-yank plugin emulation (enhanced clipboard)
-# keybind = ctrl+space>equal=paste_from_clipboard
-#
-# # tmux-thumbs plugin emulation (hint mode for URLs/text)
-# keybind = ctrl+space>f=toggle_quick_terminal
-#
-# # tmux-fzf plugin emulation (fuzzy finding)
-# keybind = ctrl+space>ctrl+shift+f=toggle_quick_terminal
-#
-# # tmux-pain-control plugin emulation (pane resizing)
-# keybind = ctrl+shift+h=resize_split:left,5
-# keybind = ctrl+shift+j=resize_split:down,5
-# keybind = ctrl+shift+k=resize_split:up,5
-# keybind = ctrl+shift+l=resize_split:right,5
-#
-# # Additional tmux bindings
-# keybind = alt+shift+backslash=equalize_splits
-# keybind = alt+shift+c=clear_screen
-# keybind = alt+shift+r=reload_config
-# # }}} tmux emulation
 
 # new project session (super+n)
 keybind = super+n=csi:62~
@@ -193,15 +120,7 @@ keybind = super+zero=reset_font_size
 keybind = performable:super+c=copy_to_clipboard
 keybind = performable:super+v=paste_from_clipboard
 
-# Valid values:
-# 
-#   * `true`
-#   * `false` - windows won't have native decorations, i.e. titlebar and
-#      borders. On MacOS this also disables tabs and tab overview.
-window-decoration = false
+keybind = super+alt+ctrl+f=toggle_fullscreen
 
-macos-titlebar-style = "tabs"
-
-copy-on-select = false
 keybind = shift+enter=text:\n
 # vim: ft=toml fdm=marker

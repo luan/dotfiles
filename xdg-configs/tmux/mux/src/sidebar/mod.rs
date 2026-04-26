@@ -37,6 +37,9 @@ pub(super) const KEY_CTRL: &str = "\u{F0634}";
 pub(super) const KEY_OPT: &str = "\u{F0635}";
 pub(super) const KEY_SHIFT: &str = "\u{F0636}";
 pub(super) const KEY_TAB: &str = "\u{F0312}";
+const SIDEBAR_WIDTH_DEFAULT: &str = "45";
+const SIDEBAR_TOKEN: &str = "mux-sidebar-v1";
+const SIDEBAR_BORDER_COLOR: &str = "#1A1B26";
 
 pub(super) fn truncate(s: &str, max: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
@@ -435,6 +438,13 @@ impl SidebarState {
 
     fn switch_to_selected(&self) {
         if let Some(id) = self.selected_session_id() {
+            // A tmux-native sidebar lives inside a tmux window, unlike the old
+            // WezTerm-native split. When jumping from the sidebar, pre-create
+            // the same sidebar in the target session's current window so the
+            // UX stays persistent without global auto-spawn hooks.
+            if running_as_tmux_sidebar() {
+                open_tmux_sidebar_in_target(Some(&id), false);
+            }
             tmux(&["switch-client", "-t", &id]);
         }
     }
@@ -469,8 +479,452 @@ pub(crate) fn bench_query_session_meta(sessions: &[String]) {
     let _ = query_session_meta(sessions);
 }
 
+fn pane_is_sidebar_line(line: &str) -> Option<String> {
+    let mut parts = line.split('\t');
+    let pane = parts.next()?;
+    let marker = parts.next()?;
+    let token = parts.next()?;
+    let command = parts.next().unwrap_or_default();
+    (marker == "1" && token == SIDEBAR_TOKEN && command == "mux" && !pane.is_empty())
+        .then(|| pane.to_string())
+}
+
+fn running_as_tmux_sidebar() -> bool {
+    std::env::var("MUX_SIDEBAR_TMUX").ok().as_deref() == Some(SIDEBAR_TOKEN)
+}
+
+fn current_pane_id() -> String {
+    if let Ok(pane) = std::env::var("TMUX_PANE")
+        && !pane.trim().is_empty()
+    {
+        return pane;
+    }
+    tmux(&["display-message", "-p", "#{pane_id}"])
+}
+
+fn mark_current_sidebar_pane() {
+    if !running_as_tmux_sidebar() {
+        return;
+    }
+    let pane = current_pane_id();
+    if pane.is_empty() {
+        return;
+    }
+    tmux(&["set-option", "-p", "-t", &pane, "@mux_sidebar", "1"]);
+    tmux(&[
+        "set-option",
+        "-p",
+        "-t",
+        &pane,
+        "@mux_sidebar_token",
+        SIDEBAR_TOKEN,
+    ]);
+}
+
+fn unmark_current_sidebar_pane() {
+    if !running_as_tmux_sidebar() {
+        return;
+    }
+    let pane = current_pane_id();
+    if pane.is_empty() {
+        return;
+    }
+    tmux(&["set-option", "-pu", "-t", &pane, "@mux_sidebar"]);
+    tmux(&["set-option", "-pu", "-t", &pane, "@mux_sidebar_token"]);
+}
+
+fn sidebar_pane_in_target(target: Option<&str>) -> Option<String> {
+    let format = "#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}";
+    let output = if let Some(target) = target {
+        tmux(&["list-panes", "-t", target, "-F", format])
+    } else {
+        tmux(&["list-panes", "-F", format])
+    };
+
+    output.lines().find_map(pane_is_sidebar_line)
+}
+
+fn current_sidebar_pane() -> Option<String> {
+    sidebar_pane_in_target(None)
+}
+
+fn all_tmux_windows() -> Vec<String> {
+    tmux(&["list-windows", "-a", "-F", "#{window_id}"])
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn all_sidebar_panes() -> Vec<String> {
+    tmux(&[
+        "list-panes",
+        "-a",
+        "-F",
+        "#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
+    ])
+    .lines()
+    .filter_map(pane_is_sidebar_line)
+    .collect()
+}
+
+fn any_sidebar_pane() -> bool {
+    !all_sidebar_panes().is_empty()
+}
+
+fn active_pane_is_sidebar() -> bool {
+    tmux(&[
+        "display-message",
+        "-p",
+        "#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
+    ]) == format!("1\t{SIDEBAR_TOKEN}\tmux")
+}
+
+fn sidebar_enabled() -> bool {
+    tmux(&["show-option", "-gv", "@sidebar_enabled"]) != "0"
+}
+
+fn sidebar_width() -> String {
+    let width = tmux(&["show-option", "-gqv", "@sidebar_width"]);
+    if width.is_empty() {
+        SIDEBAR_WIDTH_DEFAULT.to_string()
+    } else {
+        width
+    }
+}
+
+fn resize_sidebar_pane(pane: &str) {
+    let width = sidebar_width();
+    tmux(&["resize-pane", "-t", pane, "-x", &width]);
+}
+
+fn resize_all_tmux_sidebars() {
+    for pane in all_sidebar_panes() {
+        resize_sidebar_pane(&pane);
+    }
+}
+
+fn sidebar_borderless() -> bool {
+    tmux(&["show-option", "-gqv", "@sidebar_borderless"]) != "0"
+}
+
+fn sidebar_border_color() -> String {
+    let color = tmux(&["show-option", "-gqv", "@sidebar_border_color"]);
+    if color.is_empty() {
+        SIDEBAR_BORDER_COLOR.to_string()
+    } else {
+        color
+    }
+}
+
+fn local_pane_option(pane: &str, option: &str) -> String {
+    let raw = tmux(&["show-option", "-pq", "-t", pane, option]);
+    raw.strip_prefix(option)
+        .and_then(|value| value.strip_prefix(' '))
+        .unwrap_or_default()
+        .trim_matches('"')
+        .to_string()
+}
+
+fn set_pane_option(pane: &str, option: &str, value: &str) {
+    tmux(&["set-option", "-p", "-t", pane, option, value]);
+}
+
+fn unset_pane_option(pane: &str, option: &str) {
+    tmux(&["set-option", "-pu", "-t", pane, option]);
+}
+
+fn apply_borderless_to_pane(pane: &str) {
+    if !sidebar_borderless() {
+        return;
+    }
+
+    let style = format!("fg={}", sidebar_border_color());
+    if local_pane_option(pane, "@mux_sidebar_border_touched") != "1" {
+        let prev_border = local_pane_option(pane, "pane-border-style");
+        let prev_active = local_pane_option(pane, "pane-active-border-style");
+        set_pane_option(pane, "@mux_sidebar_prev_pane_border_style", &prev_border);
+        set_pane_option(
+            pane,
+            "@mux_sidebar_prev_pane_active_border_style",
+            &prev_active,
+        );
+        set_pane_option(pane, "@mux_sidebar_border_touched", "1");
+    }
+
+    set_pane_option(pane, "pane-border-style", &style);
+    set_pane_option(pane, "pane-active-border-style", &style);
+}
+
+fn restore_sidebar_borders() {
+    let output = tmux(&[
+        "list-panes",
+        "-a",
+        "-F",
+        "#{pane_id}\t#{@mux_sidebar_border_touched}",
+    ]);
+
+    for pane in output.lines().filter_map(|line| {
+        let (pane, touched) = line.split_once('\t')?;
+        (touched == "1" && !pane.is_empty()).then_some(pane.to_string())
+    }) {
+        let prev_border = local_pane_option(&pane, "@mux_sidebar_prev_pane_border_style");
+        let prev_active = local_pane_option(&pane, "@mux_sidebar_prev_pane_active_border_style");
+
+        if prev_border.is_empty() {
+            unset_pane_option(&pane, "pane-border-style");
+        } else {
+            set_pane_option(&pane, "pane-border-style", &prev_border);
+        }
+
+        if prev_active.is_empty() {
+            unset_pane_option(&pane, "pane-active-border-style");
+        } else {
+            set_pane_option(&pane, "pane-active-border-style", &prev_active);
+        }
+
+        unset_pane_option(&pane, "@mux_sidebar_prev_pane_border_style");
+        unset_pane_option(&pane, "@mux_sidebar_prev_pane_active_border_style");
+        unset_pane_option(&pane, "@mux_sidebar_border_touched");
+    }
+}
+
+fn set_sidebar_open(open: bool) {
+    if open {
+        tmux(&["set-option", "-g", "@sidebar_open", "1"]);
+    } else if !any_sidebar_pane() {
+        tmux(&["set-option", "-gu", "@sidebar_open"]);
+    }
+    refresh_status_bar();
+}
+
+fn open_tmux_sidebar_in_target(target: Option<&str>, select: bool) -> Option<String> {
+    if !sidebar_enabled() {
+        return None;
+    }
+
+    if let Some(pane) = sidebar_pane_in_target(target) {
+        resize_sidebar_pane(&pane);
+        apply_borderless_to_pane(&pane);
+        if select {
+            tmux(&["select-pane", "-t", &pane]);
+        }
+        set_sidebar_open(true);
+        return Some(pane);
+    }
+
+    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
+    let command = format!(
+        "exec env MUX_SIDEBAR_TMUX={} {} sidebar",
+        SIDEBAR_TOKEN,
+        exe.display()
+    );
+    let width = sidebar_width();
+    let pane = if let Some(target) = target {
+        tmux(&[
+            "split-window",
+            "-t",
+            target,
+            "-h",
+            "-b",
+            "-f",
+            "-l",
+            &width,
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            &command,
+        ])
+    } else {
+        tmux(&[
+            "split-window",
+            "-h",
+            "-b",
+            "-f",
+            "-l",
+            &width,
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            &command,
+        ])
+    };
+
+    if pane.is_empty() {
+        return None;
+    }
+
+    tmux(&["set-option", "-p", "-t", &pane, "@mux_sidebar", "1"]);
+    tmux(&[
+        "set-option",
+        "-p",
+        "-t",
+        &pane,
+        "@mux_sidebar_token",
+        SIDEBAR_TOKEN,
+    ]);
+    resize_sidebar_pane(&pane);
+    apply_borderless_to_pane(&pane);
+    set_sidebar_open(true);
+    if select {
+        tmux(&["select-pane", "-t", &pane]);
+    }
+    Some(pane)
+}
+
+fn open_tmux_sidebar(select: bool) -> Option<String> {
+    open_tmux_sidebar_in_target(None, select)
+}
+
+fn open_tmux_sidebar_everywhere() {
+    if !sidebar_enabled() {
+        return;
+    }
+
+    let current_window = tmux(&["display-message", "-p", "#{window_id}"]);
+    let mut current_pane = None;
+
+    for window in all_tmux_windows() {
+        let pane = open_tmux_sidebar_in_target(Some(&window), false);
+        if window == current_window {
+            current_pane = pane;
+        }
+    }
+
+    prune_orphan_sidebar_windows();
+    resize_all_tmux_sidebars();
+
+    set_sidebar_open(any_sidebar_pane());
+
+    if active_pane_is_sidebar() {
+        return;
+    }
+
+    // Keep focus in the user's current content pane after a global reveal.
+    if let Some(pane) = current_pane {
+        let active = tmux(&["list-panes", "-F", "#{pane_id}\t#{pane_active}"])
+            .lines()
+            .find_map(|line| {
+                let (pane_id, active) = line.split_once('\t')?;
+                (active == "1" && pane_id != pane).then(|| pane_id.to_string())
+            });
+        if let Some(active) = active {
+            tmux(&["select-pane", "-t", &active]);
+        }
+    }
+}
+
+fn close_all_tmux_sidebars() {
+    for pane in all_sidebar_panes() {
+        tmux(&["kill-pane", "-t", &pane]);
+    }
+    restore_sidebar_borders();
+    set_sidebar_open(false);
+}
+
+fn prune_orphan_sidebar_windows() {
+    let output = tmux(&[
+        "list-panes",
+        "-a",
+        "-F",
+        "#{window_id}\t#{pane_id}\t#{pane_left}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
+    ]);
+
+    let mut windows: std::collections::HashMap<String, (Vec<(u16, String)>, usize)> =
+        std::collections::HashMap::new();
+
+    for line in output.lines() {
+        let mut parts = line.split('\t');
+        let Some(window_id) = parts.next() else {
+            continue;
+        };
+        let Some(pane_id) = parts.next() else {
+            continue;
+        };
+        let pane_left: u16 = parts
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(u16::MAX);
+        if window_id.is_empty() || pane_id.is_empty() {
+            continue;
+        }
+        let marker = parts.next().unwrap_or_default();
+        let token = parts.next().unwrap_or_default();
+        let command = parts.next().unwrap_or_default();
+        let is_sidebar = marker == "1" && token == SIDEBAR_TOKEN && command == "mux";
+
+        let entry = windows.entry(window_id.to_string()).or_default();
+        if is_sidebar {
+            entry.0.push((pane_left, pane_id.to_string()));
+        } else {
+            entry.1 += 1;
+        }
+    }
+
+    for (window_id, (mut sidebars, content)) in windows {
+        if !sidebars.is_empty() && content == 0 {
+            tmux(&["kill-window", "-t", &window_id]);
+            continue;
+        }
+
+        // If multiple global-open jobs race (for example new-session hooks),
+        // keep the leftmost marked sidebar and kill the duplicates. Only panes
+        // passing the full marker+token+command check above are eligible.
+        if sidebars.len() > 1 {
+            sidebars.sort_by_key(|(left, _)| *left);
+            for (_, pane) in sidebars.into_iter().skip(1) {
+                tmux(&["kill-pane", "-t", &pane]);
+            }
+        }
+    }
+}
+
+fn focus_tmux_sidebar() {
+    if active_pane_is_sidebar() {
+        tmux(&["select-pane", "-R"]);
+    } else if let Some(pane) = current_sidebar_pane() {
+        tmux(&["select-pane", "-t", &pane]);
+    } else {
+        open_tmux_sidebar(true);
+    }
+}
+
+pub(crate) fn send_key_to_current_sidebar(key: &str) -> bool {
+    let Some(pane) = current_sidebar_pane() else {
+        return false;
+    };
+    tmux(&["select-pane", "-t", &pane]);
+    tmux(&["send-keys", "-t", &pane, "-l", key]);
+    true
+}
+
+pub(crate) fn cmd_sidebar_control(args: &[String]) {
+    match args.first().map(String::as_str) {
+        Some("toggle") => {
+            if any_sidebar_pane() {
+                close_all_tmux_sidebars();
+            } else {
+                open_tmux_sidebar_everywhere();
+            }
+        }
+        Some("open") => {
+            open_tmux_sidebar_everywhere();
+        }
+        Some("focus") => focus_tmux_sidebar(),
+        Some("close") => close_all_tmux_sidebars(),
+        Some("prune-orphans") => prune_orphan_sidebar_windows(),
+        Some("resize") => resize_all_tmux_sidebars(),
+        _ => {}
+    }
+}
+
 pub(crate) fn cmd_sidebar() {
     crate::usage::start_all();
+
+    mark_current_sidebar_pane();
 
     // Set WezTerm user var for toggle detection
     // "dHJ1ZQ==" is base64("true")
@@ -745,9 +1199,16 @@ pub(crate) fn cmd_sidebar() {
         io::stdout().flush().ok();
     }
 
-    // Restore status bar
-    tmux(&["set-option", "-gu", "@sidebar_open"]);
-    refresh_status_bar();
+    // Restore status bar. For tmux-native sidebars, unmark this pane before
+    // checking whether any other marked sidebars remain; otherwise our own
+    // soon-to-exit pane would keep @sidebar_open stuck on.
+    let tmux_native_sidebar = running_as_tmux_sidebar();
+    unmark_current_sidebar_pane();
+    if tmux_native_sidebar {
+        close_all_tmux_sidebars();
+        return;
+    }
+    set_sidebar_open(false);
 }
 
 fn refresh_status_bar() {
@@ -790,6 +1251,11 @@ fn toggle_hidden(session: &str) {
 }
 
 fn focus_main_pane() {
+    if running_as_tmux_sidebar() {
+        tmux(&["select-pane", "-R"]);
+        return;
+    }
+
     let _ = Command::new("wezterm")
         .args(["cli", "activate-pane-direction", "Right"])
         .stdout(Stdio::null())
@@ -800,6 +1266,14 @@ fn focus_main_pane() {
 /// Bounce an accidental keystroke to the neighbouring pane so typing `ls` in
 /// the sidebar by mistake still lands where the user expected.
 fn forward_char_to_main(c: char) {
+    if running_as_tmux_sidebar() {
+        tmux(&["select-pane", "-R"]);
+        let mut buf = [0u8; 4];
+        let text = c.encode_utf8(&mut buf);
+        tmux(&["send-keys", "-l", text]);
+        return;
+    }
+
     let Ok(out) = Command::new("wezterm")
         .args(["cli", "get-pane-direction", "Right"])
         .output()

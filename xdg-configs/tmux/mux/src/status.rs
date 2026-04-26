@@ -138,6 +138,70 @@ pub(crate) fn render_windows(windows: &[WindowInfo], cur_color: &str) -> String 
     out
 }
 
+pub(crate) fn render_windows_centered_in_main(
+    rendered_windows: &str,
+    client_width: usize,
+    sidebar_offset: usize,
+) -> String {
+    if rendered_windows.is_empty() {
+        return String::new();
+    }
+
+    let main_width = client_width.saturating_sub(sidebar_offset);
+    if main_width == 0 {
+        return rendered_windows.to_string();
+    }
+
+    let win_width = tmux_visible_width(rendered_windows);
+    let pad = sidebar_offset + main_width.saturating_sub(win_width) / 2;
+    format!("{}{}", " ".repeat(pad), rendered_windows)
+}
+
+pub(crate) fn render_windows_left_of_notch(
+    rendered_windows: &str,
+    client_width: usize,
+    sidebar_offset: usize,
+    notch_width: usize,
+) -> String {
+    if rendered_windows.is_empty() {
+        return String::new();
+    }
+
+    let win_width = tmux_visible_width(rendered_windows);
+    let notch_left = client_width.saturating_sub(notch_width) / 2;
+    let safe_end = notch_left.saturating_sub(2);
+
+    let pad = if safe_end <= sidebar_offset || win_width >= safe_end.saturating_sub(sidebar_offset)
+    {
+        sidebar_offset
+    } else {
+        safe_end - win_width
+    };
+
+    format!("{}{}", " ".repeat(pad), rendered_windows)
+}
+
+fn tmux_visible_width(s: &str) -> usize {
+    let mut width = 0;
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '#' && chars.peek() == Some(&'[') {
+            chars.next();
+            for inner in chars.by_ref() {
+                if inner == ']' {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        width += 1;
+    }
+
+    width
+}
+
 // ── Sessions ──────────────────────────────────────────────────
 
 pub(crate) fn compute_all_colors(
