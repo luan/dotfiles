@@ -347,16 +347,13 @@ pub(crate) fn cmd_mru_overlay() {
     loop {
         let _ = fs::write(heartbeat_path(), now_ms().to_string());
 
-        let st = load();
         let now = now_ms();
-        let stale = match &st {
-            Some(s) => now.saturating_sub(s.ts_ms) > TIMEOUT_MS + OVERLAY_GRACE_MS,
-            None => true,
+        let Some(s) = load() else {
+            break;
         };
-        if stale {
+        if now.saturating_sub(s.ts_ms) > TIMEOUT_MS + OVERLAY_GRACE_MS {
             break;
         }
-        let s = st.unwrap();
         // Close the instant Ctrl is released — unless we're inside the grace
         // window right after the latest press, where the user is very likely
         // still mid-chord.

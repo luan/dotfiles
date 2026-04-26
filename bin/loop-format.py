@@ -380,7 +380,7 @@ RESET = "\033[0m"
 def get_width():
     try:
         return os.get_terminal_size().columns
-    except:
+    except OSError:
         return 80
 
 
@@ -692,7 +692,7 @@ def show_diff(file_path, patches, is_sidechain=False):
             for line in out.strip().split("\n"):
                 print(indent_text(f"  {line}", is_sidechain))
             draw_status()
-    except:
+    except (OSError, subprocess.SubprocessError):
         pass
 
 

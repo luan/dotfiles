@@ -237,7 +237,7 @@ pub(in crate::sidebar) fn render_item(
                     " Waiting…",
                     Style::default().fg(ASK_COLOR).bg(row_bg),
                 ));
-            } else if gerund.is_some() {
+            } else if let Some(gerund_str) = gerund.as_deref() {
                 // ── Active: glyph brightness pulse + percolating gerund ──
                 let perc_step = (now_ms / PERC_MS) as usize;
                 let brightness = triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
@@ -267,7 +267,7 @@ pub(in crate::sidebar) fn render_item(
                         let idx = (now_ms / 8000) as usize % OPENCODE_VERBS.len();
                         OPENCODE_VERBS[idx]
                     }
-                    _ => gerund.as_ref().unwrap(),
+                    _ => gerund_str,
                 };
 
                 let chars: Vec<char> = word.chars().collect();
