@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -212,9 +213,14 @@ pub(crate) fn worktree_name_parts(selected_dir: &Path, branch: Option<&str>) -> 
 }
 
 pub(crate) fn create_session_at_dir(session_name: &str, dir: &Path) {
+    create_session_with(session_name, dir, true);
+}
+
+fn create_session_with(session_name: &str, dir: &Path, switch: bool) {
     let exact = format!("={session_name}");
+    let select_target = format!("={session_name}:ai");
     let dir_str = dir.to_str().unwrap_or(".");
-    tmux(&[
+    let mut args: Vec<&str> = vec![
         "new-session",
         "-d",
         "-s",
@@ -242,12 +248,12 @@ pub(crate) fn create_session_at_dir(session_name: &str, dir: &Path) {
         ";",
         "select-window",
         "-t",
-        &format!("={session_name}:ai"),
-        ";",
-        "switch-client",
-        "-t",
-        &exact,
-    ]);
+        &select_target,
+    ];
+    if switch {
+        args.extend_from_slice(&[";", "switch-client", "-t", &exact]);
+    }
+    tmux(&args);
 }
 
 pub(crate) fn resolve_selected_dir_from_session(target: Option<&str>) -> Option<PathBuf> {
@@ -397,6 +403,67 @@ pub(crate) fn rename_session(old_name: &str, new_name: &str) -> Result<(), Strin
     store.rename(old_name, new_name);
     store.save();
     Ok(())
+}
+
+/// Non-interactive session creator: `mux new [path]`. Creates a session named
+/// after the directory (using `default_session_name`), with the same `ai`/`vi`/`sh`
+/// window layout as the Cmd+N picker. Switches to it if invoked inside tmux,
+/// otherwise execs `tmux attach` so a bare shell can use this as its tmux entry
+/// point.
+pub(crate) fn cmd_new(args: &[String]) {
+    let path_arg = args.first().map_or(".", String::as_str);
+
+    let raw = if path_arg == "." || path_arg.is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else if path_arg == "~" {
+        home()
+    } else if let Some(rest) = path_arg.strip_prefix("~/") {
+        home().join(rest)
+    } else {
+        PathBuf::from(path_arg)
+    };
+
+    let dir = match fs::canonicalize(&raw) {
+        Ok(d) if d.is_dir() => d,
+        _ => {
+            eprintln!("mux new: '{}' is not a directory", raw.display());
+            std::process::exit(1);
+        }
+    };
+
+    let mut name = default_session_name(&dir, &dir);
+    if name.is_empty() {
+        name = repo_display_name(&dir);
+    }
+    if name.is_empty() {
+        name = "default".to_string();
+    }
+
+    touch_lru(dir.to_str().unwrap_or(""));
+
+    let exact = format!("={name}");
+    let in_tmux = std::env::var("TMUX").is_ok();
+
+    let exists = Command::new("tmux")
+        .args(["has-session", "-t", &exact])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+
+    if !exists {
+        // Skip switch-client when not in tmux: there's no client yet, and
+        // `switch-client` would log a spurious error before we attach.
+        create_session_with(&name, &dir, in_tmux);
+    } else if in_tmux {
+        tmux(&["switch-client", "-t", &exact]);
+    }
+
+    if !in_tmux {
+        let err = Command::new("tmux").args(["attach", "-t", &exact]).exec();
+        eprintln!("mux new: failed to exec tmux attach: {err}");
+        std::process::exit(1);
+    }
 }
 
 pub(crate) fn cmd_new_session() {

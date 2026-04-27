@@ -687,6 +687,7 @@ fn main() {
         "chooser" => chooser::cmd_chooser(),
         "project-list" => project::cmd_project_list(&rest),
         "toggle-favorite" => project::cmd_toggle_favorite(&rest),
+        "new" => project::cmd_new(&rest),
         "new-session" => project::cmd_new_session(),
         "new-worktree" => project::cmd_new_worktree(&rest),
         "ditch" => project::cmd_ditch(&rest),
