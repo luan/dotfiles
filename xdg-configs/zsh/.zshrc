@@ -48,3 +48,6 @@ done
 unset f
 
 command -v sheldon >/dev/null && eval "$(sheldon source)"
+
+# opencode
+export PATH=/Users/luan/.opencode/bin:$PATH
