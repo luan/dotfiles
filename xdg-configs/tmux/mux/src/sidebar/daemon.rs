@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
 use crate::order::compute_order;
+use crate::process::spawn_reaped;
 use crate::tmux::{home, tmux};
 use crate::usage_bars;
 
@@ -345,12 +346,13 @@ pub(super) fn ensure_started() {
     }
 
     let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
-    let _ = Command::new(exe)
+    let mut command = Command::new(exe);
+    command
         .arg("sidebar-daemon")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+        .stderr(Stdio::null());
+    let _ = spawn_reaped(command);
 }
 
 pub(crate) fn cmd_sidebar_daemon() {
