@@ -15,6 +15,7 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::prelude::*;
 
 use crate::order::compute_order;
+use crate::process::spawn_reaped;
 use crate::tmux::tmux;
 use tracing::debug;
 
@@ -1572,11 +1573,12 @@ fn focus_main_pane() {
         return;
     }
 
-    let _ = Command::new("wezterm")
+    let mut command = Command::new("wezterm");
+    command
         .args(["cli", "activate-pane-direction", "Right"])
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+        .stderr(Stdio::null());
+    let _ = spawn_reaped(command);
 }
 
 /// Bounce an accidental keystroke to the neighbouring pane so typing `ls` in
