@@ -1,18 +1,20 @@
 # Zsh interactive init — history, completion, keybinds, functions, conf.d, plugins.
 
-# HISTFILE lives outside $ZDOTDIR because $ZDOTDIR is a stow symlink into
+typeset -g ZSH_CONFIG_HOME="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"
+
+# HISTFILE lives outside the repo-managed config dir because it is a stow symlink into
 # the public dotfiles repo — writing history there would stage it on `git add`.
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=50000
 SAVEHIST=50000
 setopt SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE HIST_REDUCE_BLANKS
 
-# .zcompdump also lives outside $ZDOTDIR for the same reason as HISTFILE.
+# .zcompdump also lives outside the repo-managed config dir for the same reason as HISTFILE.
 typeset -g _zcompdump="$HOME/.cache/zsh/.zcompdump"
 [[ -d ${_zcompdump:h} ]] || mkdir -p "${_zcompdump:h}"
 
 # Completion functions need to be on fpath before compinit runs.
-fpath=("$ZDOTDIR/functions" $fpath)
+fpath=("$ZSH_CONFIG_HOME/functions" $fpath)
 if [[ -d $HOME/.rustup/toolchains ]]; then
   for site_functions in "$HOME/.rustup/toolchains"/*/share/zsh/site-functions; do
     [[ -d $site_functions ]] && fpath=("$site_functions" $fpath)
@@ -29,20 +31,28 @@ if [[ -d $HOME/.rustup/toolchains ]]; then
   compdef _cargo cargo
 fi
 
-# rustup ships its zsh completion via `rustup completions zsh` instead of a
-# file on disk, so define it directly.
+# rustup ships its zsh completion via `rustup completions zsh`; cache the
+# generated file instead of spawning rustup on every shell startup.
 if command -v rustup >/dev/null; then
-  eval "$(rustup completions zsh)"
-  compdef _rustup rustup
+  _rustup_completion="${_zcompdump:h}/_rustup"
+  _rustup_bin="${commands[rustup]}"
+  if [[ ! -s $_rustup_completion || $_rustup_completion -ot $_rustup_bin ]]; then
+    rustup completions zsh >| "$_rustup_completion" 2>/dev/null
+  fi
+  if [[ -s $_rustup_completion ]]; then
+    source "$_rustup_completion"
+    compdef _rustup rustup
+  fi
+  unset _rustup_completion _rustup_bin
 fi
 
 bindkey -e
 
 autoload -Uz bd-init dia lau sync-ab sync-abc wt
 
-# conf.d files load in numeric order: 10=aliases, 20=tools, 30=languages,
-# 40=bcny, 90=secrets (last so everything else is set up first).
-for f in "$ZDOTDIR"/conf.d/*.zsh; do
+# conf.d files load in numeric order. Machine-local customizations are handled
+# by ~/.zshrc after this repo-managed config returns.
+for f in "$ZSH_CONFIG_HOME"/conf.d/*.zsh; do
   source "$f"
 done
 unset f
@@ -50,6 +60,3 @@ unset f
 command -v sheldon >/dev/null && eval "$(sheldon source)"
 
 export PATH=$HOME/.opencode/bin:$PATH
-
-# bun completions
-[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"

@@ -15,8 +15,10 @@ bin/.claude/settings.local.json
 nvim
 dot-claude
 xdg-configs/fish/conf.d/bcny.fish
+xdg-configs/zsh/conf.d/40-bcny.zsh
 xdg-configs/tmux/session-order.json
 xdg-configs/tmux/.project-lru
 indowp
 /.claude/scheduled_tasks.lock
 /xdg-configs/zsh/.zcompdump
+/xdg-configs/zsh/.zsh_history

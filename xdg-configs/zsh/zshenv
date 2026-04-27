@@ -1,10 +1,14 @@
 # Zsh environment — sourced for every shell (interactive, login, scripts).
 # Keep this idempotent and fast; heavy work belongs in .zshrc.
+# Do not set ZDOTDIR here: ~/.zshrc is the local entrypoint and sources the
+# repo-managed ~/.config/zsh/zshrc explicitly.
 
-export ZDOTDIR="$HOME/.config/zsh"
 export XDG_CONFIG_HOME="$HOME/.config"
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+export HOMEBREW_PREFIX="/opt/homebrew"
+export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
+export HOMEBREW_REPOSITORY="/opt/homebrew/Homebrew"
+export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
 
 export EDITOR=nvim
 export GIT_EDITOR=nvim
@@ -17,4 +21,4 @@ export VCPKG_ROOT="$HOME/vcpkg"
 export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
 
 typeset -U path
-path=("$HOME/bin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)
+path=("/opt/homebrew/bin" "/opt/homebrew/sbin" "$HOME/bin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)

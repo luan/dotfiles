@@ -11,7 +11,8 @@ link:
     stow -R bin -t "{{ env("HOME") }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
     ln -sfn "$HOME/.claude" "{{ dotfiles_dir }}/dot-claude"
-    ln -sfn "{{ dotfiles_dir }}/xdg-configs/zsh/.zshenv" "{{ env("HOME") }}/.zshenv"
+    if [ ! -e "{{ env("HOME") }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ env("HOME") }}/.zshenv"; fi
+    if [ ! -e "{{ env("HOME") }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ env("HOME") }}/.zshrc"; fi
 
 # Unlink stow configs + remove convenience symlinks
 unlink:
@@ -19,7 +20,6 @@ unlink:
     stow -D bin -t "{{ env("HOME") }}/bin"
     rm -f "{{ dotfiles_dir }}/nvim"
     rm -f "{{ dotfiles_dir }}/dot-claude"
-    rm -f "{{ env("HOME") }}/.zshenv"
 
 # Clone external repos if not already present
 repos:
