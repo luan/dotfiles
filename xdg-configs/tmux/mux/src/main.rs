@@ -9,7 +9,6 @@ mod color;
 mod filter;
 mod group;
 mod logging;
-mod mru;
 mod order;
 mod palette;
 mod picker;
@@ -700,9 +699,6 @@ fn main() {
         "click" => cmd_click(&rest),
         "sidebar" if rest.is_empty() => sidebar::cmd_sidebar(),
         "sidebar" => sidebar::cmd_sidebar_control(&rest),
-        "mru-cycle" => mru::cmd_mru_cycle(&rest),
-        "mru-reveal" => mru::cmd_mru_reveal(&rest),
-        "mru-overlay" => mru::cmd_mru_overlay(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
         "log" => logging::cmd_log(&rest),

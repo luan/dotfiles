@@ -69,7 +69,6 @@ config.disable_default_key_bindings = true
 
 -- Shared paths
 local PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-local mux_bin = os.getenv("HOME") .. "/.config/tmux/scripts/mux"
 
 -- Helpers
 local tmux_prefix = "\x00" -- Ctrl+Space
@@ -144,12 +143,12 @@ local function toggle_sidebar(window, pane)
 	window:perform_action(act.SendString(csi("74~")), pane)
 end
 
--- Ctrl+Tab works even when focus is in a tmux-native sidebar pane by spawning
--- mux directly; mux itself uses `tmux switch-client` to move sessions.
-local function mru_cycle(back)
-	local arg = back and " mru-cycle --back" or " mru-cycle"
+
+-- Ctrl+Tab toggles the previous tmux session even when focus is in a
+-- tmux-native sidebar pane by spawning tmux directly.
+local function toggle_last_session()
 	return wezterm.action_callback(function(_window, _pane)
-		os.execute("PATH=" .. PATH .. " " .. mux_bin .. arg .. " >/dev/null 2>&1 &")
+		os.execute("PATH=" .. PATH .. " tmux switch-client -l >/dev/null 2>&1 &")
 	end)
 end
 
@@ -198,9 +197,9 @@ config.keys = {
 	-- Cmd+P: sidebar-aware session chooser (mux dispatches to an open sidebar)
 	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
 
-	-- Browser-style MRU session cycling (works from any pane)
-	{ key = "Tab", mods = "CTRL", action = mru_cycle(false) },
-	{ key = "Tab", mods = "CTRL|SHIFT", action = mru_cycle(true) },
+	-- Toggle the previous tmux session (works from any pane)
+	{ key = "Tab", mods = "CTRL", action = toggle_last_session() },
+	{ key = "Tab", mods = "CTRL|SHIFT", action = toggle_last_session() },
 }
 
 -- {{{ tmux relay: prefix + key

@@ -338,9 +338,10 @@ impl SidebarState {
         }
 
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
-        // External session switches (e.g. MRU-cycle via Ctrl+Tab) should drag
-        // the cursor along, not just the "current session" highlight — staying
-        // put would leave the selection orphaned on a stale session.
+        // External session switches (e.g. Ctrl+Tab toggling the last session)
+        // should drag the cursor along, not just the "current session"
+        // highlight — staying put would leave the selection orphaned on a
+        // stale session.
         let current_changed = cur != self.current;
 
         self.items = build_items(&sessions, &cur, &self.meta);
@@ -500,6 +501,11 @@ fn current_pane_id() -> String {
         return pane;
     }
     tmux(&["display-message", "-p", "#{pane_id}"])
+}
+
+fn current_window_id() -> Option<String> {
+    let window = tmux(&["display-message", "-p", "#{window_id}"]);
+    (!window.trim().is_empty()).then_some(window)
 }
 
 fn mark_current_sidebar_pane() {
@@ -884,7 +890,12 @@ fn prune_orphan_sidebar_windows() {
 
 fn focus_tmux_sidebar() {
     if active_pane_is_sidebar() {
+        tmux(&["switch-client", "-l"]);
         tmux(&["select-pane", "-R"]);
+    } else if let Some(window) = current_window_id()
+        && let Some(pane) = sidebar_pane_in_target(Some(&window))
+    {
+        tmux(&["select-pane", "-t", &pane]);
     } else if let Some(pane) = current_sidebar_pane() {
         tmux(&["select-pane", "-t", &pane]);
     } else {

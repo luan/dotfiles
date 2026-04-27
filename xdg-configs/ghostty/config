@@ -87,8 +87,9 @@ keybind = super+alt+k=csi:90;18~
 keybind = super+alt+j=csi:90;19~
 keybind = super+alt+shift+k=csi:90;20~
 keybind = super+alt+shift+j=csi:90;21~
-# session toggle relay (ctrl+tab)
+# last-session toggle relay (ctrl+tab)
 keybind = ctrl+tab=csi:60~
+keybind = ctrl+shift+tab=csi:76~
 # attention session relay (super+;)
 keybind = super+semicolon=csi:61~
 # tmux-native sidebar toggle (super+shift+e)
