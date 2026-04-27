@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use crossterm::cursor;
@@ -40,6 +42,49 @@ pub(super) const KEY_TAB: &str = "\u{F0312}";
 const SIDEBAR_WIDTH_DEFAULT: &str = "45";
 const SIDEBAR_TOKEN: &str = "mux-sidebar-v1";
 const SIDEBAR_BORDER_COLOR: &str = "#1A1B26";
+const SIDEBAR_OPEN_LOCK: &str = "mux-sidebar-open.lock";
+const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
+const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_secs(3);
+
+struct SidebarOpenLock {
+    path: std::path::PathBuf,
+}
+
+impl Drop for SidebarOpenLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
+fn acquire_sidebar_open_lock() -> Option<SidebarOpenLock> {
+    let path = std::env::temp_dir().join(SIDEBAR_OPEN_LOCK);
+    let start = Instant::now();
+
+    loop {
+        match fs::create_dir(&path) {
+            Ok(()) => return Some(SidebarOpenLock { path }),
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                let stale = fs::metadata(&path)
+                    .and_then(|meta| meta.modified())
+                    .ok()
+                    .and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|age| age > SIDEBAR_OPEN_LOCK_STALE);
+
+                if stale {
+                    let _ = fs::remove_dir(&path);
+                    continue;
+                }
+
+                if start.elapsed() > SIDEBAR_OPEN_LOCK_TIMEOUT {
+                    return None;
+                }
+
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(_) => return None,
+        }
+    }
+}
 
 pub(super) fn truncate(s: &str, max: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
@@ -710,6 +755,18 @@ fn open_tmux_sidebar_in_target(target: Option<&str>, select: bool) -> Option<Str
         return None;
     }
 
+    // session-created/after-new-window hooks can fire in a burst while the
+    // three-window session template is being assembled. Without serializing the
+    // check+split sequence, those background jobs can all observe "no sidebar"
+    // and briefly create duplicate sidebar panes that prune-orphans cleans up a
+    // moment later. The final layout was right, but the visible pop-in/pop-out
+    // was jarring.
+    let _lock = acquire_sidebar_open_lock()?;
+
+    open_tmux_sidebar_in_target_locked(target, select)
+}
+
+fn open_tmux_sidebar_in_target_locked(target: Option<&str>, select: bool) -> Option<String> {
     if let Some(pane) = sidebar_pane_in_target(target) {
         resize_sidebar_pane(&pane);
         apply_borderless_to_pane(&pane);
@@ -790,11 +847,16 @@ fn open_tmux_sidebar_everywhere() {
         return;
     }
 
+    let _lock = match acquire_sidebar_open_lock() {
+        Some(lock) => lock,
+        None => return,
+    };
+
     let current_window = tmux(&["display-message", "-p", "#{window_id}"]);
     let mut current_pane = None;
 
     for window in all_tmux_windows() {
-        let pane = open_tmux_sidebar_in_target(Some(&window), false);
+        let pane = open_tmux_sidebar_in_target_locked(Some(&window), false);
         if window == current_window {
             current_pane = pane;
         }
