@@ -18,7 +18,7 @@ use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
 use super::meta::{AgentInstance, SessionMeta, query_session_meta};
 
-const SNAPSHOT_VERSION: u32 = 1;
+const SNAPSHOT_VERSION: u32 = 2;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -341,7 +341,23 @@ impl DaemonCache {
 }
 
 pub(super) fn ensure_started() {
-    if pid_alive() {
+    if let Some(pid) = daemon_pid()
+        && process_alive(pid)
+    {
+        if snapshot_version_current() {
+            return;
+        }
+        let _ = Command::new("kill")
+            .arg(pid.to_string())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let _ = fs::remove_file(pid_path());
+    }
+
+    if let Some(pid) = daemon_pid()
+        && process_alive(pid)
+    {
         return;
     }
 
@@ -480,12 +496,17 @@ fn write_snapshot(snapshot: &SidebarSnapshot) -> std::io::Result<()> {
 }
 
 fn pid_alive() -> bool {
+    daemon_pid().is_some_and(process_alive)
+}
+
+fn daemon_pid() -> Option<u32> {
     let Ok(contents) = fs::read_to_string(pid_path()) else {
-        return false;
+        return None;
     };
-    let Ok(pid) = contents.trim().parse::<u32>() else {
-        return false;
-    };
+    contents.trim().parse::<u32>().ok()
+}
+
+fn process_alive(pid: u32) -> bool {
     Command::new("kill")
         .args(["-0", &pid.to_string()])
         .stdout(Stdio::null())
@@ -493,6 +514,13 @@ fn pid_alive() -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn snapshot_version_current() -> bool {
+    fs::read_to_string(snapshot_path())
+        .ok()
+        .and_then(|contents| serde_json::from_str::<SidebarSnapshot>(&contents).ok())
+        .is_some_and(|snapshot| snapshot.version == SNAPSHOT_VERSION)
 }
 
 fn claim_daemon_pid() -> bool {

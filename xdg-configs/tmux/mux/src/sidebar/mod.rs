@@ -25,13 +25,14 @@ mod claude;
 mod daemon;
 pub(crate) mod meta;
 mod overlay;
+mod pi;
 mod render;
 mod tree;
 
 use meta::{SessionMeta, query_session_meta};
 use overlay::{SidebarOverlay, handle_readline_key};
 use render::draw;
-use tree::{Item, build_items};
+use tree::{Item, ItemKind, build_items};
 
 // Nerd Font keyboard modifier glyphs (md-apple-keyboard-* + md-keyboard-tab).
 // These render at proper size/weight where the bare Unicode symbols (⌘⌃⌥⇧⇥)
@@ -621,6 +622,21 @@ impl SidebarState {
             self.selected = idx;
             self.switch_to_selected();
         }
+    }
+
+    fn visible_agent_animation_active(&self, list_h: u16) -> bool {
+        let visible_rows = (list_h as usize).min(self.visible.len().saturating_sub(self.offset));
+        self.visible
+            .iter()
+            .skip(self.offset)
+            .take(visible_rows)
+            .filter_map(|idx| self.items.get(*idx))
+            .any(|item| {
+                matches!(
+                    &item.kind,
+                    ItemKind::Agent { gerund, asking, .. } if gerund.is_some() || *asking
+                )
+            })
     }
 }
 
@@ -1283,19 +1299,13 @@ pub(crate) fn cmd_sidebar() {
 
         // High-frequency redraw while any animation is mid-flight: bar
         // pulses OR gerund percolation.
-        let pulse_active = state
-            .pulse_starts
-            .values()
-            .any(|s| s.elapsed() < usage_bars::PULSE_DURATION);
-        let gerund_active = state
-            .gerund_cache
-            .values()
-            .any(|(_, t)| t.elapsed() < ACTIVITY_GRACE);
-        let any_asking = state
-            .meta
-            .values()
-            .any(|m| m.agents.iter().any(|a| a.asking));
-        let poll_timeout = if pulse_active || gerund_active || any_asking {
+        let pulse_active = state.last_bars_h > 0
+            && state
+                .pulse_starts
+                .values()
+                .any(|s| s.elapsed() < usage_bars::PULSE_DURATION);
+        let agent_animation_active = state.visible_agent_animation_active(last_list_h);
+        let poll_timeout = if pulse_active || agent_animation_active {
             PULSE_POLL
         } else {
             IDLE_POLL

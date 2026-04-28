@@ -8,6 +8,7 @@ use crate::palette::{BLUE, MAUVE, PEACH, SUBTEXT0};
 use crate::tmux::tmux;
 
 use super::claude::{AgentCtx, query_agent_scrapes, query_claude_ages};
+use super::pi::query_pi_agents;
 
 // ── Process info ─────────────────────────────────────────────
 
@@ -42,11 +43,14 @@ fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>) {
 const OPENCODE_COLOR: Color = Color::Rgb(0x9A, 0x8F, 0xBF);
 /// Sky blue matching codex's usage bar provider color.
 const CODEX_AGENT_COLOR: Color = Color::Rgb(0x74, 0xC7, 0xEC);
+/// Opencode-adjacent blue-lavender for Pi.
+const PI_AGENT_COLOR: Color = Color::Rgb(0x82, 0x97, 0xD6);
 
 const AGENTS: &[(&str, Color)] = &[
     ("claude", PEACH),
     ("codex", CODEX_AGENT_COLOR),
     ("opencode", OPENCODE_COLOR),
+    ("pi", PI_AGENT_COLOR),
     ("aider", MAUVE),
     ("cursor-agent", BLUE),
     ("gemini", BLUE),
@@ -67,14 +71,15 @@ pub(super) fn agent_glyph(name: &str) -> Option<&'static str> {
         "claude" => Some("\u{e861}"),
         "codex" => Some("\u{e7cf}"),
         "opencode" => Some("\u{f0b16}"),
+        "pi" => Some("\u{e22c}"),
         _ => None,
     }
 }
 
-struct PaneInfo {
-    session: String,
-    pane_id: String,
-    pid: u32,
+pub(super) struct PaneInfo {
+    pub(super) session: String,
+    pub(super) pane_id: String,
+    pub(super) pid: u32,
 }
 
 /// Returns (session, pane_id, agent_name) for every agent found across all panes.
@@ -316,9 +321,18 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     }
 
     let (parent_of, name_of) = build_process_info();
+    let pi_agents = query_pi_agents(&all_panes);
     let agent_hits = query_agents(&all_panes, &parent_of, &name_of);
 
-    let (scrape_map, scrape_calls) = query_agent_scrapes(&agent_hits);
+    let scrape_targets: Vec<(String, String, String)> = agent_hits
+        .iter()
+        .filter(|(session, pane_id, name)| {
+            name != "pi" || !pi_agents.contains_key(&(session.clone(), pane_id.clone()))
+        })
+        .cloned()
+        .collect();
+
+    let (scrape_map, scrape_calls) = query_agent_scrapes(&scrape_targets);
     tmux_calls += scrape_calls;
 
     let claude_sessions: Vec<String> = agent_hits
@@ -344,9 +358,12 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         let cwd = cwds.get(name).cloned().unwrap_or_default();
         let branch = branch_cache.get(&cwd).cloned().unwrap_or_default();
 
-        let session_agents: Vec<AgentInstance> = agent_hits
+        let mut session_agents: Vec<AgentInstance> = agent_hits
             .iter()
             .filter(|(s, _, _)| s == name)
+            .filter(|(s, pane_id, agent_name)| {
+                agent_name != "pi" || !pi_agents.contains_key(&(s.clone(), pane_id.clone()))
+            })
             .map(|(s, pane_id, agent_name)| {
                 let scrape = scrape_map.get(&(s.clone(), pane_id.clone()));
                 AgentInstance {
@@ -363,6 +380,12 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
                 }
             })
             .collect();
+        session_agents.extend(
+            pi_agents
+                .iter()
+                .filter(|((session, _), _)| session == name)
+                .map(|(_, agent)| agent.clone()),
+        );
 
         result.insert(
             name.clone(),

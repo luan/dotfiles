@@ -32,6 +32,7 @@ const ASK_COLOR: Color = Color::Rgb(0xF9, 0xE2, 0xAF); // yellow — attention
 
 const CODEX_VERBS: &[&str] = &["Codexing…", "Working…", "Thingamabobbing…"];
 const OPENCODE_VERBS: &[&str] = &["Opencodding…", "Opendoing…", "Shming Shmopenig…"];
+const PI_VERBS: &[&str] = &["Purring…", "Noodling…", "Tinkering…", "Scribbling…"];
 
 /// Scale an RGB color's brightness by `factor`. 0.0 = black, 1.0 = original,
 /// 1.5 = 50% brighter (clamped to 255).
@@ -266,6 +267,10 @@ pub(in crate::sidebar) fn render_item(
                     "opencode" => {
                         let idx = (now_ms / 8000) as usize % OPENCODE_VERBS.len();
                         OPENCODE_VERBS[idx]
+                    }
+                    "pi" => {
+                        let idx = (now_ms / 8000) as usize % PI_VERBS.len();
+                        PI_VERBS[idx]
                     }
                     _ => gerund_str,
                 };
