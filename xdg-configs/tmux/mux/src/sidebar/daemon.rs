@@ -42,7 +42,6 @@ struct SessionMetaSnapshot {
     branch: String,
     agents: Vec<AgentSnapshot>,
     attention: bool,
-    ports: Vec<u16>,
     status: String,
     progress: Option<u8>,
 }
@@ -118,7 +117,6 @@ impl SessionMetaSnapshot {
                 .map(AgentSnapshot::from_runtime)
                 .collect(),
             attention: meta.attention,
-            ports: meta.ports.clone(),
             status: meta.status.clone(),
             progress: meta.progress,
         }
@@ -129,7 +127,6 @@ impl SessionMetaSnapshot {
             branch: self.branch.clone(),
             agents: self.agents.iter().map(AgentSnapshot::runtime).collect(),
             attention: self.attention,
-            ports: self.ports.clone(),
             status: self.status.clone(),
             progress: self.progress,
         }

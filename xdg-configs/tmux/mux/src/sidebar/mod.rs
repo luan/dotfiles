@@ -1436,9 +1436,7 @@ pub(crate) fn cmd_sidebar() {
                     }
 
                     match (key.code, key.modifiers) {
-                        (KeyCode::Char('q'), _)
-                        | (KeyCode::Esc, _)
-                        | (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
+                        (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
                         // Cmd+O from WezTerm arrives as Ctrl+O (see wezterm.lua
                         // focus_sidebar) — toggle to the last session.
                         (KeyCode::Char('o'), KeyModifiers::CONTROL) => {

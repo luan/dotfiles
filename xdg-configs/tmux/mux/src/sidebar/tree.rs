@@ -25,7 +25,6 @@ pub(super) enum ItemKind {
         /// Agent is waiting for user input.
         asking: bool,
     },
-    Ports(Vec<u16>),
     Status,
     Progress(u8),
 }
@@ -180,19 +179,6 @@ pub(super) fn build_items(
                 selectable: false,
                 session_id: Some(name.clone()),
                 kind: ItemKind::Branch,
-            });
-        }
-        if !sm.ports.is_empty() {
-            items.push(Item {
-                id: format!("__ports__{name}"),
-                display: String::new(),
-                indent: detail_indent,
-                tree: detail_tree,
-                color,
-                dim_color,
-                selectable: false,
-                session_id: Some(name.clone()),
-                kind: ItemKind::Ports(sm.ports.clone()),
             });
         }
         if !sm.status.is_empty() {

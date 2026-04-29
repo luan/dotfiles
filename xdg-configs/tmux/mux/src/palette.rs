@@ -11,7 +11,6 @@ pub(crate) const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 pub(crate) const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
 pub(crate) const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
 pub(crate) const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
-pub(crate) const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
 
 const NUM_SELECTED: &[char] = &[
     '\u{F03A4}',

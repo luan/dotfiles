@@ -99,7 +99,8 @@ fn cmd_update_with_args(args: &[String]) {
     // users can keep the notched black-bg single-row layout.
     let notched = tmux_cmd(&["show-option", "-gv", "@notched"]) == "1";
     let two_row = notched && tmux_cmd(&["show-option", "-gv", "@two_row_status"]) != "0";
-    let status_style = if notched { "bg=#000000" } else { "bg=default" };
+    let status_bg = if notched { "#000000" } else { "#11111b" };
+    let status_style = format!("bg={status_bg}");
     let sidebar_width: usize = tmux_cmd(&["show-option", "-gqv", "@sidebar_width"])
         .parse()
         .unwrap_or(45);
@@ -118,10 +119,14 @@ fn cmd_update_with_args(args: &[String]) {
     // per-session rendered strings from session-local options so each
     // client draws its own bar. Sidebar-open is evaluated live so toggling
     // it propagates without needing a re-render per session.
-    let content_fmt: &str = if notched {
-        "#[bg=#000000]#{?@sidebar_open,#[align=left]#{@mux_win_main},#[align=left]#{@mux_left}#{@mux_win}}#[align=right]#{@sysinfo}"
+    let content_fmt = if notched {
+        format!(
+            "#[bg={status_bg}]#{{?@sidebar_open,#[align=left]#{{@mux_win_main}},#[align=left]#{{@mux_left}}#{{@mux_win}}}}#[align=right]#{{@sysinfo}}"
+        )
     } else {
-        "#{?@sidebar_open,#[align=left]#{@mux_win_main},#[align=left]#{@mux_left}#[align=centre]#{@mux_win}}#[align=right]#{@sysinfo}"
+        format!(
+            "#[bg={status_bg}]#{{?@sidebar_open,#[align=left]#{{@mux_win_main}},#[align=left]#{{@mux_left}}#[align=centre]#{{@mux_win}}}}#[align=right]#{{@sysinfo}}"
+        )
     };
 
     let mut tmux_args: Vec<String> = vec![
@@ -194,7 +199,7 @@ fn cmd_update_with_args(args: &[String]) {
         "set".into(),
         "-g".into(),
         "status-style".into(),
-        status_style.into(),
+        status_style,
     ]);
     // On notched displays, stack a blank black row above the real content so
     // the notch sits in dedicated empty space instead of eating chrome.
@@ -218,7 +223,7 @@ fn cmd_update_with_args(args: &[String]) {
             "set".into(),
             "-g".into(),
             "status-format[1]".into(),
-            content_fmt.into(),
+            content_fmt.clone(),
         ]);
     } else {
         tmux_args.extend([
@@ -239,7 +244,7 @@ fn cmd_update_with_args(args: &[String]) {
             "set".into(),
             "-g".into(),
             "status-format[0]".into(),
-            content_fmt.into(),
+            content_fmt,
         ]);
     }
     tmux_args.extend([";".into(), "refresh-client".into(), "-S".into()]);

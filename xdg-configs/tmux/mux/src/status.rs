@@ -265,7 +265,7 @@ fn render_sessions_full(
         };
 
         let (_, ref color, ref dim_c) = colors[idx];
-        let a = attn.get(name.as_str()).map_or("", String::as_str);
+        let has_attention = attn.get(name.as_str()).is_some_and(|a| a == "1");
         let display = if gtotal == 1 {
             group
         } else {
@@ -305,16 +305,17 @@ fn render_sessions_full(
 
         if name == cur {
             out.push_str(&format!("#[fg={color}]{glyph} #[bold]{display}#[nobold]"));
-        } else if show_name && a == "1" {
-            out.push_str(&format!(
-                "#[fg={dim_c}]{glyph} #[bold,fg={color}]●#[nobold] #[underscore,fg={dim_c}]{display}#[nounderscore]"
-            ));
         } else if show_name {
-            out.push_str(&format!("#[fg={dim_c}]{glyph} {display}"));
-        } else if a == "1" {
+            let marker = if has_attention {
+                format!("#[bold,fg={color}]●#[nobold] ")
+            } else {
+                "  ".to_string()
+            };
+            out.push_str(&format!("#[fg={dim_c}]{glyph} {marker}{display}"));
+        } else if has_attention {
             out.push_str(&format!("#[fg={dim_c}]{glyph}#[bold,fg={color}]●#[nobold]"));
         } else {
-            out.push_str(&format!("#[fg={dim_c}]{glyph}"));
+            out.push_str(&format!("#[fg={dim_c}]{glyph} "));
         }
 
         out.push_str("#[norange]");
