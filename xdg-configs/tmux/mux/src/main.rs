@@ -706,6 +706,7 @@ fn main() {
         "sidebar" if rest.is_empty() => sidebar::cmd_sidebar(),
         "sidebar" => sidebar::cmd_sidebar_control(&rest),
         "sidebar-daemon" => sidebar::cmd_sidebar_daemon(),
+        "hook" => sidebar::cmd_hook(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
         "log" => logging::cmd_log(&rest),

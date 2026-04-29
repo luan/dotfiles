@@ -16,9 +16,9 @@ use crate::usage_bars;
 
 use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
-use super::meta::{AgentInstance, SessionMeta, query_session_meta};
+use super::meta::{AgentInstance, DiffStat, SessionMeta, query_session_meta};
 
-const SNAPSHOT_VERSION: u32 = 2;
+const SNAPSHOT_VERSION: u32 = 3;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -40,10 +40,17 @@ pub(super) struct SidebarSnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SessionMetaSnapshot {
     branch: String,
+    diff: Option<DiffStatSnapshot>,
     agents: Vec<AgentSnapshot>,
     attention: bool,
     status: String,
     progress: Option<u8>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+struct DiffStatSnapshot {
+    added: u32,
+    removed: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -111,6 +118,7 @@ impl SessionMetaSnapshot {
     fn from_runtime(meta: &SessionMeta) -> Self {
         Self {
             branch: meta.branch.clone(),
+            diff: meta.diff.map(DiffStatSnapshot::from_runtime),
             agents: meta
                 .agents
                 .iter()
@@ -125,10 +133,27 @@ impl SessionMetaSnapshot {
     fn runtime(&self) -> SessionMeta {
         SessionMeta {
             branch: self.branch.clone(),
+            diff: self.diff.map(DiffStatSnapshot::runtime),
             agents: self.agents.iter().map(AgentSnapshot::runtime).collect(),
             attention: self.attention,
             status: self.status.clone(),
             progress: self.progress,
+        }
+    }
+}
+
+impl DiffStatSnapshot {
+    fn from_runtime(diff: DiffStat) -> Self {
+        Self {
+            added: diff.added,
+            removed: diff.removed,
+        }
+    }
+
+    fn runtime(self) -> DiffStat {
+        DiffStat {
+            added: self.added,
+            removed: self.removed,
         }
     }
 }

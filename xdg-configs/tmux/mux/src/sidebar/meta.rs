@@ -8,6 +8,7 @@ use crate::palette::{BLUE, MAUVE, PEACH, SUBTEXT0};
 use crate::tmux::tmux;
 
 use super::claude::{AgentCtx, query_agent_scrapes, query_claude_ages};
+use super::hooks;
 use super::pi::query_pi_agents;
 
 // ── Process info ─────────────────────────────────────────────
@@ -159,10 +160,17 @@ pub(super) struct AgentInstance {
 #[derive(Default, Clone)]
 pub(super) struct SessionMeta {
     pub(super) branch: String,
+    pub(super) diff: Option<DiffStat>,
     pub(super) agents: Vec<AgentInstance>,
     pub(super) attention: bool,
     pub(super) status: String,
     pub(super) progress: Option<u8>,
+}
+
+#[derive(Default, Clone, Copy)]
+pub(super) struct DiffStat {
+    pub(super) added: u32,
+    pub(super) removed: u32,
 }
 
 fn git_branch(dir: &str) -> String {
@@ -175,6 +183,39 @@ fn git_branch(dir: &str) -> String {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+fn git_diff_stat(dir: &str) -> Option<DiffStat> {
+    let out = Command::new("git")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .args(["-C", dir, "diff", "HEAD", "--numstat"])
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let mut stat = DiffStat::default();
+    for line in raw.lines() {
+        let mut parts = line.split('\t');
+        let added = parts.next().and_then(|s| s.parse::<u32>().ok());
+        let removed = parts.next().and_then(|s| s.parse::<u32>().ok());
+        if let (Some(added), Some(removed)) = (added, removed) {
+            stat.added = stat.added.saturating_add(added);
+            stat.removed = stat.removed.saturating_add(removed);
+        }
+    }
+
+    (stat.added > 0 || stat.removed > 0).then_some(stat)
+}
+
+fn min_duration(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
 /// Returns (meta_map, tmux_call_count).
@@ -202,6 +243,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     tmux_calls += 1;
 
     let mut cwds: HashMap<String, String> = HashMap::new();
+    let mut pane_cwds: HashMap<(String, String), String> = HashMap::new();
     let mut all_panes: Vec<PaneInfo> = Vec::new();
     let mut attn: HashMap<String, bool> = HashMap::new();
     let mut statuses: HashMap<String, String> = HashMap::new();
@@ -225,9 +267,10 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         if let Ok(pid) = pid_str.parse::<u32>() {
             all_panes.push(PaneInfo {
                 session: session.clone(),
-                pane_id,
+                pane_id: pane_id.clone(),
                 pid,
             });
+            pane_cwds.insert((session.clone(), pane_id), cwd.to_string());
 
             if window_active && pane_active {
                 cwds.insert(session.clone(), cwd.to_string());
@@ -279,9 +322,11 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     let claude_age_map = query_claude_ages(&claude_sessions, &cwds);
 
     let mut branch_cache: HashMap<String, String> = HashMap::new();
+    let mut diff_cache: HashMap<String, Option<DiffStat>> = HashMap::new();
     for cwd in cwds.values() {
         if !cwd.is_empty() && !branch_cache.contains_key(cwd) {
             branch_cache.insert(cwd.clone(), git_branch(cwd));
+            diff_cache.insert(cwd.clone(), git_diff_stat(cwd));
         }
     }
 
@@ -289,6 +334,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     for name in sessions {
         let cwd = cwds.get(name).cloned().unwrap_or_default();
         let branch = branch_cache.get(&cwd).cloned().unwrap_or_default();
+        let diff = diff_cache.get(&cwd).copied().flatten();
 
         let mut session_agents: Vec<AgentInstance> = agent_hits
             .iter()
@@ -298,17 +344,35 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             })
             .map(|(s, pane_id, agent_name)| {
                 let scrape = scrape_map.get(&(s.clone(), pane_id.clone()));
+                let hook = if agent_name == "claude" || agent_name == "codex" {
+                    if let Some(cwd) = pane_cwds.get(&(s.clone(), pane_id.clone())) {
+                        if agent_name == "claude" {
+                            hooks::install(cwd);
+                        }
+                    }
+                    hooks::read_signal(pane_id)
+                } else {
+                    None
+                };
+                let hook_age = hook.as_ref().and_then(|h| h.age);
                 AgentInstance {
                     name: agent_name.clone(),
                     pane_id: pane_id.clone(),
-                    gerund: scrape.and_then(|sc| sc.gerund.clone()),
+                    gerund: if hook.as_ref().is_some_and(|h| h.idle) {
+                        None
+                    } else {
+                        scrape
+                            .and_then(|sc| sc.gerund.clone())
+                            .or_else(|| hook.as_ref().and_then(|h| h.gerund.clone()))
+                    },
                     ctx: scrape.and_then(|sc| sc.ctx.clone()),
                     age: if agent_name == "claude" {
-                        claude_age_map.get(s).copied()
+                        min_duration(claude_age_map.get(s).copied(), hook_age)
                     } else {
-                        None
+                        hook_age
                     },
-                    asking: scrape.is_some_and(|sc| sc.asking),
+                    asking: scrape.is_some_and(|sc| sc.asking)
+                        || hook.as_ref().is_some_and(|h| h.asking),
                 }
             })
             .collect();
@@ -319,13 +383,16 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
                 .filter_map(|pane| pi_agents.get(&(pane.session.clone(), pane.pane_id.clone())))
                 .cloned(),
         );
+        let needs_attention =
+            *attn.get(name).unwrap_or(&false) || session_agents.iter().any(|agent| agent.asking);
 
         result.insert(
             name.clone(),
             SessionMeta {
                 branch,
+                diff,
                 agents: session_agents,
-                attention: *attn.get(name).unwrap_or(&false),
+                attention: needs_attention,
                 status: statuses.get(name).cloned().unwrap_or_default(),
                 progress: progresses.get(name).copied(),
             },

@@ -139,7 +139,7 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Session { attention } => {
+        ItemKind::Session { attention, diff } => {
             let fg = if is_sel || is_cur {
                 item.color
             } else {
@@ -149,7 +149,21 @@ pub(in crate::sidebar) fn render_item(
             let mut spans: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             spans.extend(tree_prefix_spans(item.tree, indent, row_bg));
 
-            let mut reserved = 0usize;
+            let mut right: Vec<Span<'static>> = Vec::new();
+            if let Some(diff) = diff {
+                right.push(Span::styled(
+                    format!("+{}", diff.added),
+                    Style::default().fg(Color::Rgb(0xa6, 0xe3, 0xa1)).bg(row_bg),
+                ));
+                right.push(Span::styled(" ", Style::default().bg(row_bg)));
+                right.push(Span::styled(
+                    format!("-{}", diff.removed),
+                    Style::default().fg(Color::Rgb(0xf3, 0x8b, 0xa8)).bg(row_bg),
+                ));
+            }
+
+            let right_w: usize = right.iter().map(|s| s.width()).sum();
+            let mut reserved = right_w;
             if *attention {
                 reserved += 2;
             }
@@ -171,6 +185,8 @@ pub(in crate::sidebar) fn render_item(
             if pad > 0 {
                 spans.push(Span::styled(" ".repeat(pad), Style::default().bg(row_bg)));
             }
+
+            spans.extend(right);
 
             if *attention {
                 spans.push(Span::styled(
