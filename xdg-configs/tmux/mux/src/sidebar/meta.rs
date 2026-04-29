@@ -144,68 +144,6 @@ fn query_agents(
     result
 }
 
-// ── Port detection ───────────────────────────────────────────
-
-fn query_ports(
-    pane_pids: &HashMap<String, u32>,
-    parent_of: &HashMap<u32, u32>,
-) -> HashMap<String, Vec<u16>> {
-    if pane_pids.is_empty() {
-        return HashMap::new();
-    }
-
-    let lsof_out = Command::new("lsof")
-        .args(["-i", "-P", "-n", "-sTCP:LISTEN", "-F", "pn"])
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default();
-
-    let mut pid_ports: HashMap<u32, Vec<u16>> = HashMap::new();
-    let mut cur_pid = 0u32;
-    for line in lsof_out.lines() {
-        if let Some(p) = line.strip_prefix('p') {
-            cur_pid = p.parse().unwrap_or(0);
-        } else if let Some(n) = line.strip_prefix('n')
-            && let Some(port_str) = n.rsplit(':').next()
-            && let Ok(port) = port_str.parse::<u16>()
-        {
-            pid_ports.entry(cur_pid).or_default().push(port);
-        }
-    }
-
-    if pid_ports.is_empty() {
-        return HashMap::new();
-    }
-
-    let pid_to_session: HashMap<u32, &str> = pane_pids
-        .iter()
-        .map(|(name, pid)| (*pid, name.as_str()))
-        .collect();
-
-    let mut result: HashMap<String, Vec<u16>> = HashMap::new();
-    for (pid, ports) in &pid_ports {
-        let mut cur = *pid;
-        for _ in 0..100 {
-            if let Some(&session) = pid_to_session.get(&cur) {
-                result.entry(session.to_string()).or_default().extend(ports);
-                break;
-            }
-            match parent_of.get(&cur) {
-                Some(&ppid) if ppid != 0 && ppid != cur => cur = ppid,
-                _ => break,
-            }
-        }
-    }
-
-    for ports in result.values_mut() {
-        ports.sort();
-        ports.dedup();
-    }
-    result
-}
-
 // ── Rich metadata ────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -223,7 +161,6 @@ pub(super) struct SessionMeta {
     pub(super) branch: String,
     pub(super) agents: Vec<AgentInstance>,
     pub(super) attention: bool,
-    pub(super) ports: Vec<u16>,
     pub(super) status: String,
     pub(super) progress: Option<u8>,
 }
@@ -265,8 +202,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     tmux_calls += 1;
 
     let mut cwds: HashMap<String, String> = HashMap::new();
-    // Active-pane pids for port detection (only the active pane per session).
-    let mut active_pane_pids: HashMap<String, u32> = HashMap::new();
     let mut all_panes: Vec<PaneInfo> = Vec::new();
     let mut attn: HashMap<String, bool> = HashMap::new();
     let mut statuses: HashMap<String, String> = HashMap::new();
@@ -296,7 +231,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
 
             if window_active && pane_active {
                 cwds.insert(session.clone(), cwd.to_string());
-                active_pane_pids.insert(session, pid);
             }
         }
     }
@@ -351,8 +285,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         }
     }
 
-    let ports_map = query_ports(&active_pane_pids, &parent_of);
-
     let mut result = HashMap::new();
     for name in sessions {
         let cwd = cwds.get(name).cloned().unwrap_or_default();
@@ -381,10 +313,11 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             })
             .collect();
         session_agents.extend(
-            pi_agents
+            all_panes
                 .iter()
-                .filter(|((session, _), _)| session == name)
-                .map(|(_, agent)| agent.clone()),
+                .filter(|pane| pane.session == *name)
+                .filter_map(|pane| pi_agents.get(&(pane.session.clone(), pane.pane_id.clone())))
+                .cloned(),
         );
 
         result.insert(
@@ -393,7 +326,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
                 branch,
                 agents: session_agents,
                 attention: *attn.get(name).unwrap_or(&false),
-                ports: ports_map.get(name).cloned().unwrap_or_default(),
                 status: statuses.get(name).cloned().unwrap_or_default(),
                 progress: progresses.get(name).copied(),
             },

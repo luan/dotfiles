@@ -22,7 +22,7 @@ adjust-underline-thickness = 1
 
 window-decoration = "none"
 window-padding-balance = true
-window-padding-color = "extend-always"
+window-padding-color = "extend"
 
 fullscreen = "non-native"
 macos-non-native-fullscreen = true

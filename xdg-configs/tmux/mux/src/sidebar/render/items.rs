@@ -1,7 +1,7 @@
 use ratatui::prelude::*;
 use ratatui::widgets::Paragraph;
 
-use crate::palette::{BASE, GREEN, OVERLAY0, PEACH, SUBTEXT0, SURFACE0, SURFACE1, TEXT};
+use crate::palette::{BASE, OVERLAY0, PEACH, SUBTEXT0, SURFACE0, SURFACE1, TEXT};
 
 use super::super::meta::{agent_color, agent_glyph};
 use super::super::overlay::RenameOverlay;
@@ -353,22 +353,6 @@ pub(in crate::sidebar) fn render_item(
                 line.extend(right);
                 line.push(Span::styled(" ", Style::default().bg(row_bg)));
             }
-            f.render_widget(
-                Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
-                row,
-            );
-        }
-        ItemKind::Ports(ports) => {
-            let text = ports
-                .iter()
-                .map(|p| format!(":{p}"))
-                .collect::<Vec<_>>()
-                .join(" ");
-            let disp = truncate(&text, content_w);
-            let color = if is_cur { GREEN } else { SURFACE1 };
-            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
-            line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            line.push(Span::styled(disp, Style::default().fg(color).bg(row_bg)));
             f.render_widget(
                 Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
                 row,
