@@ -6,11 +6,12 @@ use ratatui::prelude::*;
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::palette::{group_glyph, hex_to_color, num_glyph};
 
-use super::meta::SessionMeta;
+use super::meta::{DiffStat, SessionMeta};
 
 pub(super) enum ItemKind {
     Session {
         attention: bool,
+        diff: Option<DiffStat>,
     },
     Group,
     Branch,
@@ -145,6 +146,7 @@ pub(super) fn build_items(
             session_id: Some(name.clone()),
             kind: ItemKind::Session {
                 attention: sm.attention,
+                diff: sm.diff,
             },
         });
 

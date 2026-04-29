@@ -23,6 +23,7 @@ use crate::usage_bars;
 
 mod claude;
 mod daemon;
+mod hooks;
 pub(crate) mod meta;
 mod overlay;
 mod pi;
@@ -1534,6 +1535,10 @@ pub(crate) fn cmd_sidebar() {
 
 pub(crate) fn cmd_sidebar_daemon() {
     daemon::cmd_sidebar_daemon();
+}
+
+pub(crate) fn cmd_hook() {
+    hooks::ingest_stdin();
 }
 
 fn refresh_status_bar() {
