@@ -13,9 +13,9 @@ use super::pi::query_pi_agents;
 
 // ── Process info ─────────────────────────────────────────────
 
-fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>) {
+fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>, HashMap<u32, f32>) {
     let out = Command::new("ps")
-        .args(["-axo", "pid=,ppid=,comm="])
+        .args(["-axo", "pid=,ppid=,pcpu=,comm="])
         .stderr(Stdio::null())
         .output()
         .ok()
@@ -24,18 +24,58 @@ fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>) {
 
     let mut parent_of: HashMap<u32, u32> = HashMap::new();
     let mut name_of: HashMap<u32, String> = HashMap::new();
+    let mut cpu_of: HashMap<u32, f32> = HashMap::new();
     for line in out.lines() {
         let mut it = line.split_whitespace();
-        if let (Some(p1), Some(p2)) = (it.next(), it.next())
+        if let (Some(p1), Some(p2), Some(p3)) = (it.next(), it.next(), it.next())
             && let (Ok(pid), Ok(ppid)) = (p1.parse::<u32>(), p2.parse::<u32>())
         {
             let comm = it.collect::<Vec<_>>().join(" ");
             let basename = comm.rsplit('/').next().unwrap_or(&comm).to_string();
             parent_of.insert(pid, ppid);
             name_of.insert(pid, basename);
+            if let Ok(cpu) = p3.parse::<f32>() {
+                cpu_of.insert(pid, cpu.max(0.0));
+            }
         }
     }
-    (parent_of, name_of)
+    (parent_of, name_of, cpu_of)
+}
+
+fn build_children(parent_of: &HashMap<u32, u32>) -> HashMap<u32, Vec<u32>> {
+    let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
+    for (&child, &parent) in parent_of {
+        children.entry(parent).or_default().push(child);
+    }
+    children
+}
+
+fn query_session_cpu(
+    all_panes: &[PaneInfo],
+    parent_of: &HashMap<u32, u32>,
+    cpu_of: &HashMap<u32, f32>,
+) -> HashMap<String, f32> {
+    let children = build_children(parent_of);
+    let mut result: HashMap<String, f32> = HashMap::new();
+    let mut seen_by_session: HashMap<String, HashSet<u32>> = HashMap::new();
+
+    for pane in all_panes {
+        let seen = seen_by_session.entry(pane.session.clone()).or_default();
+        let mut stack = vec![pane.pid];
+
+        while let Some(pid) = stack.pop() {
+            if !seen.insert(pid) {
+                continue;
+            }
+            *result.entry(pane.session.clone()).or_default() +=
+                cpu_of.get(&pid).copied().unwrap_or(0.0);
+            if let Some(kids) = children.get(&pid) {
+                stack.extend(kids);
+            }
+        }
+    }
+
+    result
 }
 
 // ── Agent detection ──────────────────────────────────────────
@@ -89,10 +129,7 @@ fn query_agents(
     parent_of: &HashMap<u32, u32>,
     name_of: &HashMap<u32, String>,
 ) -> Vec<(String, String, String)> {
-    let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
-    for (&c, &p) in parent_of {
-        children.entry(p).or_default().push(c);
-    }
+    let children = build_children(parent_of);
 
     let mut result: Vec<(String, String, String)> = Vec::new();
 
@@ -161,6 +198,7 @@ pub(super) struct AgentInstance {
 pub(super) struct SessionMeta {
     pub(super) branch: String,
     pub(super) diff: Option<DiffStat>,
+    pub(super) cpu_pct: f32,
     pub(super) agents: Vec<AgentInstance>,
     pub(super) attention: bool,
     pub(super) status: String,
@@ -297,7 +335,8 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         }
     }
 
-    let (parent_of, name_of) = build_process_info();
+    let (parent_of, name_of, cpu_of) = build_process_info();
+    let session_cpu = query_session_cpu(&all_panes, &parent_of, &cpu_of);
     let pi_agents = query_pi_agents(&all_panes);
     let agent_hits = query_agents(&all_panes, &parent_of, &name_of);
 
@@ -391,6 +430,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             SessionMeta {
                 branch,
                 diff,
+                cpu_pct: session_cpu.get(name).copied().unwrap_or(0.0),
                 agents: session_agents,
                 attention: needs_attention,
                 status: statuses.get(name).cloned().unwrap_or_default(),

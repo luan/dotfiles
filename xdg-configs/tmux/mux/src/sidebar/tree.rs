@@ -12,6 +12,7 @@ pub(super) enum ItemKind {
     Session {
         attention: bool,
         diff: Option<DiffStat>,
+        cpu_pct: f32,
     },
     Group,
     Branch,
@@ -147,6 +148,7 @@ pub(super) fn build_items(
             kind: ItemKind::Session {
                 attention: sm.attention,
                 diff: sm.diff,
+                cpu_pct: sm.cpu_pct,
             },
         });
 
