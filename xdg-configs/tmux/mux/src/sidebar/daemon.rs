@@ -18,7 +18,7 @@ use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
 use super::meta::{AgentInstance, DiffStat, SessionMeta, query_session_meta};
 
-const SNAPSHOT_VERSION: u32 = 3;
+const SNAPSHOT_VERSION: u32 = 4;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -41,6 +41,7 @@ pub(super) struct SidebarSnapshot {
 struct SessionMetaSnapshot {
     branch: String,
     diff: Option<DiffStatSnapshot>,
+    cpu_pct: f32,
     agents: Vec<AgentSnapshot>,
     attention: bool,
     status: String,
@@ -119,6 +120,7 @@ impl SessionMetaSnapshot {
         Self {
             branch: meta.branch.clone(),
             diff: meta.diff.map(DiffStatSnapshot::from_runtime),
+            cpu_pct: meta.cpu_pct,
             agents: meta
                 .agents
                 .iter()
@@ -134,6 +136,7 @@ impl SessionMetaSnapshot {
         SessionMeta {
             branch: self.branch.clone(),
             diff: self.diff.map(DiffStatSnapshot::runtime),
+            cpu_pct: self.cpu_pct,
             agents: self.agents.iter().map(AgentSnapshot::runtime).collect(),
             attention: self.attention,
             status: self.status.clone(),

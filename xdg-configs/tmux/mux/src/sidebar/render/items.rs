@@ -59,6 +59,15 @@ fn blend_color(a: Color, b: Color, t: f32) -> Color {
     Color::Rgb(mix(ar, br), mix(ag, bg), mix(ab, bb))
 }
 
+fn format_cpu_pct(cpu_pct: f32) -> String {
+    let cpu_pct = cpu_pct.max(0.0);
+    if cpu_pct < 9.95 {
+        format!("{cpu_pct:.1}%")
+    } else {
+        format!("{cpu_pct:.0}%")
+    }
+}
+
 /// Triangle wave `lo → hi → lo` over `period_ms`.
 fn triangle_wave(now_ms: u128, period_ms: u128, lo: f32, hi: f32) -> f32 {
     let t = (now_ms % period_ms) as f32 / period_ms as f32;
@@ -139,7 +148,11 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Session { attention, diff } => {
+        ItemKind::Session {
+            attention,
+            diff,
+            cpu_pct,
+        } => {
             let fg = if is_sel || is_cur {
                 item.color
             } else {
@@ -161,6 +174,22 @@ pub(in crate::sidebar) fn render_item(
                     Style::default().fg(Color::Rgb(0xf3, 0x8b, 0xa8)).bg(row_bg),
                 ));
             }
+            if !right.is_empty() {
+                right.push(Span::styled(" ", Style::default().bg(row_bg)));
+            }
+            let cpu_color = if *cpu_pct >= 100.0 {
+                PEACH
+            } else if *cpu_pct >= 25.0 {
+                Color::Rgb(0xf9, 0xe2, 0xaf)
+            } else if is_cur {
+                OVERLAY0
+            } else {
+                SURFACE1
+            };
+            right.push(Span::styled(
+                format_cpu_pct(*cpu_pct),
+                Style::default().fg(cpu_color).bg(row_bg),
+            ));
 
             let right_w: usize = right.iter().map(|s| s.width()).sum();
             let mut reserved = right_w;
