@@ -46,7 +46,7 @@ const SIDEBAR_TOKEN: &str = "mux-sidebar-v1";
 const SIDEBAR_BORDER_COLOR: &str = "#1A1B26";
 const SIDEBAR_OPEN_LOCK: &str = "mux-sidebar-open.lock";
 const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
-const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_secs(3);
+const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub(crate) fn attention_target(sessions: &[String]) -> Option<String> {
     let (meta, _) = query_session_meta(sessions);
@@ -1524,13 +1524,16 @@ pub(crate) fn cmd_sidebar() {
         io::stdout().flush().ok();
     }
 
-    // Restore status bar. For tmux-native sidebars, unmark this pane before
-    // checking whether any other marked sidebars remain; otherwise our own
-    // soon-to-exit pane would keep @sidebar_open stuck on.
+    // Restore status bar. For tmux-native sidebars, only unmark this pane. Do
+    // not close every sidebar or unset @sidebar_open from here: background
+    // sync intentionally kills stale sidebar panes, and each killed pane runs
+    // this exit path. Let explicit close_all_tmux_sidebars() own the global
+    // close state; otherwise a stale pane exit can race a newly-created pane,
+    // hide the sidebar globally, and leave future hooks with nothing to sync.
     let tmux_native_sidebar = running_as_tmux_sidebar();
     unmark_current_sidebar_pane();
     if tmux_native_sidebar {
-        close_all_tmux_sidebars();
+        refresh_status_bar();
         return;
     }
     set_sidebar_open(false);
