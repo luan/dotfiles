@@ -1322,9 +1322,8 @@ pub(crate) fn cmd_sidebar() {
     let mut state = SidebarState::new();
     state.refresh();
 
-    // Cache layout for mouse-click mapping between draws
-    let mut last_list_y: u16 = 0;
-    let mut last_list_h: u16 = 0;
+    // Cache layout for mouse mapping between draws.
+    let mut last_list_area = Rect::default();
     let mut last_refresh = Instant::now();
     const IDLE_POLL: Duration = Duration::from_millis(500);
     const ANIMATION_POLL: Duration = Duration::from_millis(33); // ~30 fps during animation
@@ -1333,14 +1332,12 @@ pub(crate) fn cmd_sidebar() {
     loop {
         terminal
             .draw(|f| {
-                let (ly, lh) = draw(f, &mut state);
-                last_list_y = ly;
-                last_list_h = lh;
+                last_list_area = draw(f, &mut state);
             })
             .ok();
 
         // High-frequency redraw while any gerund percolation is mid-flight.
-        let agent_animation_active = state.visible_agent_animation_active(last_list_h);
+        let agent_animation_active = state.visible_agent_animation_active(last_list_area.height);
         let poll_timeout = if agent_animation_active {
             ANIMATION_POLL
         } else {
@@ -1362,9 +1359,12 @@ pub(crate) fn cmd_sidebar() {
                 Ok(Event::Mouse(_)) if state.overlay_active() => {}
                 Ok(Event::Mouse(me)) => match me.kind {
                     MouseEventKind::Down(MouseButton::Left)
-                        if me.row >= last_list_y && me.row < last_list_y + last_list_h =>
+                        if last_list_area.contains(Position {
+                            x: me.column,
+                            y: me.row,
+                        }) =>
                     {
-                        let vis_idx = state.offset + (me.row - last_list_y) as usize;
+                        let vis_idx = state.offset + (me.row - last_list_area.y) as usize;
                         if let Some(item_idx) = state.visible.get(vis_idx).copied()
                             && let Some(sid) =
                                 state.items.get(item_idx).and_then(|i| i.session_id.clone())
@@ -1382,8 +1382,11 @@ pub(crate) fn cmd_sidebar() {
                         }
                     }
                     MouseEventKind::Moved => {
-                        if me.row >= last_list_y && me.row < last_list_y + last_list_h {
-                            let vis_idx = state.offset + (me.row - last_list_y) as usize;
+                        if last_list_area.contains(Position {
+                            x: me.column,
+                            y: me.row,
+                        }) {
+                            let vis_idx = state.offset + (me.row - last_list_area.y) as usize;
                             state.hover = state
                                 .visible
                                 .get(vis_idx)
