@@ -533,14 +533,17 @@ impl SidebarState {
 
     fn switch_to_selected(&self) {
         if let Some(id) = self.selected_session_id() {
-            // A tmux-native sidebar lives inside a tmux window, unlike the old
-            // WezTerm-native split. When jumping from the sidebar, pre-create
-            // the same sidebar in the target session's current window so the
-            // UX stays persistent without global auto-spawn hooks.
+            // A tmux-native sidebar lives inside a tmux window. When jumping
+            // from the sidebar, pre-create sidebars across the target
+            // session's windows so both the session switch and subsequent
+            // window switches stay flicker-free.
             if running_as_tmux_sidebar() {
-                open_tmux_sidebar_in_target(Some(&id), false);
+                open_sidebars_for_session(&id);
             }
             tmux(&["switch-client", "-t", &id]);
+            if running_as_tmux_sidebar() {
+                sync_sidebars_to_attached_session_windows();
+            }
         }
     }
 
@@ -666,15 +669,53 @@ fn current_sidebar_pane() -> Option<String> {
     sidebar_pane_in_target(None)
 }
 
-fn all_tmux_windows_and_sidebars() -> (Vec<String>, HashMap<String, String>) {
+fn attached_session_window_ids() -> HashSet<String> {
+    let sessions: HashSet<String> = tmux(&["list-clients", "-F", "#{client_session}"])
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+
+    let mut windows: HashSet<String> =
+        tmux(&["list-windows", "-a", "-F", "#{session_name}\t#{window_id}"])
+            .lines()
+            .filter_map(|line| {
+                let (session, window) = line.split_once('\t')?;
+                (sessions.contains(session) && !window.is_empty()).then(|| window.to_string())
+            })
+            .collect();
+
+    // When tmux is executing a hook without a normal client context,
+    // list-clients can be empty. Fall back to the command's current window so
+    // an explicit `mux sidebar open/sync` still does the useful thing.
+    if windows.is_empty() {
+        if let Some(window) = current_window_id() {
+            windows.insert(window);
+        }
+    }
+
+    windows
+}
+
+fn session_window_ids(session: &str) -> Vec<String> {
+    tmux(&["list-windows", "-t", session, "-F", "#{window_id}"])
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn all_sidebar_panes_by_window() -> HashMap<String, Vec<String>> {
     let output = tmux(&[
         "list-panes",
         "-a",
         "-F",
         "#{window_id}\t#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
     ]);
-    let mut windows = Vec::new();
-    let mut sidebar_by_window = HashMap::new();
+
+    let mut panes_by_window: HashMap<String, Vec<String>> = HashMap::new();
     for line in output.lines() {
         let mut parts = line.split('\t');
         let Some(window) = parts.next().filter(|s| !s.is_empty()) else {
@@ -683,19 +724,17 @@ fn all_tmux_windows_and_sidebars() -> (Vec<String>, HashMap<String, String>) {
         let Some(pane) = parts.next().filter(|s| !s.is_empty()) else {
             continue;
         };
-        if !windows.iter().any(|seen| seen == window) {
-            windows.push(window.to_string());
-        }
         let marker = parts.next().unwrap_or_default();
         let token = parts.next().unwrap_or_default();
         let command = parts.next().unwrap_or_default();
         if marker == "1" && token == SIDEBAR_TOKEN && command == "mux" {
-            sidebar_by_window
+            panes_by_window
                 .entry(window.to_string())
-                .or_insert_with(|| pane.to_string());
+                .or_default()
+                .push(pane.to_string());
         }
     }
-    (windows, sidebar_by_window)
+    panes_by_window
 }
 
 fn all_sidebar_panes() -> Vec<String> {
@@ -1027,7 +1066,7 @@ fn open_tmux_sidebar(select: bool) -> Option<String> {
     open_tmux_sidebar_in_target(None, select)
 }
 
-fn open_tmux_sidebar_everywhere() {
+fn open_sidebars_for_session(session: &str) {
     if !sidebar_enabled() {
         return;
     }
@@ -1039,17 +1078,77 @@ fn open_tmux_sidebar_everywhere() {
         None => return,
     };
 
-    let current_window = tmux(&["display-message", "-p", "#{window_id}"]);
-    let (windows, existing_by_window) = all_tmux_windows_and_sidebars();
+    let windows = session_window_ids(session);
+    if windows.is_empty() {
+        return;
+    }
+
     let width = sidebar_width();
+    let existing = all_sidebar_panes_by_window();
     let missing_windows: Vec<String> = windows
         .iter()
-        .filter(|window| !existing_by_window.contains_key(*window))
+        .filter(|window| !existing.contains_key(*window))
         .cloned()
         .collect();
-    let mut panes: Vec<String> = existing_by_window.values().cloned().collect();
-    let new_panes = split_sidebar_panes_in_windows(&missing_windows, &width);
-    panes.extend(new_panes);
+    let mut panes: Vec<String> = existing
+        .iter()
+        .filter(|(window, _)| windows.iter().any(|target| target == *window))
+        .flat_map(|(_, panes)| panes.iter().cloned())
+        .collect();
+    panes.extend(split_sidebar_panes_in_windows(&missing_windows, &width));
+
+    batch_mark_and_resize_sidebar_panes(&panes, &width);
+    if sidebar_borderless() {
+        for pane in &panes {
+            apply_borderless_to_pane(pane);
+        }
+    }
+    set_sidebar_open(any_sidebar_pane());
+}
+
+fn sync_sidebars_to_attached_session_windows() {
+    if !sidebar_enabled() {
+        return;
+    }
+
+    daemon::ensure_started();
+
+    let _lock = match acquire_sidebar_open_lock() {
+        Some(lock) => lock,
+        None => return,
+    };
+
+    let attached = attached_session_window_ids();
+    if attached.is_empty() {
+        close_all_tmux_sidebars();
+        return;
+    }
+
+    let width = sidebar_width();
+    let existing = all_sidebar_panes_by_window();
+
+    let stale_panes: Vec<String> = existing
+        .iter()
+        .filter(|(window, _)| !attached.contains(*window))
+        .flat_map(|(_, panes)| panes.iter().cloned())
+        .collect();
+    for pane in stale_panes {
+        tmux(&["kill-pane", "-t", &pane]);
+    }
+
+    let mut attached_windows: Vec<String> = attached.into_iter().collect();
+    attached_windows.sort();
+    let missing_windows: Vec<String> = attached_windows
+        .iter()
+        .filter(|window| !existing.contains_key(*window))
+        .cloned()
+        .collect();
+    let mut panes: Vec<String> = existing
+        .iter()
+        .filter(|(window, _)| attached_windows.iter().any(|attached| attached == *window))
+        .flat_map(|(_, panes)| panes.iter().cloned())
+        .collect();
+    panes.extend(split_sidebar_panes_in_windows(&missing_windows, &width));
 
     batch_mark_and_resize_sidebar_panes(&panes, &width);
     if sidebar_borderless() {
@@ -1059,26 +1158,7 @@ fn open_tmux_sidebar_everywhere() {
     }
 
     prune_orphan_sidebar_windows();
-
     set_sidebar_open(any_sidebar_pane());
-
-    if active_pane_is_sidebar() {
-        return;
-    }
-
-    // Keep focus in the user's current content pane after a global reveal.
-    if windows.iter().any(|window| window == &current_window) {
-        let active = tmux(&["list-panes", "-F", "#{pane_id}\t#{pane_active}"])
-            .lines()
-            .find_map(|line| {
-                let (pane_id, active) = line.split_once('\t')?;
-                let is_sidebar = panes.iter().any(|pane| pane == pane_id);
-                (active == "1" && !is_sidebar).then(|| pane_id.to_string())
-            });
-        if let Some(active) = active {
-            tmux(&["select-pane", "-t", &active]);
-        }
-    }
 }
 
 fn close_all_tmux_sidebars() {
@@ -1148,7 +1228,12 @@ fn prune_orphan_sidebar_windows() {
 
 fn focus_tmux_sidebar() {
     if active_pane_is_sidebar() {
+        let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
+        if !target.is_empty() {
+            open_sidebars_for_session(&target);
+        }
         tmux(&["switch-client", "-l"]);
+        finish_session_switch();
         tmux(&["select-pane", "-R"]);
     } else if let Some(window) = current_window_id()
         && let Some(pane) = sidebar_pane_in_target(Some(&window))
@@ -1170,18 +1255,35 @@ pub(crate) fn send_key_to_current_sidebar(key: &str) -> bool {
     true
 }
 
+pub(crate) fn prepare_session_switch(target: &str) {
+    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
+        open_sidebars_for_session(target);
+    }
+}
+
+pub(crate) fn finish_session_switch() {
+    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
+        sync_sidebars_to_attached_session_windows();
+    }
+}
+
 pub(crate) fn cmd_sidebar_control(args: &[String]) {
     match args.first().map(String::as_str) {
         Some("toggle") => {
-            if any_sidebar_pane() {
+            let attached = attached_session_window_ids();
+            let attached_has_sidebar = all_sidebar_panes_by_window()
+                .keys()
+                .any(|window| attached.contains(window));
+            if attached_has_sidebar {
                 close_all_tmux_sidebars();
             } else {
-                open_tmux_sidebar_everywhere();
+                sync_sidebars_to_attached_session_windows();
             }
         }
         Some("open") => {
-            open_tmux_sidebar_everywhere();
+            sync_sidebars_to_attached_session_windows();
         }
+        Some("sync") => sync_sidebars_to_attached_session_windows(),
         Some("focus") => focus_tmux_sidebar(),
         Some("close") => close_all_tmux_sidebars(),
         Some("prune-orphans") => prune_orphan_sidebar_windows(),
@@ -1360,7 +1462,12 @@ pub(crate) fn cmd_sidebar() {
                         // Cmd+O from WezTerm arrives as Ctrl+O (see wezterm.lua
                         // focus_sidebar) — toggle to the last session.
                         (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
+                            let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
+                            if !target.is_empty() {
+                                open_sidebars_for_session(&target);
+                            }
                             tmux(&["switch-client", "-l"]);
+                            finish_session_switch();
                             focus_main_pane();
                         }
                         (KeyCode::Char('j'), KeyModifiers::ALT) => {
