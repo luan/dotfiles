@@ -297,7 +297,20 @@ impl SidebarState {
 
         let cur = std::env::var("TMUX_PANE")
             .ok()
-            .and_then(|pane| snapshot.pane_sessions.get(&pane).cloned())
+            .and_then(|pane| {
+                snapshot.pane_sessions.get(&pane).cloned().or_else(|| {
+                    // A sidebar pane can be created immediately before a
+                    // session switch, while the daemon snapshot is still
+                    // up to 500ms old. Falling back to the first session
+                    // during that gap makes the sidebar highlight the
+                    // wrong session for a few frames. Query only this
+                    // pane's owning session when the snapshot does not
+                    // know about the fresh pane yet.
+                    let session = tmux(&["display-message", "-p", "-t", &pane, "#{session_name}"]);
+                    self.tmux_call_count += 1;
+                    (!session.is_empty()).then_some(session)
+                })
+            })
             .or_else(|| (!self.current.is_empty()).then(|| self.current.clone()))
             .or_else(|| snapshot.alive_sessions.first().cloned())
             .unwrap_or_default();
@@ -533,16 +546,16 @@ impl SidebarState {
 
     fn switch_to_selected(&self) {
         if let Some(id) = self.selected_session_id() {
-            // A tmux-native sidebar lives inside a tmux window. When jumping
-            // from the sidebar, pre-create sidebars across the target
-            // session's windows so both the session switch and subsequent
-            // window switches stay flicker-free.
+            // A tmux-native sidebar lives inside a tmux window. Pre-create
+            // only the target session's current window synchronously so the
+            // switch itself stays fast; the rest of the attached session is
+            // synced in the background after switching.
             if running_as_tmux_sidebar() {
-                open_sidebars_for_session(&id);
+                open_tmux_sidebar_in_target(Some(&id), false);
             }
             tmux(&["switch-client", "-t", &id]);
             if running_as_tmux_sidebar() {
-                sync_sidebars_to_attached_session_windows();
+                spawn_detached_sidebar_sync();
             }
         }
     }
@@ -696,15 +709,6 @@ fn attached_session_window_ids() -> HashSet<String> {
     }
 
     windows
-}
-
-fn session_window_ids(session: &str) -> Vec<String> {
-    tmux(&["list-windows", "-t", session, "-F", "#{window_id}"])
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect()
 }
 
 fn all_sidebar_panes_by_window() -> HashMap<String, Vec<String>> {
@@ -1066,44 +1070,14 @@ fn open_tmux_sidebar(select: bool) -> Option<String> {
     open_tmux_sidebar_in_target(None, select)
 }
 
-fn open_sidebars_for_session(session: &str) {
-    if !sidebar_enabled() {
-        return;
-    }
-
-    daemon::ensure_started();
-
-    let _lock = match acquire_sidebar_open_lock() {
-        Some(lock) => lock,
-        None => return,
-    };
-
-    let windows = session_window_ids(session);
-    if windows.is_empty() {
-        return;
-    }
-
-    let width = sidebar_width();
-    let existing = all_sidebar_panes_by_window();
-    let missing_windows: Vec<String> = windows
-        .iter()
-        .filter(|window| !existing.contains_key(*window))
-        .cloned()
-        .collect();
-    let mut panes: Vec<String> = existing
-        .iter()
-        .filter(|(window, _)| windows.iter().any(|target| target == *window))
-        .flat_map(|(_, panes)| panes.iter().cloned())
-        .collect();
-    panes.extend(split_sidebar_panes_in_windows(&missing_windows, &width));
-
-    batch_mark_and_resize_sidebar_panes(&panes, &width);
-    if sidebar_borderless() {
-        for pane in &panes {
-            apply_borderless_to_pane(pane);
-        }
-    }
-    set_sidebar_open(any_sidebar_pane());
+fn spawn_detached_sidebar_sync() {
+    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
+    let mut command = Command::new(exe);
+    command
+        .args(["sidebar", "sync"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let _ = spawn_reaped(command);
 }
 
 fn sync_sidebars_to_attached_session_windows() {
@@ -1230,7 +1204,7 @@ fn focus_tmux_sidebar() {
     if active_pane_is_sidebar() {
         let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
         if !target.is_empty() {
-            open_sidebars_for_session(&target);
+            open_tmux_sidebar_in_target(Some(&target), false);
         }
         tmux(&["switch-client", "-l"]);
         finish_session_switch();
@@ -1257,13 +1231,13 @@ pub(crate) fn send_key_to_current_sidebar(key: &str) -> bool {
 
 pub(crate) fn prepare_session_switch(target: &str) {
     if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        open_sidebars_for_session(target);
+        open_tmux_sidebar_in_target(Some(target), false);
     }
 }
 
 pub(crate) fn finish_session_switch() {
     if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        sync_sidebars_to_attached_session_windows();
+        spawn_detached_sidebar_sync();
     }
 }
 
@@ -1467,7 +1441,7 @@ pub(crate) fn cmd_sidebar() {
                         (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
                             let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
                             if !target.is_empty() {
-                                open_sidebars_for_session(&target);
+                                open_tmux_sidebar_in_target(Some(&target), false);
                             }
                             tmux(&["switch-client", "-l"]);
                             finish_session_switch();
