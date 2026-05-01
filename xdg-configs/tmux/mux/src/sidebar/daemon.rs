@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
@@ -18,7 +17,7 @@ use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
 use super::meta::{AgentInstance, DiffStat, SessionMeta, query_session_meta};
 
-const SNAPSHOT_VERSION: u32 = 4;
+const SNAPSHOT_VERSION: u32 = 7;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -33,8 +32,7 @@ pub(super) struct SidebarSnapshot {
     pub(super) alive_sessions: Vec<String>,
     pub(super) pane_sessions: HashMap<String, String>,
     meta: HashMap<String, SessionMetaSnapshot>,
-    usage_bars: Vec<UsageBarSnapshot>,
-    overage: Option<ClaudeOverageSnapshot>,
+    usage_lines: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,27 +68,6 @@ struct AgentCtxSnapshot {
     tokens: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct UsageBarSnapshot {
-    label: String,
-    display: String,
-    pct: f64,
-    window_secs: i64,
-    reset_ts: i64,
-    last_ts: i64,
-    provider_rgb: (u8, u8, u8),
-    overage: Option<f64>,
-    hit_rate: Option<f64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct ClaudeOverageSnapshot {
-    five_h: f64,
-    seven_d: f64,
-    month: f64,
-    total: f64,
-}
-
 impl SidebarSnapshot {
     pub(super) fn age_ms(&self) -> u64 {
         now_ms().saturating_sub(self.generated_at_ms)
@@ -103,15 +80,8 @@ impl SidebarSnapshot {
             .collect()
     }
 
-    pub(super) fn usage_bars_runtime(&self) -> Vec<usage_bars::Bar> {
-        self.usage_bars
-            .iter()
-            .map(UsageBarSnapshot::runtime)
-            .collect()
-    }
-
-    pub(super) fn overage_runtime(&self) -> Option<usage_bars::ClaudeOverage> {
-        self.overage.as_ref().map(ClaudeOverageSnapshot::runtime)
+    pub(super) fn usage_lines(&self) -> Vec<String> {
+        self.usage_lines.clone()
     }
 }
 
@@ -201,67 +171,12 @@ impl AgentCtxSnapshot {
     }
 }
 
-impl UsageBarSnapshot {
-    fn from_runtime(bar: &usage_bars::Bar) -> Self {
-        Self {
-            label: bar.label.clone(),
-            display: bar.display.clone(),
-            pct: bar.pct,
-            window_secs: bar.window_secs,
-            reset_ts: bar.reset_ts,
-            last_ts: bar.last_ts,
-            provider_rgb: color_rgb(bar.provider),
-            overage: bar.overage,
-            hit_rate: bar.hit_rate,
-        }
-    }
-
-    fn runtime(&self) -> usage_bars::Bar {
-        usage_bars::Bar {
-            label: self.label.clone(),
-            display: self.display.clone(),
-            pct: self.pct,
-            window_secs: self.window_secs,
-            reset_ts: self.reset_ts,
-            last_ts: self.last_ts,
-            provider: Color::Rgb(
-                self.provider_rgb.0,
-                self.provider_rgb.1,
-                self.provider_rgb.2,
-            ),
-            overage: self.overage,
-            hit_rate: self.hit_rate,
-        }
-    }
-}
-
-impl ClaudeOverageSnapshot {
-    fn from_runtime(overage: &usage_bars::ClaudeOverage) -> Self {
-        Self {
-            five_h: overage.five_h,
-            seven_d: overage.seven_d,
-            month: overage.month,
-            total: overage.total,
-        }
-    }
-
-    fn runtime(&self) -> usage_bars::ClaudeOverage {
-        usage_bars::ClaudeOverage {
-            five_h: self.five_h,
-            seven_d: self.seven_d,
-            month: self.month,
-            total: self.total,
-        }
-    }
-}
-
 struct DaemonCache {
     meta: HashMap<String, SessionMeta>,
     gerund_cache: HashMap<String, (String, Instant)>,
     last_active: HashMap<String, Instant>,
     last_meta_refresh: Instant,
-    usage_bars: Vec<usage_bars::Bar>,
-    overage: Option<usage_bars::ClaudeOverage>,
+    usage_lines: Vec<String>,
 }
 
 struct BaseSnapshotInput {
@@ -278,8 +193,7 @@ impl DaemonCache {
             gerund_cache: HashMap::new(),
             last_active: HashMap::new(),
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
-            usage_bars: Vec::new(),
-            overage: None,
+            usage_lines: Vec::new(),
         }
     }
 
@@ -303,15 +217,7 @@ impl DaemonCache {
                 .iter()
                 .map(|(session, meta)| (session.clone(), SessionMetaSnapshot::from_runtime(meta)))
                 .collect(),
-            usage_bars: self
-                .usage_bars
-                .iter()
-                .map(UsageBarSnapshot::from_runtime)
-                .collect(),
-            overage: self
-                .overage
-                .as_ref()
-                .map(ClaudeOverageSnapshot::from_runtime),
+            usage_lines: self.usage_lines.clone(),
         };
         Some((snapshot, base.sidebar_panes))
     }
@@ -353,9 +259,7 @@ impl DaemonCache {
         self.meta = meta;
         self.last_meta_refresh = now;
 
-        let snap = usage_bars::collect();
-        self.usage_bars = snap.bars;
-        self.overage = snap.overage;
+        self.usage_lines = usage_bars::collect(usage_width()).lines;
 
         debug!(
             tmux_calls,
@@ -582,26 +486,8 @@ fn claim_daemon_pid() -> bool {
     }
 }
 
-fn color_rgb(color: Color) -> (u8, u8, u8) {
-    match color {
-        Color::Rgb(r, g, b) => (r, g, b),
-        Color::Black => (0, 0, 0),
-        Color::White => (255, 255, 255),
-        Color::Red => (255, 0, 0),
-        Color::Green => (0, 255, 0),
-        Color::Yellow => (255, 255, 0),
-        Color::Blue => (0, 0, 255),
-        Color::Magenta => (255, 0, 255),
-        Color::Cyan => (0, 255, 255),
-        Color::Gray | Color::DarkGray => (128, 128, 128),
-        Color::LightRed => (255, 128, 128),
-        Color::LightGreen => (128, 255, 128),
-        Color::LightYellow => (255, 255, 128),
-        Color::LightBlue => (128, 128, 255),
-        Color::LightMagenta => (255, 128, 255),
-        Color::LightCyan => (128, 255, 255),
-        Color::Indexed(_) | Color::Reset => (255, 255, 255),
-    }
+fn usage_width() -> u16 {
+    super::sidebar_width().parse::<u16>().unwrap_or(36)
 }
 
 fn now_ms() -> u64 {

@@ -19,8 +19,6 @@ use crate::process::spawn_reaped;
 use crate::tmux::tmux;
 use tracing::debug;
 
-use crate::usage_bars;
-
 mod claude;
 mod daemon;
 mod hooks;
@@ -140,14 +138,9 @@ struct SidebarState {
     pub(super) overlay: Option<SidebarOverlay>,
     pub(super) filter: String,
     pub(super) filter_cursor: usize,
-    /// Cached usage bars — refreshed on the 3s meta cycle, not every 500ms draw.
-    pub(super) usage_bars_cache: Vec<usage_bars::Bar>,
-    /// Claude overage snapshot cached alongside usage_bars_cache.
-    pub(super) overage: Option<usage_bars::ClaudeOverage>,
-    /// Active pulse animations keyed by Bar.label. Populated when a bar's used
-    /// pct strictly increases (= remaining decreases) between refreshes.
-    /// Entries are pruned once the pulse animation completes.
-    pub(super) pulse_starts: HashMap<String, Instant>,
+    /// Cached usage section lines rendered by `ct tui usage-bars`, refreshed on
+    /// the 3s meta cycle, not every 500ms draw.
+    pub(super) usage_lines_cache: Vec<String>,
     /// y-origin and height of the usage bars rect from the last draw — used
     /// to map mouse clicks to bar labels for manual pulse triggers.
     pub(super) last_bars_y: u16,
@@ -179,9 +172,7 @@ impl SidebarState {
             overlay: None,
             filter: String::new(),
             filter_cursor: 0,
-            usage_bars_cache: Vec::new(),
-            overage: None,
-            pulse_starts: HashMap::new(),
+            usage_lines_cache: Vec::new(),
             last_bars_y: 0,
             last_bars_h: 0,
             tmux_call_count: 0,
@@ -307,34 +298,7 @@ impl SidebarState {
         let sessions = compute_order(&alive, self.show_hidden);
         let meta = snapshot.meta_runtime();
 
-        let pulse_now = Instant::now();
-        let bars = snapshot.usage_bars_runtime();
-        for nb in &bars {
-            if let Some(prev) = self.usage_bars_cache.iter().find(|b| b.label == nb.label)
-                && nb.pct > prev.pct
-            {
-                self.pulse_starts.insert(nb.label.clone(), pulse_now);
-            }
-        }
-        let overage = snapshot.overage_runtime();
-        if let (Some(old), Some(new)) = (&self.overage, &overage) {
-            if old.five_h != new.five_h {
-                self.pulse_starts.insert("over:claude 5h".into(), pulse_now);
-            }
-            if old.seven_d != new.seven_d {
-                self.pulse_starts.insert("over:claude 7d".into(), pulse_now);
-            }
-            if old.month != new.month {
-                self.pulse_starts.insert("over:mo".into(), pulse_now);
-            }
-            if old.total != new.total {
-                self.pulse_starts.insert("over:total".into(), pulse_now);
-            }
-        }
-        self.pulse_starts
-            .retain(|_, started| pulse_now.duration_since(*started) < usage_bars::PULSE_DURATION);
-        self.usage_bars_cache = bars;
-        self.overage = overage;
+        self.usage_lines_cache = snapshot.usage_lines();
 
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
         let current_changed = cur != self.current;
@@ -455,39 +419,8 @@ impl SidebarState {
                 .retain(|_, (_, t)| now.duration_since(*t) < ACTIVITY_GRACE);
             self.meta = meta;
             self.last_meta_refresh = now;
-            let snap = usage_bars::collect();
-            // Detect usage increases (= remaining decrease in display) per bar
-            // label and start a pulse animation.
-            let pulse_now = Instant::now();
-            for nb in &snap.bars {
-                if let Some(prev) = self.usage_bars_cache.iter().find(|b| b.label == nb.label)
-                    && nb.pct > prev.pct
-                {
-                    self.pulse_starts.insert(nb.label.clone(), pulse_now);
-                }
-            }
-            // Detect overage dollar-value changes (any direction) and pulse
-            // the specific field with a red color flash. Skip first load
-            // (old == None) — that's initialization, not a change.
-            if let (Some(old), Some(new)) = (&self.overage, &snap.overage) {
-                if old.five_h != new.five_h {
-                    self.pulse_starts.insert("over:claude 5h".into(), pulse_now);
-                }
-                if old.seven_d != new.seven_d {
-                    self.pulse_starts.insert("over:claude 7d".into(), pulse_now);
-                }
-                if old.month != new.month {
-                    self.pulse_starts.insert("over:mo".into(), pulse_now);
-                }
-                if old.total != new.total {
-                    self.pulse_starts.insert("over:total".into(), pulse_now);
-                }
-            }
-            self.pulse_starts.retain(|_, started| {
-                pulse_now.duration_since(*started) < usage_bars::PULSE_DURATION
-            });
-            self.usage_bars_cache = snap.bars;
-            self.overage = snap.overage;
+            let usage_width = sidebar_width().parse::<u16>().unwrap_or(36);
+            self.usage_lines_cache = crate::usage_bars::collect(usage_width).lines;
         }
 
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
@@ -1252,8 +1185,6 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
 pub(crate) fn cmd_sidebar() {
     daemon::ensure_started();
 
-    crate::usage::start_all();
-
     mark_current_sidebar_pane();
 
     // Set WezTerm user var for toggle detection
@@ -1286,7 +1217,7 @@ pub(crate) fn cmd_sidebar() {
     let mut last_list_h: u16 = 0;
     let mut last_refresh = Instant::now();
     const IDLE_POLL: Duration = Duration::from_millis(500);
-    const PULSE_POLL: Duration = Duration::from_millis(33); // ~30 fps during pulse
+    const ANIMATION_POLL: Duration = Duration::from_millis(33); // ~30 fps during animation
     const REFRESH_INTERVAL: Duration = Duration::from_millis(500);
 
     loop {
@@ -1298,16 +1229,10 @@ pub(crate) fn cmd_sidebar() {
             })
             .ok();
 
-        // High-frequency redraw while any animation is mid-flight: bar
-        // pulses OR gerund percolation.
-        let pulse_active = state.last_bars_h > 0
-            && state
-                .pulse_starts
-                .values()
-                .any(|s| s.elapsed() < usage_bars::PULSE_DURATION);
+        // High-frequency redraw while any gerund percolation is mid-flight.
         let agent_animation_active = state.visible_agent_animation_active(last_list_h);
-        let poll_timeout = if pulse_active || agent_animation_active {
-            PULSE_POLL
+        let poll_timeout = if agent_animation_active {
+            ANIMATION_POLL
         } else {
             IDLE_POLL
         };
@@ -1326,20 +1251,6 @@ pub(crate) fn cmd_sidebar() {
                 }
                 Ok(Event::Mouse(_)) if state.overlay_active() => {}
                 Ok(Event::Mouse(me)) => match me.kind {
-                    MouseEventKind::Down(MouseButton::Left)
-                        if state.last_bars_h > 0
-                            && me.row >= state.last_bars_y
-                            && me.row < state.last_bars_y + state.last_bars_h =>
-                    {
-                        // Manual pulse trigger for testing.
-                        let bar_idx =
-                            ((me.row - state.last_bars_y) / usage_bars::ROWS_PER_BAR) as usize;
-                        if let Some(label) =
-                            state.usage_bars_cache.get(bar_idx).map(|b| b.label.clone())
-                        {
-                            state.pulse_starts.insert(label, Instant::now());
-                        }
-                    }
                     MouseEventKind::Down(MouseButton::Left)
                         if me.row >= last_list_y && me.row < last_list_y + last_list_h =>
                     {
