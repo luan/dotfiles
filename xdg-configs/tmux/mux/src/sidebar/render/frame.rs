@@ -83,14 +83,8 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
     }
     let footer_h = FOOTER_H;
 
-    let bars = &state.usage_bars_cache;
-    let has_overage_footer = state
-        .overage
-        .as_ref()
-        .map(|ov| ov.month > 0.0 || ov.total > 0.0)
-        .unwrap_or(false)
-        && bars.iter().any(|b| b.label.starts_with("claude"));
-    let wanted_bars_h = usage_bars::height(bars.len(), has_overage_footer);
+    let usage_lines = &state.usage_lines_cache;
+    let wanted_bars_h = usage_bars::height(usage_lines);
     // Only show bars when the list still has room for at least 4 rows after.
     // Add 2 extra rows for dim separator lines above and below the bars.
     let bars_h =
@@ -136,14 +130,7 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
             width: content_w,
             height: bars_h,
         };
-        usage_bars::draw(
-            f,
-            bars_rect,
-            bg,
-            bars,
-            &state.pulse_starts,
-            state.overage.as_ref(),
-        );
+        usage_bars::draw(f, bars_rect, bg, usage_lines);
         state.last_bars_y = bars_y;
         state.last_bars_h = bars_h;
     } else {

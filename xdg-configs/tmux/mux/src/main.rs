@@ -17,7 +17,6 @@ mod project;
 mod sidebar;
 mod status;
 mod tmux;
-mod usage;
 mod usage_bars;
 
 use color::compute_color;
@@ -615,7 +614,7 @@ fn cmd_bench(args: &[String]) {
     let mut collect_times = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let t0 = std::time::Instant::now();
-        let _ = usage_bars::collect();
+        let _ = usage_bars::collect(80);
         collect_times.push(t0.elapsed());
     }
 
@@ -645,7 +644,7 @@ fn cmd_bench(args: &[String]) {
             "#S",
         ]);
         sidebar::bench_query_session_meta(&sessions);
-        let _ = usage_bars::collect();
+        let _ = usage_bars::collect(80);
         refresh_times.push(t0.elapsed());
     }
 
