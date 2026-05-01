@@ -13,8 +13,8 @@ use super::items::{InlineRenameCtx, render_inline_rename_item, render_item};
 use super::overlays::{overlay_height, render_overlay};
 use super::render_at;
 
-/// Returns (list_y_start, list_height) for mouse mapping.
-pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16, u16) {
+/// Returns the list area for mouse mapping.
+pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> Rect {
     let area = f.area();
     f.render_widget(ratatui::widgets::Clear, area);
 
@@ -25,7 +25,7 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
     };
 
     if area.height < 3 || area.width < 6 {
-        return (0, 0);
+        return Rect::default();
     }
 
     // On notched displays, reserve an extra solid-black row at the very top to
@@ -139,7 +139,12 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
     }
 
     if list_h == 0 {
-        return (list_y, 0);
+        return Rect {
+            x: area.x,
+            y: list_y,
+            width: content_w,
+            height: 0,
+        };
     }
 
     let list_w_with_bar = content_w.saturating_sub(1); // right pad
@@ -239,7 +244,12 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> (u16,
         render_overlay(f, overlay_area, overlay, bg, state.focused);
     }
 
-    (list_y, list_h)
+    Rect {
+        x: area.x,
+        y: list_y,
+        width: content_w,
+        height: list_h,
+    }
 }
 
 fn render_filter_row(f: &mut Frame, row: Rect, state: &SidebarState, bg: Color) {
