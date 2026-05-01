@@ -287,7 +287,9 @@ fn cmd_list() {
 fn cmd_click(args: &[String]) {
     let range = args.first().map_or("", String::as_str);
     if let Some(session) = range.strip_prefix("s:") {
+        sidebar::prepare_session_switch(session);
         tmux_cmd(&["switch-client", "-t", session]);
+        sidebar::finish_session_switch();
     } else if let Some(window) = range.strip_prefix("w:") {
         tmux_cmd(&["select-window", "-t", &format!(":{window}")]);
     } else if range == "caffeine" {
@@ -455,7 +457,18 @@ fn cmd_switch(args: &[String]) {
         (None, "prev") => sessions.last().expect("non-empty after early return"),
         (None, _) => &sessions[0],
     };
+    sidebar::prepare_session_switch(target);
     tmux_cmd(&["switch-client", "-t", target]);
+    sidebar::finish_session_switch();
+}
+
+fn cmd_last() {
+    let target = tmux_cmd(&["display-message", "-p", "#{client_last_session}"]);
+    if !target.is_empty() {
+        sidebar::prepare_session_switch(&target);
+    }
+    tmux_cmd(&["switch-client", "-l"]);
+    sidebar::finish_session_switch();
 }
 
 fn cmd_move(args: &[String]) {
@@ -512,7 +525,9 @@ fn cmd_select(args: &[String]) {
     let st = query_state();
     let sessions = compute_order(&st.alive, false);
     if let Some(target) = sessions.get(index - 1) {
+        sidebar::prepare_session_switch(target);
         tmux_cmd(&["switch-client", "-t", target]);
+        sidebar::finish_session_switch();
     }
 }
 
@@ -520,7 +535,9 @@ fn cmd_attention() {
     let st = query_state();
     let target = tmux_cmd(&["show-option", "-gqv", "@attention_target"]);
     if !target.is_empty() && st.alive.contains(&target) {
+        sidebar::prepare_session_switch(&target);
         tmux_cmd(&["switch-client", "-t", &target]);
+        sidebar::finish_session_switch();
         tmux_cmd(&["set-option", "-gu", "@attention_target"]);
         return;
     }
@@ -531,13 +548,17 @@ fn cmd_attention() {
         .find(|(_, v)| *v == "1")
         .map(|(k, _)| k.as_str())
     {
+        sidebar::prepare_session_switch(target);
         tmux_cmd(&["switch-client", "-t", target]);
+        sidebar::finish_session_switch();
         return;
     }
 
     let sessions = compute_order(&st.alive, false);
     if let Some(target) = sidebar::attention_target(&sessions) {
+        sidebar::prepare_session_switch(&target);
         tmux_cmd(&["switch-client", "-t", &target]);
+        sidebar::finish_session_switch();
     }
 }
 
@@ -698,6 +719,7 @@ fn main() {
         "order" => cmd_order(&rest),
         "list" => cmd_list(),
         "color" => cmd_color(&rest),
+        "last" => cmd_last(),
         "switch" => cmd_switch(&rest),
         "move" => cmd_move(&rest),
         "chooser-list" => chooser::cmd_chooser_list(),
