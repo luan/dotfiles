@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::palette::{group_glyph, num_glyph};
 use crate::tmux::{SystemInfo, WindowInfo};
@@ -29,7 +27,6 @@ pub(crate) fn render_bar(
     sessions: &[String],
     cur_session: &str,
     meta: &GroupMeta,
-    attn: &HashMap<String, String>,
     width: usize,
 ) -> BarOutput {
     if sessions.is_empty() {
@@ -49,7 +46,7 @@ pub(crate) fn render_bar(
         render_sessions_narrow(sessions, cur_session, &colors, width)
     } else {
         let compact = width < 120;
-        render_sessions_full(sessions, cur_session, meta, attn, &colors, compact)
+        render_sessions_full(sessions, cur_session, meta, &colors, compact)
     };
 
     BarOutput {
@@ -243,7 +240,6 @@ fn render_sessions_full(
     sessions: &[String],
     cur: &str,
     meta: &GroupMeta,
-    attn: &HashMap<String, String>,
     colors: &[(String, String, String)],
     compact: bool,
 ) -> String {
@@ -265,7 +261,6 @@ fn render_sessions_full(
         };
 
         let (_, ref color, ref dim_c) = colors[idx];
-        let has_attention = attn.get(name.as_str()).is_some_and(|a| a == "1");
         let display = if gtotal == 1 {
             group
         } else {
@@ -306,14 +301,7 @@ fn render_sessions_full(
         if name == cur {
             out.push_str(&format!("#[fg={color}]{glyph} #[bold]{display}#[nobold]"));
         } else if show_name {
-            let marker = if has_attention {
-                format!("#[bold,fg={color}]●#[nobold] ")
-            } else {
-                "  ".to_string()
-            };
-            out.push_str(&format!("#[fg={dim_c}]{glyph} {marker}{display}"));
-        } else if has_attention {
-            out.push_str(&format!("#[fg={dim_c}]{glyph}#[bold,fg={color}]●#[nobold]"));
+            out.push_str(&format!("#[fg={dim_c}]{glyph}   {display}"));
         } else {
             out.push_str(&format!("#[fg={dim_c}]{glyph} "));
         }

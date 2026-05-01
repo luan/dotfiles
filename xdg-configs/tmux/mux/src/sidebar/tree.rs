@@ -10,7 +10,6 @@ use super::meta::{DiffStat, SessionMeta};
 
 pub(super) enum ItemKind {
     Session {
-        attention: bool,
         diff: Option<DiffStat>,
         cpu_pct: f32,
     },
@@ -146,7 +145,6 @@ pub(super) fn build_items(
             selectable: true,
             session_id: Some(name.clone()),
             kind: ItemKind::Session {
-                attention: sm.attention,
                 diff: sm.diff,
                 cpu_pct: sm.cpu_pct,
             },
