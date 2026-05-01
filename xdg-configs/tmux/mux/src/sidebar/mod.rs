@@ -48,6 +48,14 @@ const SIDEBAR_OPEN_LOCK: &str = "mux-sidebar-open.lock";
 const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
 const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_secs(3);
 
+pub(crate) fn attention_target(sessions: &[String]) -> Option<String> {
+    let (meta, _) = query_session_meta(sessions);
+    sessions
+        .iter()
+        .find(|session| meta.get(*session).is_some_and(|m| m.attention))
+        .cloned()
+}
+
 struct SidebarOpenLock {
     path: std::path::PathBuf,
 }

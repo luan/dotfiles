@@ -153,7 +153,7 @@ fn cmd_update_with_args(args: &[String]) {
             .iter()
             .find(|(n, _)| n == session)
             .map_or("#FFFFFF", |(_, c)| c.as_str());
-        let bar = render_bar(&sessions, session, &meta, &st.attn, client_width);
+        let bar = render_bar(&sessions, session, &meta, client_width);
         let windows = query_windows(session);
         let win_str = render_windows(&windows, cur_color);
         let win_main_str = if notched {
@@ -262,7 +262,7 @@ fn cmd_list() {
     let st = query_state();
     let sessions = compute_order(&st.alive, false);
     let meta = GroupMeta::new(&sessions);
-    let bar = render_bar(&sessions, &st.current, &meta, &st.attn, 200);
+    let bar = render_bar(&sessions, &st.current, &meta, 200);
     print!("{}", bar.left);
 
     if !bar.colors.is_empty() {
@@ -518,6 +518,13 @@ fn cmd_select(args: &[String]) {
 
 fn cmd_attention() {
     let st = query_state();
+    let target = tmux_cmd(&["show-option", "-gqv", "@attention_target"]);
+    if !target.is_empty() && st.alive.contains(&target) {
+        tmux_cmd(&["switch-client", "-t", &target]);
+        tmux_cmd(&["set-option", "-gu", "@attention_target"]);
+        return;
+    }
+
     if let Some(target) = st
         .attn
         .iter()
@@ -525,6 +532,12 @@ fn cmd_attention() {
         .map(|(k, _)| k.as_str())
     {
         tmux_cmd(&["switch-client", "-t", target]);
+        return;
+    }
+
+    let sessions = compute_order(&st.alive, false);
+    if let Some(target) = sidebar::attention_target(&sessions) {
+        tmux_cmd(&["switch-client", "-t", &target]);
     }
 }
 

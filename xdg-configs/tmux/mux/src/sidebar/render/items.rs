@@ -26,10 +26,6 @@ const GLYPH_PULSE_MS: u128 = 2000;
 /// Floor/ceiling for glyph brightness pulse — avoids full black or full white.
 const PULSE_MIN: f32 = 0.15;
 const PULSE_MAX: f32 = 1.3;
-/// Fast pulse for "asking" attention state.
-const ASK_PULSE_MS: u128 = 800;
-const ASK_COLOR: Color = Color::Rgb(0xF9, 0xE2, 0xAF); // yellow — attention
-
 const CODEX_VERBS: &[&str] = &["Codexing…", "Working…", "Thingamabobbing…"];
 const OPENCODE_VERBS: &[&str] = &["Opencodding…", "Opendoing…", "Shming Shmopenig…"];
 const PI_VERBS: &[&str] = &["Purring…", "Noodling…", "Tinkering…", "Scribbling…"];
@@ -43,20 +39,6 @@ fn scale_brightness(c: Color, factor: f32) -> Color {
     };
     let s = |v: u8| ((v as f32 * factor).round().clamp(0.0, 255.0)) as u8;
     Color::Rgb(s(r), s(g), s(b))
-}
-
-/// Linear blend of two RGB colors. `t` = 0 → a, `t` = 1 → b.
-fn blend_color(a: Color, b: Color, t: f32) -> Color {
-    let (ar, ag, ab) = match a {
-        Color::Rgb(r, g, b) => (r, g, b),
-        _ => (0xff, 0xff, 0xff),
-    };
-    let (br, bg, bb) = match b {
-        Color::Rgb(r, g, b) => (r, g, b),
-        _ => (0xff, 0xff, 0xff),
-    };
-    let mix = |x: u8, y: u8| ((x as f32) * (1.0 - t) + (y as f32) * t).round() as u8;
-    Color::Rgb(mix(ar, br), mix(ag, bg), mix(ab, bb))
 }
 
 fn format_cpu_pct(cpu_pct: f32) -> String {
@@ -148,11 +130,7 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Session {
-            attention,
-            diff,
-            cpu_pct,
-        } => {
+        ItemKind::Session { diff, cpu_pct } => {
             let fg = if is_sel || is_cur {
                 item.color
             } else {
@@ -193,9 +171,6 @@ pub(in crate::sidebar) fn render_item(
 
             let right_w: usize = right.iter().map(|s| s.width()).sum();
             let mut reserved = right_w;
-            if *attention {
-                reserved += 2;
-            }
             if is_cur {
                 reserved += 2;
             }
@@ -217,13 +192,6 @@ pub(in crate::sidebar) fn render_item(
 
             spans.extend(right);
 
-            if *attention {
-                spans.push(Span::styled(
-                    "●",
-                    Style::default().fg(item.color).bg(row_bg),
-                ));
-                spans.push(Span::styled(" ", Style::default().bg(row_bg)));
-            }
             if is_cur {
                 spans.push(Span::styled("←", Style::default().fg(SUBTEXT0).bg(row_bg)));
                 spans.push(Span::styled(" ", Style::default().bg(row_bg)));
@@ -271,19 +239,7 @@ pub(in crate::sidebar) fn render_item(
             let glyph_str = agent_glyph(name).unwrap_or(name).to_string();
             let agent_col = agent_color(name);
 
-            if *asking {
-                // ── Asking: loud attention pulse ──
-                let pulse = triangle_wave(now_ms, ASK_PULSE_MS, 0.0, 1.0);
-                let glyph_fg = blend_color(agent_col, ASK_COLOR, pulse);
-                line.push(Span::styled(
-                    glyph_str,
-                    Style::default().fg(glyph_fg).bg(row_bg),
-                ));
-                line.push(Span::styled(
-                    " Waiting…",
-                    Style::default().fg(ASK_COLOR).bg(row_bg),
-                ));
-            } else if let Some(gerund_str) = gerund.as_deref() {
+            if let Some(gerund_str) = gerund.as_deref().filter(|_| !*asking) {
                 // ── Active: glyph brightness pulse + percolating gerund ──
                 let perc_step = (now_ms / PERC_MS) as usize;
                 let brightness = triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
