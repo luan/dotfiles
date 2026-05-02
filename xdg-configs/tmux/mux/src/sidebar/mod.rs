@@ -1094,21 +1094,11 @@ fn sync_sidebars_to_attached_session_windows() {
 
     let attached = attached_session_window_ids();
     if attached.is_empty() {
-        close_all_tmux_sidebars();
         return;
     }
 
     let width = sidebar_width();
     let existing = all_sidebar_panes_by_window();
-
-    let stale_panes: Vec<String> = existing
-        .iter()
-        .filter(|(window, _)| !attached.contains(*window))
-        .flat_map(|(_, panes)| panes.iter().cloned())
-        .collect();
-    for pane in stale_panes {
-        tmux(&["kill-pane", "-t", &pane]);
-    }
 
     let mut attached_windows: Vec<String> = attached.into_iter().collect();
     attached_windows.sort();
@@ -1131,7 +1121,6 @@ fn sync_sidebars_to_attached_session_windows() {
         }
     }
 
-    prune_orphan_sidebar_windows();
     set_sidebar_open(any_sidebar_pane());
 }
 
