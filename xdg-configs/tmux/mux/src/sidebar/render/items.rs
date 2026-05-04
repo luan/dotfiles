@@ -12,6 +12,7 @@ use crate::palette::{age_color, ctx_label_color, dim_color, format_age};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const TREE_COLOR: Color = Color::Rgb(0x2e, 0x2f, 0x40);
+const WAITING_COLOR: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 
 // ── Agent activity animation ─────────────────────────────────
 // Claude's percolation palette (warm amber).
@@ -239,19 +240,25 @@ pub(in crate::sidebar) fn render_item(
             let glyph_str = agent_glyph(name).unwrap_or(name).to_string();
             let agent_col = agent_color(name);
 
-            if let Some(gerund_str) = gerund.as_deref().filter(|_| !*asking) {
+            if *asking || gerund.is_some() {
                 // ── Active: glyph brightness pulse + percolating gerund ──
                 let perc_step = (now_ms / PERC_MS) as usize;
                 let brightness = triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX);
+                let active_col = if *asking { WAITING_COLOR } else { agent_col };
                 line.push(Span::styled(
                     glyph_str,
                     Style::default()
-                        .fg(scale_brightness(agent_col, brightness))
+                        .fg(scale_brightness(active_col, brightness))
                         .bg(row_bg),
                 ));
                 line.push(Span::styled(" ", Style::default().bg(row_bg)));
 
-                let (base, shine) = if name == "claude" {
+                let (base, shine) = if *asking {
+                    (
+                        scale_brightness(WAITING_COLOR, 0.7),
+                        scale_brightness(WAITING_COLOR, 1.25),
+                    )
+                } else if name == "claude" {
                     (PERC_BASE, PERC_SHINE)
                 } else {
                     (
@@ -260,7 +267,11 @@ pub(in crate::sidebar) fn render_item(
                     )
                 };
 
-                let word: &str = match name.as_str() {
+                let word: &str = if *asking {
+                    "Waiting…"
+                } else {
+                    let gerund_str = gerund.as_deref().unwrap_or_default();
+                    match name.as_str() {
                     "codex" => {
                         let idx = (now_ms / 8000) as usize % CODEX_VERBS.len();
                         CODEX_VERBS[idx]
@@ -274,6 +285,7 @@ pub(in crate::sidebar) fn render_item(
                         PI_VERBS[idx]
                     }
                     _ => gerund_str,
+                    }
                 };
 
                 let chars: Vec<char> = word.chars().collect();
