@@ -13,33 +13,65 @@ use super::pi::query_pi_agents;
 
 // ── Process info ─────────────────────────────────────────────
 
-fn build_process_info() -> (HashMap<u32, u32>, HashMap<u32, String>, HashMap<u32, f32>) {
+#[derive(Clone, Default)]
+pub(super) struct ProcessTreeInfo {
+    pub(super) name: String,
+    pub(super) cpu_pct: f32,
+    pub(super) mem_bytes: u64,
+}
+
+#[derive(Clone, Default)]
+struct ProcSample {
+    ppid: u32,
+    name: String,
+    cpu_pct: f32,
+    rss_bytes: u64,
+}
+
+fn build_process_info() -> HashMap<u32, ProcSample> {
     let out = Command::new("ps")
-        .args(["-axo", "pid=,ppid=,pcpu=,comm="])
+        .args(["-axo", "pid=,ppid=,pcpu=,rss=,comm="])
         .stderr(Stdio::null())
         .output()
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
 
-    let mut parent_of: HashMap<u32, u32> = HashMap::new();
-    let mut name_of: HashMap<u32, String> = HashMap::new();
-    let mut cpu_of: HashMap<u32, f32> = HashMap::new();
+    let mut samples: HashMap<u32, ProcSample> = HashMap::new();
     for line in out.lines() {
         let mut it = line.split_whitespace();
-        if let (Some(p1), Some(p2), Some(p3)) = (it.next(), it.next(), it.next())
+        if let (Some(p1), Some(p2), Some(p3), Some(p4)) =
+            (it.next(), it.next(), it.next(), it.next())
             && let (Ok(pid), Ok(ppid)) = (p1.parse::<u32>(), p2.parse::<u32>())
         {
             let comm = it.collect::<Vec<_>>().join(" ");
             let basename = comm.rsplit('/').next().unwrap_or(&comm).to_string();
-            parent_of.insert(pid, ppid);
-            name_of.insert(pid, basename);
-            if let Ok(cpu) = p3.parse::<f32>() {
-                cpu_of.insert(pid, cpu.max(0.0));
-            }
+            samples.insert(
+                pid,
+                ProcSample {
+                    ppid,
+                    name: basename,
+                    cpu_pct: p3.parse::<f32>().unwrap_or(0.0).max(0.0),
+                    rss_bytes: p4.parse::<u64>().unwrap_or(0).saturating_mul(1024),
+                },
+            );
         }
     }
-    (parent_of, name_of, cpu_of)
+    samples
+}
+
+fn parent_map(samples: &HashMap<u32, ProcSample>) -> HashMap<u32, u32> {
+    samples
+        .iter()
+        .map(|(&pid, sample)| (pid, sample.ppid))
+        .collect()
+}
+
+fn name_map(samples: &HashMap<u32, ProcSample>) -> HashMap<u32, String> {
+    samples
+        .iter()
+        .map(|(&pid, sample)| (pid, sample.name.clone()))
+        .collect()
 }
 
 fn build_children(parent_of: &HashMap<u32, u32>) -> HashMap<u32, Vec<u32>> {
@@ -53,7 +85,7 @@ fn build_children(parent_of: &HashMap<u32, u32>) -> HashMap<u32, Vec<u32>> {
 fn query_session_cpu(
     all_panes: &[PaneInfo],
     parent_of: &HashMap<u32, u32>,
-    cpu_of: &HashMap<u32, f32>,
+    samples: &HashMap<u32, ProcSample>,
 ) -> HashMap<String, f32> {
     let children = build_children(parent_of);
     let mut result: HashMap<String, f32> = HashMap::new();
@@ -67,8 +99,10 @@ fn query_session_cpu(
             if !seen.insert(pid) {
                 continue;
             }
-            *result.entry(pane.session.clone()).or_default() +=
-                cpu_of.get(&pid).copied().unwrap_or(0.0);
+            *result.entry(pane.session.clone()).or_default() += samples
+                .get(&pid)
+                .map(|sample| sample.cpu_pct)
+                .unwrap_or_default();
             if let Some(kids) = children.get(&pid) {
                 stack.extend(kids);
             }
@@ -76,6 +110,199 @@ fn query_session_cpu(
     }
 
     result
+}
+
+fn subtree_usage(
+    pid: u32,
+    children: &HashMap<u32, Vec<u32>>,
+    samples: &HashMap<u32, ProcSample>,
+    memo: &mut HashMap<u32, (f32, u64)>,
+) -> (f32, u64) {
+    if let Some(usage) = memo.get(&pid).copied() {
+        return usage;
+    }
+    let mut cpu = samples.get(&pid).map(|s| s.cpu_pct).unwrap_or_default();
+    let mut mem = samples.get(&pid).map(|s| s.rss_bytes).unwrap_or_default();
+    if let Some(kids) = children.get(&pid) {
+        for &kid in kids {
+            let (kid_cpu, kid_mem) = subtree_usage(kid, children, samples, memo);
+            cpu += kid_cpu;
+            mem = mem.saturating_add(kid_mem);
+        }
+    }
+    memo.insert(pid, (cpu, mem));
+    (cpu, mem)
+}
+
+fn is_shell_or_tmux_root(name: &str) -> bool {
+    matches!(
+        name,
+        "tmux" | "zsh" | "fish" | "bash" | "sh" | "login" | "mux"
+    )
+}
+
+fn is_agent_process(name: &str) -> bool {
+    AGENTS.iter().any(|(agent, _)| name == *agent)
+}
+
+fn is_hot(cpu_pct: f32, mem_bytes: u64) -> bool {
+    const HOT_CPU_PCT: f32 = 50.0;
+    const HOT_MEM_BYTES: u64 = 1024 * 1024 * 1024;
+
+    cpu_pct > HOT_CPU_PCT || mem_bytes > HOT_MEM_BYTES
+}
+
+fn dominant_process_root(
+    pid: u32,
+    children: &HashMap<u32, Vec<u32>>,
+    samples: &HashMap<u32, ProcSample>,
+    memo: &mut HashMap<u32, (f32, u64)>,
+) -> u32 {
+    let mut current = pid;
+    loop {
+        let (current_cpu, current_mem) = subtree_usage(current, children, samples, memo);
+        let Some(kids) = children.get(&current) else {
+            return current;
+        };
+        let Some((&best_child, (best_cpu, best_mem))) = kids
+            .iter()
+            .map(|kid| (kid, subtree_usage(*kid, children, samples, memo)))
+            .filter(|(_, (cpu, mem))| is_hot(*cpu, *mem))
+            .max_by(|(_, a), (_, b)| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        else {
+            return current;
+        };
+
+        // Keep walking through wrapper chains (just → uv → cmake → ninja →
+        // swift-driver) but stop when work fans out across many children. This
+        // names the dominant child tree instead of an unhelpful top-level
+        // parent while avoiding a long list of individual compiler workers.
+        let cpu_dominant = current_cpu > 0.0 && best_cpu >= current_cpu * 0.5;
+        let mem_dominant = current_mem > 0 && best_mem >= current_mem / 2;
+        if is_agent_process(
+            samples
+                .get(&current)
+                .map(|s| s.name.as_str())
+                .unwrap_or_default(),
+        ) || cpu_dominant
+            || mem_dominant
+        {
+            current = best_child;
+        } else {
+            return current;
+        }
+    }
+}
+
+fn query_session_memory_and_processes(
+    all_panes: &[PaneInfo],
+    parent_of: &HashMap<u32, u32>,
+    samples: &HashMap<u32, ProcSample>,
+) -> (HashMap<String, u64>, HashMap<String, Vec<ProcessTreeInfo>>) {
+    let children = build_children(parent_of);
+    let mut memo: HashMap<u32, (f32, u64)> = HashMap::new();
+    let mut session_mem: HashMap<String, u64> = HashMap::new();
+    let mut seen_by_session: HashMap<String, HashSet<u32>> = HashMap::new();
+    let mut roots_by_session: HashMap<String, Vec<(u32, ProcessTreeInfo)>> = HashMap::new();
+    let mut pids_by_pane: Vec<(&PaneInfo, Vec<u32>)> = Vec::new();
+
+    for pane in all_panes {
+        let seen = seen_by_session.entry(pane.session.clone()).or_default();
+        let mut stack = vec![pane.pid];
+        let mut pane_pids = HashSet::new();
+
+        while let Some(pid) = stack.pop() {
+            if !pane_pids.insert(pid) {
+                continue;
+            }
+            if seen.insert(pid) {
+                *session_mem.entry(pane.session.clone()).or_default() = session_mem
+                    .get(&pane.session)
+                    .copied()
+                    .unwrap_or_default()
+                    .saturating_add(samples.get(&pid).map(|s| s.rss_bytes).unwrap_or_default());
+            }
+            if let Some(kids) = children.get(&pid) {
+                stack.extend(kids);
+            }
+        }
+        pids_by_pane.push((pane, pane_pids.into_iter().collect()));
+    }
+
+    for (pane, pane_pids) in pids_by_pane {
+        let mut claimed = HashSet::new();
+        let pane_pid_set: HashSet<u32> = pane_pids.into_iter().collect();
+        let mut candidates = Vec::new();
+        let mut stack = vec![pane.pid];
+        while let Some(pid) = stack.pop() {
+            if !pane_pid_set.contains(&pid) {
+                continue;
+            }
+            candidates.push(pid);
+            if let Some(kids) = children.get(&pid) {
+                stack.extend(kids.iter().rev().copied());
+            }
+        }
+        for pid in candidates {
+            if claimed.contains(&pid) || pid == pane.pid {
+                continue;
+            }
+            let Some(sample) = samples.get(&pid) else {
+                continue;
+            };
+            if is_shell_or_tmux_root(&sample.name) {
+                continue;
+            }
+            let (cpu_pct, mem_bytes) = subtree_usage(pid, &children, samples, &mut memo);
+            if !is_hot(cpu_pct, mem_bytes) {
+                continue;
+            }
+            let pid = dominant_process_root(pid, &children, samples, &mut memo);
+            if claimed.contains(&pid) {
+                continue;
+            }
+            let Some(sample) = samples.get(&pid) else {
+                continue;
+            };
+            let (cpu_pct, mem_bytes) = subtree_usage(pid, &children, samples, &mut memo);
+            if is_agent_process(&sample.name) {
+                continue;
+            }
+            roots_by_session
+                .entry(pane.session.clone())
+                .or_default()
+                .push((
+                    pid,
+                    ProcessTreeInfo {
+                        name: sample.name.clone(),
+                        cpu_pct,
+                        mem_bytes,
+                    },
+                ));
+            let mut subtree = vec![pid];
+            while let Some(cur) = subtree.pop() {
+                claimed.insert(cur);
+                if let Some(kids) = children.get(&cur) {
+                    subtree.extend(kids);
+                }
+            }
+        }
+    }
+
+    let processes = roots_by_session
+        .into_iter()
+        .map(|(session, mut entries)| {
+            entries.sort_by(|(_, a), (_, b)| {
+                b.mem_bytes
+                    .cmp(&a.mem_bytes)
+                    .then_with(|| b.cpu_pct.total_cmp(&a.cpu_pct))
+            });
+            entries.dedup_by_key(|(pid, _)| *pid);
+            (session, entries.into_iter().map(|(_, info)| info).collect())
+        })
+        .collect();
+
+    (session_mem, processes)
 }
 
 // ── Agent detection ──────────────────────────────────────────
@@ -227,6 +454,8 @@ pub(super) struct SessionMeta {
     pub(super) branch: String,
     pub(super) diff: Option<DiffStat>,
     pub(super) cpu_pct: f32,
+    pub(super) mem_bytes: u64,
+    pub(super) processes: Vec<ProcessTreeInfo>,
     pub(super) agents: Vec<AgentInstance>,
     pub(super) attention: bool,
     pub(super) status: String,
@@ -372,8 +601,12 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         }
     }
 
-    let (parent_of, name_of, cpu_of) = build_process_info();
-    let session_cpu = query_session_cpu(&all_panes, &parent_of, &cpu_of);
+    let samples = build_process_info();
+    let parent_of = parent_map(&samples);
+    let name_of = name_map(&samples);
+    let session_cpu = query_session_cpu(&all_panes, &parent_of, &samples);
+    let (session_mem, session_processes) =
+        query_session_memory_and_processes(&all_panes, &parent_of, &samples);
     let pi_agents = query_pi_agents(&all_panes);
     let agent_hits = query_agents(&all_panes, &parent_of, &name_of);
 
@@ -468,6 +701,8 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
                 branch,
                 diff,
                 cpu_pct: session_cpu.get(name).copied().unwrap_or(0.0),
+                mem_bytes: session_mem.get(name).copied().unwrap_or(0),
+                processes: session_processes.get(name).cloned().unwrap_or_default(),
                 agents: session_agents,
                 attention: needs_attention,
                 status: statuses.get(name).cloned().unwrap_or_default(),

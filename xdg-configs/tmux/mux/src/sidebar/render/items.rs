@@ -51,6 +51,74 @@ fn format_cpu_pct(cpu_pct: f32) -> String {
     }
 }
 
+fn format_mem(bytes: u64) -> String {
+    let mib = bytes as f64 / 1024.0 / 1024.0;
+    if mib >= 1024.0 {
+        format!("{:.1}G", mib / 1024.0)
+    } else {
+        format!("{mib:.0}M")
+    }
+}
+
+fn process_icon_and_color(name: &str) -> (&'static str, Color) {
+    match name {
+        "nvim" => ("\u{e6ae}", Color::Rgb(0xa6, 0xe3, 0xa1)),
+        "lazygit" => ("\u{e702}", Color::Rgb(0xfa, 0xb3, 0x87)),
+        "swiftlint" | "swiftc" => ("\u{e755}", Color::Rgb(0xfa, 0xb3, 0x87)),
+        "rustc" | "cargo" => ("\u{e7a8}", Color::Rgb(0xce, 0x41, 0x22)),
+        "node" => ("\u{ed0d}", Color::Rgb(0xa6, 0xe3, 0xa1)),
+        "python" | "python3" => ("\u{e73c}", Color::Rgb(0xf9, 0xe2, 0xaf)),
+        "ruby" | "bundle" => ("\u{e791}", Color::Rgb(0xf3, 0x8b, 0xa8)),
+        "go" | "gopls" => ("\u{e724}", Color::Rgb(0x74, 0xc7, 0xec)),
+        "java" => ("\u{e738}", Color::Rgb(0xf9, 0xe2, 0xaf)),
+        _ => ("\u{e795}", OVERLAY0),
+    }
+}
+
+const CPU_ICON: &str = "\u{f2db}";
+const MEM_ICON: &str = "\u{efc5}";
+
+fn cpu_stat_color(cpu_pct: f32) -> Color {
+    if cpu_pct >= 100.0 {
+        PEACH
+    } else if cpu_pct >= 20.0 {
+        Color::Rgb(0xf9, 0xe2, 0xaf)
+    } else {
+        SURFACE1
+    }
+}
+
+fn mem_stat_color(mem_bytes: u64) -> Color {
+    if mem_bytes >= 2 * 1024 * 1024 * 1024 {
+        PEACH
+    } else if mem_bytes >= 1024 * 1024 * 1024 {
+        Color::Rgb(0xf9, 0xe2, 0xaf)
+    } else {
+        SURFACE1
+    }
+}
+
+fn aggregate_stat_spans(cpu_pct: f32, mem_bytes: u64, row_bg: Color) -> Vec<Span<'static>> {
+    let cpu_color = cpu_stat_color(cpu_pct);
+    let mem_color = mem_stat_color(mem_bytes);
+    vec![
+        Span::styled(" ", Style::default().bg(row_bg)),
+        Span::styled(CPU_ICON, Style::default().fg(cpu_color).bg(row_bg)),
+        Span::styled(" ", Style::default().bg(row_bg)),
+        Span::styled(
+            format_cpu_pct(cpu_pct),
+            Style::default().fg(cpu_color).bg(row_bg),
+        ),
+        Span::styled(" ", Style::default().bg(row_bg)),
+        Span::styled(MEM_ICON, Style::default().fg(mem_color).bg(row_bg)),
+        Span::styled(" ", Style::default().bg(row_bg)),
+        Span::styled(
+            format_mem(mem_bytes),
+            Style::default().fg(mem_color).bg(row_bg),
+        ),
+    ]
+}
+
 /// Triangle wave `lo → hi → lo` over `period_ms`.
 fn triangle_wave(now_ms: u128, period_ms: u128, lo: f32, hi: f32) -> f32 {
     let t = (now_ms % period_ms) as f32 / period_ms as f32;
@@ -131,7 +199,11 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Session { diff, cpu_pct } => {
+        ItemKind::Session {
+            diff,
+            cpu_pct,
+            mem_bytes,
+        } => {
             let fg = if is_sel || is_cur {
                 item.color
             } else {
@@ -153,29 +225,15 @@ pub(in crate::sidebar) fn render_item(
                     Style::default().fg(Color::Rgb(0xf3, 0x8b, 0xa8)).bg(row_bg),
                 ));
             }
-            if !right.is_empty() {
-                right.push(Span::styled(" ", Style::default().bg(row_bg)));
-            }
-            let cpu_color = if *cpu_pct >= 100.0 {
-                PEACH
-            } else if *cpu_pct >= 25.0 {
-                Color::Rgb(0xf9, 0xe2, 0xaf)
-            } else if is_cur {
-                OVERLAY0
-            } else {
-                SURFACE1
-            };
-            right.push(Span::styled(
-                format_cpu_pct(*cpu_pct),
-                Style::default().fg(cpu_color).bg(row_bg),
-            ));
 
+            let stats = aggregate_stat_spans(*cpu_pct, *mem_bytes, row_bg);
+            let stats_w: usize = stats.iter().map(|s| s.width()).sum();
             let right_w: usize = right.iter().map(|s| s.width()).sum();
             let mut reserved = right_w;
             if is_cur {
                 reserved += 2;
             }
-            let name_w = content_w.saturating_sub(reserved);
+            let name_w = content_w.saturating_sub(reserved + stats_w);
             let name = truncate(&item.display, name_w);
 
             let name_style = if is_cur {
@@ -184,6 +242,7 @@ pub(in crate::sidebar) fn render_item(
                 Style::default().fg(fg).bg(row_bg)
             };
             spans.push(Span::styled(name, name_style));
+            spans.extend(stats);
 
             let used: usize = spans.iter().skip(1).map(|s| s.width()).sum();
             let pad = (w - bar_w).saturating_sub(used + reserved);
@@ -200,6 +259,69 @@ pub(in crate::sidebar) fn render_item(
 
             f.render_widget(
                 Paragraph::new(Line::from(spans)).style(Style::default().bg(row_bg)),
+                row,
+            );
+        }
+        ItemKind::Process(process) => {
+            let (icon, icon_color) = process_icon_and_color(&process.name);
+            let icon_color = if is_cur {
+                icon_color
+            } else {
+                dim_color(icon_color)
+            };
+            let name_color = if is_cur { SUBTEXT0 } else { SURFACE1 };
+            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
+            line.extend(tree_prefix_spans(item.tree, indent, row_bg));
+            line.push(Span::styled(
+                icon,
+                Style::default().fg(icon_color).bg(row_bg),
+            ));
+            line.push(Span::styled(" ", Style::default().bg(row_bg)));
+
+            let right = vec![
+                Span::styled(
+                    CPU_ICON,
+                    Style::default()
+                        .fg(cpu_stat_color(process.cpu_pct))
+                        .bg(row_bg),
+                ),
+                Span::styled(" ", Style::default().bg(row_bg)),
+                Span::styled(
+                    format_cpu_pct(process.cpu_pct),
+                    Style::default()
+                        .fg(cpu_stat_color(process.cpu_pct))
+                        .bg(row_bg),
+                ),
+                Span::styled(" ", Style::default().bg(row_bg)),
+                Span::styled(
+                    MEM_ICON,
+                    Style::default()
+                        .fg(mem_stat_color(process.mem_bytes))
+                        .bg(row_bg),
+                ),
+                Span::styled(" ", Style::default().bg(row_bg)),
+                Span::styled(
+                    format_mem(process.mem_bytes),
+                    Style::default()
+                        .fg(mem_stat_color(process.mem_bytes))
+                        .bg(row_bg),
+                ),
+            ];
+            let right_w: usize = right.iter().map(|s| s.width()).sum();
+            let left_w: usize = line.iter().map(|s| s.width()).sum();
+            let name_w = w.saturating_sub(left_w + right_w + 1);
+            line.push(Span::styled(
+                truncate(&process.name, name_w),
+                Style::default().fg(name_color).bg(row_bg),
+            ));
+            let used: usize = line.iter().map(|s| s.width()).sum();
+            let pad = w.saturating_sub(used + right_w);
+            if pad > 0 {
+                line.push(Span::styled(" ".repeat(pad), Style::default().bg(row_bg)));
+            }
+            line.extend(right);
+            f.render_widget(
+                Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
                 row,
             );
         }
@@ -272,19 +394,19 @@ pub(in crate::sidebar) fn render_item(
                 } else {
                     let gerund_str = gerund.as_deref().unwrap_or_default();
                     match name.as_str() {
-                    "codex" => {
-                        let idx = (now_ms / 8000) as usize % CODEX_VERBS.len();
-                        CODEX_VERBS[idx]
-                    }
-                    "opencode" => {
-                        let idx = (now_ms / 8000) as usize % OPENCODE_VERBS.len();
-                        OPENCODE_VERBS[idx]
-                    }
-                    "pi" => {
-                        let idx = (now_ms / 8000) as usize % PI_VERBS.len();
-                        PI_VERBS[idx]
-                    }
-                    _ => gerund_str,
+                        "codex" => {
+                            let idx = (now_ms / 8000) as usize % CODEX_VERBS.len();
+                            CODEX_VERBS[idx]
+                        }
+                        "opencode" => {
+                            let idx = (now_ms / 8000) as usize % OPENCODE_VERBS.len();
+                            OPENCODE_VERBS[idx]
+                        }
+                        "pi" => {
+                            let idx = (now_ms / 8000) as usize % PI_VERBS.len();
+                            PI_VERBS[idx]
+                        }
+                        _ => gerund_str,
                     }
                 };
 

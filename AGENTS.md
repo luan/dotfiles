@@ -47,7 +47,7 @@ See [docs/architecture.md](docs/architecture.md) for the layered diagram + modul
 
 `xdg-configs/tmux/` has extensive session management scripts in `scripts/`. Plugins managed by tpm. The tmux config lives at `~/.config/tmux/tmux.conf` (XDG path, not `~/.tmux.conf`).
 
-When changing `mux` (xdg-configs/tmux/mux/), run `just mux` to rebuild, copy, and codesign the runtime binary.
+When changing `mux` (xdg-configs/tmux/mux/), always run `just mux` before handing back: it rebuilds, copies, and codesigns the runtime binary. In general, when editing any generated/installed/runtime-facing dotfile tool, also run the repo’s install/reload/update command so the live environment reflects the change, not just the source tree.
 
 ## Conventions
 
