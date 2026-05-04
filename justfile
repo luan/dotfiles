@@ -10,7 +10,6 @@ link:
     stow -R xdg-configs -t "{{ config_dir }}"
     stow -R bin -t "{{ env("HOME") }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
-    ln -sfn "$HOME/.claude" "{{ dotfiles_dir }}/dot-claude"
     if [ ! -e "{{ env("HOME") }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ env("HOME") }}/.zshenv"; fi
     if [ ! -e "{{ env("HOME") }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ env("HOME") }}/.zshrc"; fi
 
@@ -19,7 +18,6 @@ unlink:
     stow -D xdg-configs -t "{{ config_dir }}"
     stow -D bin -t "{{ env("HOME") }}/bin"
     rm -f "{{ dotfiles_dir }}/nvim"
-    rm -f "{{ dotfiles_dir }}/dot-claude"
 
 # Clone external repos if not already present
 repos:
@@ -37,7 +35,6 @@ repos:
     }
 
     clone_if_missing "https://github.com/luan/nvim" "{{ config_dir }}/nvim"
-    clone_if_missing "https://github.com/luan/dot-claude" "$HOME/.claude"
 
 # Safely pull dotfiles + external repos (skips repos with uncommitted changes)
 pull:
@@ -60,7 +57,6 @@ pull:
 
     safe_pull "{{ dotfiles_dir }}" "dotfiles"
     safe_pull "{{ config_dir }}/nvim" "nvim"
-    safe_pull "$HOME/.claude" "dot-claude"
 
 # Install Homebrew packages from Brewfile
 brew:
@@ -171,17 +167,6 @@ dev-routing: link
     set -euo pipefail
     "$HOME/bin/dev-routing" setup && "$HOME/bin/dev-routing" scan
 
-# Run dot-claude setup (ct tool + completions)
-dot-claude:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -f "$HOME/.claude/justfile" ]; then
-        echo "→ Running dot-claude setup"
-        just -f "$HOME/.claude/justfile" setup
-    else
-        echo "⚠ dot-claude justfile not found, skipping"
-    fi
-
 # Build mux binary (Rust)
 mux:
     cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
@@ -194,5 +179,5 @@ mux:
     codesign --force --sign - "{{ env("HOME") }}/bin/notch-state"
     @echo "✓ mux built"
 
-# Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, dot-claude, mux, sheldon
-setup: brew cargo repos link gitconfig claude-plugins dev-routing dot-claude mux sheldon
+# Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
+setup: brew cargo repos link gitconfig claude-plugins dev-routing mux sheldon
