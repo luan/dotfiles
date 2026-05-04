@@ -6,13 +6,15 @@ use ratatui::prelude::*;
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::palette::{group_glyph, hex_to_color, num_glyph};
 
-use super::meta::{DiffStat, SessionMeta};
+use super::meta::{DiffStat, ProcessTreeInfo, SessionMeta};
 
 pub(super) enum ItemKind {
     Session {
         diff: Option<DiffStat>,
         cpu_pct: f32,
+        mem_bytes: u64,
     },
+    Process(ProcessTreeInfo),
     Group,
     Branch,
     Agent {
@@ -147,10 +149,24 @@ pub(super) fn build_items(
             kind: ItemKind::Session {
                 diff: sm.diff,
                 cpu_pct: sm.cpu_pct,
+                mem_bytes: sm.mem_bytes,
             },
         });
 
         // Detail rows (all indented to align after number glyph)
+        for (pi, process) in sm.processes.iter().enumerate() {
+            items.push(Item {
+                id: format!("__process__{name}__{pi}"),
+                display: process.name.clone(),
+                indent: detail_indent,
+                tree: detail_tree,
+                color,
+                dim_color,
+                selectable: false,
+                session_id: Some(name.clone()),
+                kind: ItemKind::Process(process.clone()),
+            });
+        }
         for (ai, agent) in sm.agents.iter().enumerate() {
             items.push(Item {
                 id: format!("__agent__{name}__{ai}"),

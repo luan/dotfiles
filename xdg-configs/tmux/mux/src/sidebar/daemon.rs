@@ -15,9 +15,9 @@ use crate::usage_bars;
 
 use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
-use super::meta::{AgentInstance, DiffStat, SessionMeta, query_session_meta};
+use super::meta::{AgentInstance, DiffStat, ProcessTreeInfo, SessionMeta, query_session_meta};
 
-const SNAPSHOT_VERSION: u32 = 7;
+const SNAPSHOT_VERSION: u32 = 10;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -40,6 +40,8 @@ struct SessionMetaSnapshot {
     branch: String,
     diff: Option<DiffStatSnapshot>,
     cpu_pct: f32,
+    mem_bytes: u64,
+    processes: Vec<ProcessSnapshot>,
     agents: Vec<AgentSnapshot>,
     attention: bool,
     status: String,
@@ -60,6 +62,13 @@ struct AgentSnapshot {
     ctx: Option<AgentCtxSnapshot>,
     age_ms: Option<u64>,
     asking: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ProcessSnapshot {
+    name: String,
+    cpu_pct: f32,
+    mem_bytes: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -91,6 +100,12 @@ impl SessionMetaSnapshot {
             branch: meta.branch.clone(),
             diff: meta.diff.map(DiffStatSnapshot::from_runtime),
             cpu_pct: meta.cpu_pct,
+            mem_bytes: meta.mem_bytes,
+            processes: meta
+                .processes
+                .iter()
+                .map(ProcessSnapshot::from_runtime)
+                .collect(),
             agents: meta
                 .agents
                 .iter()
@@ -107,6 +122,12 @@ impl SessionMetaSnapshot {
             branch: self.branch.clone(),
             diff: self.diff.map(DiffStatSnapshot::runtime),
             cpu_pct: self.cpu_pct,
+            mem_bytes: self.mem_bytes,
+            processes: self
+                .processes
+                .iter()
+                .map(ProcessSnapshot::runtime)
+                .collect(),
             agents: self.agents.iter().map(AgentSnapshot::runtime).collect(),
             attention: self.attention,
             status: self.status.clone(),
@@ -127,6 +148,24 @@ impl DiffStatSnapshot {
         DiffStat {
             added: self.added,
             removed: self.removed,
+        }
+    }
+}
+
+impl ProcessSnapshot {
+    fn from_runtime(process: &ProcessTreeInfo) -> Self {
+        Self {
+            name: process.name.clone(),
+            cpu_pct: process.cpu_pct,
+            mem_bytes: process.mem_bytes,
+        }
+    }
+
+    fn runtime(&self) -> ProcessTreeInfo {
+        ProcessTreeInfo {
+            name: self.name.clone(),
+            cpu_pct: self.cpu_pct,
+            mem_bytes: self.mem_bytes,
         }
     }
 }
