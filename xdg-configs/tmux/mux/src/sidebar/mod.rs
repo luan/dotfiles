@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -19,9 +21,12 @@ use crate::process::spawn_reaped;
 use crate::tmux::tmux;
 use tracing::debug;
 
+#[allow(dead_code)]
+pub mod bench_support;
 mod claude;
 mod daemon;
 mod hooks;
+pub mod instrument;
 pub(crate) mod meta;
 mod overlay;
 mod pi;
@@ -158,6 +163,13 @@ struct SidebarState {
     pub(super) tmux_call_count: u32,
     /// When true, hidden sessions are included in the list.
     pub(super) show_hidden: bool,
+    /// True when this sidebar pane belongs to a window that is active in an
+    /// attached tmux client. Hidden panes keep their process alive, so avoid
+    /// redraws/refreshes there.
+    pub(super) on_screen: bool,
+    pub(super) last_visibility_check: Instant,
+    pub(super) counters: instrument::SidebarCounters,
+    pub(super) hidden_lifecycle: instrument::HiddenLifecycle,
 }
 
 pub(super) const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
@@ -186,6 +198,10 @@ impl SidebarState {
             last_bars_h: 0,
             tmux_call_count: 0,
             show_hidden: false,
+            on_screen: true,
+            last_visibility_check: Instant::now() - Duration::from_secs(60),
+            counters: instrument::SidebarCounters::default(),
+            hidden_lifecycle: instrument::HiddenLifecycle::default(),
         }
     }
 
@@ -232,21 +248,13 @@ impl SidebarState {
     }
 
     fn search_matches(&self) -> Vec<(usize, u16)> {
-        let selectable: Vec<(usize, &Item)> = self
-            .items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| item.selectable)
-            .collect();
-        let raw = crate::filter::fuzzy_match(&selectable, &self.filter, |(_, item)| {
-            match item.session_id.as_ref() {
-                Some(session_id) => format!("{} {}", item.display, session_id),
-                None => item.display.clone(),
+        crate::filter::fuzzy_match_borrowed(&self.items, &self.filter, |item| {
+            if item.selectable {
+                item.search_text.as_str()
+            } else {
+                ""
             }
-        });
-        raw.into_iter()
-            .map(|(match_idx, score)| (selectable[match_idx].0, score))
-            .collect()
+        })
     }
 
     fn selectable_visible_indices(&self) -> Vec<usize> {
@@ -284,10 +292,12 @@ impl SidebarState {
 
     fn refresh(&mut self) {
         if let Some(snapshot) = daemon::load_snapshot() {
+            self.counters.record_refresh(0, true);
             self.refresh_from_snapshot(snapshot);
             return;
         }
 
+        self.counters.record_refresh(0, false);
         self.refresh_direct();
     }
 
@@ -309,6 +319,7 @@ impl SidebarState {
                     // know about the fresh pane yet.
                     let session = tmux(&["display-message", "-p", "-t", &pane, "#{session_name}"]);
                     self.tmux_call_count += 1;
+                    self.counters.record_tmux_spawns(1);
                     (!session.is_empty()).then_some(session)
                 })
             })
@@ -325,8 +336,13 @@ impl SidebarState {
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
         let current_changed = cur != self.current;
 
-        self.meta = meta;
-        self.items = build_items(&sessions, &cur, &self.meta);
+        self.items = build_items(&sessions, &cur, &meta);
+        // Daemon-backed sidebars receive a complete fresh metadata snapshot on
+        // every refresh. Once tree rows have been materialized, retaining the
+        // decoded SessionMeta map only duplicates memory per attached sidebar
+        // process. Direct/non-daemon mode still keeps `self.meta` below for
+        // refreshes where the expensive metadata query is skipped.
+        self.meta = HashMap::new();
         self.current = cur;
         self.rebuild_visible();
 
@@ -391,6 +407,7 @@ impl SidebarState {
             "#S",
         ]);
         self.tmux_call_count += 1;
+        self.counters.record_tmux_spawns(1);
         let mut lines = batch.lines();
         self.notched = lines.next().unwrap_or("") == "1";
         let cur = lines.next().unwrap_or("").to_string();
@@ -401,6 +418,7 @@ impl SidebarState {
         if meta_refreshed {
             let (mut meta, meta_calls) = query_session_meta(&sessions);
             self.tmux_call_count += meta_calls;
+            self.counters.record_tmux_spawns(meta_calls.into());
             let now = Instant::now();
             for (session, m) in meta.iter_mut() {
                 for agent in m.agents.iter_mut() {
@@ -542,7 +560,7 @@ impl SidebarState {
         }
         self.items
             .get(self.selected)
-            .and_then(|i| i.session_id.clone())
+            .and_then(|i| i.session_id.as_ref().map(|session| session.to_string()))
     }
 
     fn switch_to_selected(&self) {
@@ -584,6 +602,9 @@ impl SidebarState {
     }
 
     fn visible_agent_animation_active(&self, list_h: u16) -> bool {
+        if !self.focused || !self.on_screen {
+            return false;
+        }
         let visible_rows = (list_h as usize).min(self.visible.len().saturating_sub(self.offset));
         self.visible
             .iter()
@@ -607,6 +628,85 @@ impl SidebarState {
                         if matches!(check.status, meta::PullRequestCheckStatus::Running)
                 )
             })
+    }
+
+    fn refresh_visibility(&mut self, interval: Duration) {
+        if self.last_visibility_check.elapsed() < interval {
+            return;
+        }
+        self.last_visibility_check = Instant::now();
+        if running_as_tmux_sidebar() {
+            self.counters.record_tmux_spawns(1);
+        }
+        self.on_screen = current_sidebar_pane_is_on_screen();
+    }
+
+    fn view_fingerprint(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.current.hash(&mut hasher);
+        self.selected.hash(&mut hasher);
+        self.offset.hash(&mut hasher);
+        self.focused.hash(&mut hasher);
+        self.show_hidden.hash(&mut hasher);
+        self.filter.hash(&mut hasher);
+        self.usage_lines_cache.hash(&mut hasher);
+        self.items.len().hash(&mut hasher);
+        for item in &self.items {
+            item.id.hash(&mut hasher);
+            item.display.hash(&mut hasher);
+            item.search_text.hash(&mut hasher);
+            item.indent.hash(&mut hasher);
+            item.selectable.hash(&mut hasher);
+            item.session_id.hash(&mut hasher);
+            fingerprint_item_kind(&item.kind, &mut hasher);
+        }
+        hasher.finish()
+    }
+}
+
+fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
+    std::mem::discriminant(kind).hash(hasher);
+    match kind {
+        ItemKind::Session {
+            diff,
+            cpu_pct,
+            mem_bytes,
+        } => {
+            diff.map(|d| (d.added, d.removed)).hash(hasher);
+            cpu_pct.to_bits().hash(hasher);
+            mem_bytes.hash(hasher);
+        }
+        ItemKind::Process(process) => {
+            process.name.hash(hasher);
+            process.cpu_pct.to_bits().hash(hasher);
+            process.mem_bytes.hash(hasher);
+        }
+        ItemKind::Branch { pr } => pr.as_ref().map(|p| p.number).hash(hasher),
+        ItemKind::PullRequestUnresolved { count, pr } => {
+            count.hash(hasher);
+            pr.number.hash(hasher);
+            pr.unresolved_comments.hash(hasher);
+        }
+        ItemKind::PullRequestCheck { check, pr } => {
+            check.name.hash(hasher);
+            check.elapsed.hash(hasher);
+            pr.number.hash(hasher);
+        }
+        ItemKind::Agent {
+            name,
+            age,
+            gerund,
+            ctx,
+            asking,
+        } => {
+            name.hash(hasher);
+            age.map(|d| d.as_secs()).hash(hasher);
+            gerund.hash(hasher);
+            ctx.hash(hasher);
+            asking.hash(hasher);
+        }
+        ItemKind::Progress(pct) => pct.hash(hasher),
+        ItemKind::Group | ItemKind::Status => {}
     }
 }
 
@@ -695,21 +795,12 @@ fn current_sidebar_pane() -> Option<String> {
 }
 
 fn attached_session_window_ids() -> HashSet<String> {
-    let sessions: HashSet<String> = tmux(&["list-clients", "-F", "#{client_session}"])
+    let mut windows: HashSet<String> = tmux(&["list-clients", "-F", "#{window_id}"])
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .map(str::to_string)
         .collect();
-
-    let mut windows: HashSet<String> =
-        tmux(&["list-windows", "-a", "-F", "#{session_name}\t#{window_id}"])
-            .lines()
-            .filter_map(|line| {
-                let (session, window) = line.split_once('\t')?;
-                (sessions.contains(session) && !window.is_empty()).then(|| window.to_string())
-            })
-            .collect();
 
     // When tmux is executing a hook without a normal client context,
     // list-clients can be empty. Fall back to the command's current window so
@@ -721,6 +812,32 @@ fn attached_session_window_ids() -> HashSet<String> {
     }
 
     windows
+}
+
+fn current_sidebar_pane_is_on_screen() -> bool {
+    if !running_as_tmux_sidebar() {
+        return true;
+    }
+
+    let pane = std::env::var("TMUX_PANE").unwrap_or_default();
+    if pane.is_empty() {
+        return true;
+    }
+
+    let output = tmux(&[
+        "display-message",
+        "-p",
+        "-t",
+        &pane,
+        "#{session_attached}\t#{window_active}",
+    ]);
+    let Some((attached, active)) = output.trim().split_once('\t') else {
+        // Fail open: a bad/empty tmux response should not freeze an actually
+        // visible sidebar.
+        return true;
+    };
+
+    attached.parse::<u16>().unwrap_or(0) > 0 && active == "1"
 }
 
 fn all_sidebar_panes_by_window() -> HashMap<String, Vec<String>> {
@@ -1111,6 +1228,13 @@ fn sync_sidebars_to_attached_session_windows() {
 
     let width = sidebar_width();
     let existing = all_sidebar_panes_by_window();
+    for (window, panes) in &existing {
+        if !attached.contains(window) {
+            for pane in panes {
+                tmux(&["kill-pane", "-t", pane]);
+            }
+        }
+    }
 
     let mut attached_windows: Vec<String> = attached.into_iter().collect();
     attached_windows.sort();
@@ -1238,7 +1362,31 @@ pub(crate) fn prepare_session_switch(target: &str) {
 
 pub(crate) fn finish_session_switch() {
     if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
+        wake_current_sidebar_pane();
         spawn_detached_sidebar_sync();
+    }
+}
+
+pub(crate) fn prepare_window_switch(target: &str) {
+    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
+        open_tmux_sidebar_in_target(Some(target), false);
+    }
+}
+
+pub(crate) fn finish_window_switch() {
+    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
+        wake_current_sidebar_pane();
+        spawn_detached_sidebar_sync();
+    }
+}
+
+fn wake_current_sidebar_pane() {
+    if let Some(pane) = current_sidebar_pane() {
+        // Parked off-screen sidebars sit in crossterm::event::poll(). Send an
+        // otherwise ignored function key after the target window/session is
+        // visible so the pane rechecks visibility immediately instead of
+        // waiting for the hidden poll timeout.
+        tmux(&["send-keys", "-t", &pane, "F20"]);
     }
 }
 
@@ -1263,13 +1411,14 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
         Some("close") => close_all_tmux_sidebars(),
         Some("prune-orphans") => prune_orphan_sidebar_windows(),
         Some("resize") => resize_all_tmux_sidebars(),
+        Some("profile") => instrument::cmd_profile(&args[1..]),
+        Some("status-latency-profile") => daemon::cmd_status_latency_profile(&args[1..]),
+        Some("snapshot-string-stats") => daemon::cmd_snapshot_string_stats(&args[1..]),
         _ => {}
     }
 }
 
 pub(crate) fn cmd_sidebar() {
-    daemon::ensure_started();
-
     mark_current_sidebar_pane();
 
     // Set WezTerm user var for toggle detection
@@ -1277,9 +1426,32 @@ pub(crate) fn cmd_sidebar() {
     print!("\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07");
     io::stdout().flush().ok();
 
-    // Tell tmux status bar to hide the session list while sidebar is open
-    tmux(&["set-option", "-g", "@sidebar_open", "1"]);
-    refresh_status_bar();
+    // Tell tmux status bar to hide the session list while sidebar is open.
+    // Normal pane creation paths already set this in the parent process after
+    // splitting the pane. Avoid repeating a tmux set-option and detached status
+    // update before the child draws its first frame.
+    if std::env::var("MUX_SIDEBAR_MARKED").ok().as_deref() != Some("1") {
+        tmux(&["set-option", "-g", "@sidebar_open", "1"]);
+        refresh_status_bar();
+    }
+
+    enter_tui();
+    let backend = CrosstermBackend::new(io::stdout());
+    let mut terminal = Terminal::new(backend).expect("create terminal");
+
+    let mut state = SidebarState::new();
+
+    // Paint sidebar chrome before any tmux/daemon refresh work. Window/session
+    // switches can make a freshly-spawned pane visible while metadata is still
+    // warming; an immediate frame avoids the perception that the sidebar UI is
+    // missing until the first full refresh completes.
+    terminal
+        .draw(|f| {
+            let _ = draw(f, &mut state);
+        })
+        .ok();
+
+    daemon::ensure_started();
 
     // On notched displays, paint this pane's terminal background black via
     // OSC 11 so the wezterm split reads as solid black (matching the status
@@ -1290,39 +1462,110 @@ pub(crate) fn cmd_sidebar() {
         io::stdout().flush().ok();
     }
 
-    enter_tui();
-    let backend = CrosstermBackend::new(io::stdout());
-    let mut terminal = Terminal::new(backend).expect("create terminal");
-
-    let mut state = SidebarState::new();
     state.refresh();
+    let sidebar_started = Instant::now();
 
     // Cache layout for mouse mapping between draws.
     let mut last_list_area = Rect::default();
     let mut last_refresh = Instant::now();
+    let mut dirty = true;
+    // A sidebar pane can be spawned for the target session just before tmux
+    // switches the client there. During that tiny handoff window tmux can still
+    // report the pane as off-screen, which sends the loop into the hidden
+    // parking path before it ever draws. Paint one frame immediately so the
+    // pane buffer is never blank when the client lands on it.
+    if terminal
+        .draw(|f| {
+            last_list_area = draw(f, &mut state);
+        })
+        .is_ok()
+    {
+        let agent_animation_active = state.visible_agent_animation_active(last_list_area.height);
+        state.counters.record_redraw(agent_animation_active);
+        dirty = false;
+    }
     const IDLE_POLL: Duration = Duration::from_millis(500);
     const ANIMATION_POLL: Duration = Duration::from_millis(33); // ~30 fps during animation
     const REFRESH_INTERVAL: Duration = Duration::from_millis(500);
+    const HIDDEN_POLL: Duration = Duration::from_secs(2);
+    const VISIBILITY_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
     loop {
-        terminal
-            .draw(|f| {
-                last_list_area = draw(f, &mut state);
-            })
-            .ok();
+        state.refresh_visibility(VISIBILITY_CHECK_INTERVAL);
+        if !state.on_screen {
+            match state
+                .hidden_lifecycle
+                .observe(false, sidebar_started.elapsed())
+            {
+                instrument::HiddenLifecycleAction::Exit => break,
+                instrument::HiddenLifecycleAction::Run => {}
+                instrument::HiddenLifecycleAction::Park => {
+                    state
+                        .counters
+                        .record_poll(instrument::LoopState::HiddenIdle);
+                }
+            }
+            if event::poll(HIDDEN_POLL).unwrap_or(false) {
+                match event::read() {
+                    Ok(Event::FocusGained) => {
+                        state.focused = true;
+                        state.on_screen = true;
+                        state.force_refresh();
+                        dirty = true;
+                    }
+                    Ok(Event::FocusLost) => {
+                        state.focused = false;
+                        state.hover = None;
+                        state.close_overlay();
+                        state.close_chooser();
+                        state.snap_to_current();
+                    }
+                    _ => {
+                        state.refresh_visibility(Duration::ZERO);
+                        if state.on_screen {
+                            state.force_refresh();
+                            dirty = true;
+                        }
+                    }
+                }
+            }
+            last_refresh = Instant::now();
+            continue;
+        }
+        state
+            .hidden_lifecycle
+            .observe(true, sidebar_started.elapsed());
+
+        if dirty {
+            terminal
+                .draw(|f| {
+                    last_list_area = draw(f, &mut state);
+                })
+                .ok();
+        }
 
         // High-frequency redraw while any gerund percolation is mid-flight.
         let agent_animation_active = state.visible_agent_animation_active(last_list_area.height);
+        if dirty {
+            state.counters.record_redraw(agent_animation_active);
+            dirty = false;
+        }
         let poll_timeout = if agent_animation_active {
             ANIMATION_POLL
         } else {
             IDLE_POLL
         };
+        state.counters.record_poll(if agent_animation_active {
+            instrument::LoopState::ActiveAnimation
+        } else {
+            instrument::LoopState::VisibleIdle
+        });
 
         if event::poll(poll_timeout).unwrap_or(false) {
             match event::read() {
                 Ok(Event::FocusGained) => {
                     state.focused = true;
+                    dirty = true;
                 }
                 Ok(Event::FocusLost) => {
                     state.focused = false;
@@ -1330,6 +1573,7 @@ pub(crate) fn cmd_sidebar() {
                     state.close_overlay();
                     state.close_chooser();
                     state.snap_to_current();
+                    dirty = true;
                 }
                 Ok(Event::Mouse(_)) if state.overlay_active() => {}
                 Ok(Event::Mouse(me)) => match me.kind {
@@ -1354,14 +1598,14 @@ pub(crate) fn cmd_sidebar() {
                             }
                         }
                         if let Some(item_idx) = state.visible.get(vis_idx).copied()
-                            && let Some(sid) = state
-                                .items
-                                .get(item_idx)
-                                .and_then(|i| i.selectable.then(|| i.session_id.clone()).flatten())
-                            && let Some(row_idx) = state
-                                .items
-                                .iter()
-                                .position(|i| i.selectable && i.session_id.as_ref() == Some(&sid))
+                            && let Some(sid) = state.items.get(item_idx).and_then(|i| {
+                                i.selectable
+                                    .then(|| i.session_id.as_ref().map(|s| s.to_string()))
+                                    .flatten()
+                            })
+                            && let Some(row_idx) = state.items.iter().position(|i| {
+                                i.selectable && i.session_id.as_deref() == Some(sid.as_str())
+                            })
                         {
                             state.selected = row_idx;
                             state.switch_to_selected();
@@ -1369,6 +1613,7 @@ pub(crate) fn cmd_sidebar() {
                                 state.close_chooser();
                                 focus_main_pane();
                             }
+                            dirty = true;
                         }
                     }
                     MouseEventKind::Moved => {
@@ -1382,20 +1627,30 @@ pub(crate) fn cmd_sidebar() {
                                 .get(vis_idx)
                                 .and_then(|idx| state.items.get(*idx))
                                 .and_then(|it| {
-                                    it.selectable.then(|| it.session_id.clone()).flatten()
+                                    it.selectable
+                                        .then(|| it.session_id.as_ref().map(|s| s.to_string()))
+                                        .flatten()
                                 });
                         } else {
                             state.hover = None;
                         }
+                        dirty = true;
                     }
-                    MouseEventKind::ScrollUp => state.move_sel(-1),
-                    MouseEventKind::ScrollDown => state.move_sel(1),
+                    MouseEventKind::ScrollUp => {
+                        state.move_sel(-1);
+                        dirty = true;
+                    }
+                    MouseEventKind::ScrollDown => {
+                        state.move_sel(1);
+                        dirty = true;
+                    }
                     _ => {}
                 },
                 Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
                     if state.overlay_active() {
                         let handled = state.handle_overlay_key(key);
                         if handled || state.overlay_active() {
+                            dirty = true;
                             continue;
                         }
                     }
@@ -1404,12 +1659,14 @@ pub(crate) fn cmd_sidebar() {
                         match (key.code, key.modifiers) {
                             (KeyCode::Esc, _) => {
                                 state.close_chooser();
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Enter, _) => {
                                 state.switch_to_selected();
                                 state.close_chooser();
                                 focus_main_pane();
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Char('h'), m) if m.contains(KeyModifiers::ALT) => {
@@ -1417,14 +1674,17 @@ pub(crate) fn cmd_sidebar() {
                                     toggle_hidden(&id);
                                     state.force_refresh();
                                 }
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Char('j'), KeyModifiers::ALT) => {
                                 state.move_selected_session("down");
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Char('k'), KeyModifiers::ALT) => {
                                 state.move_selected_session("up");
+                                dirty = true;
                                 continue;
                             }
                             _ if handle_readline_key(
@@ -1434,18 +1694,21 @@ pub(crate) fn cmd_sidebar() {
                             ) =>
                             {
                                 state.apply_filter_change();
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Char('j'), _)
                             | (KeyCode::Down, _)
                             | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
                                 state.move_sel(1);
+                                dirty = true;
                                 continue;
                             }
                             (KeyCode::Char('k'), _)
                             | (KeyCode::Up, _)
                             | (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
                                 state.move_sel(-1);
+                                dirty = true;
                                 continue;
                             }
                             _ => {}
@@ -1464,53 +1727,71 @@ pub(crate) fn cmd_sidebar() {
                             tmux(&["switch-client", "-l"]);
                             finish_session_switch();
                             focus_main_pane();
+                            dirty = true;
                         }
                         (KeyCode::Char('j'), KeyModifiers::ALT) => {
                             state.move_selected_session("down");
+                            dirty = true;
                         }
                         (KeyCode::Char('k'), KeyModifiers::ALT) => {
                             state.move_selected_session("up");
+                            dirty = true;
                         }
                         (KeyCode::Char('j'), _)
                         | (KeyCode::Down, _)
-                        | (KeyCode::Char('n'), KeyModifiers::CONTROL) => state.move_sel(1),
+                        | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                            state.move_sel(1);
+                            dirty = true;
+                        }
                         (KeyCode::Char('k'), _)
                         | (KeyCode::Up, _)
-                        | (KeyCode::Char('p'), KeyModifiers::CONTROL) => state.move_sel(-1),
+                        | (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
+                            state.move_sel(-1);
+                            dirty = true;
+                        }
                         (KeyCode::Enter, _) => {
                             state.switch_to_selected();
                             focus_main_pane();
+                            dirty = true;
                         }
                         (KeyCode::Char('n'), m)
                             if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                         {
                             state.open_project_overlay();
+                            dirty = true;
                         }
                         (KeyCode::Char('w'), _) => {
                             state.open_worktree_overlay();
+                            dirty = true;
                         }
                         (KeyCode::Char('r'), _) => {
                             state.open_rename_overlay();
+                            dirty = true;
                         }
                         (KeyCode::Char('x'), _) => {
                             state.open_ditch_overlay();
+                            dirty = true;
                         }
                         (KeyCode::Char('h'), m) if m.contains(KeyModifiers::ALT) => {
                             if let Some(id) = state.selected_session_id() {
                                 toggle_hidden(&id);
                                 state.force_refresh();
                             }
+                            dirty = true;
                         }
                         (KeyCode::Char('h'), _) => {
                             state.show_hidden = !state.show_hidden;
+                            dirty = true;
                         }
                         (KeyCode::Char('/'), _) => {
                             state.open_chooser();
+                            dirty = true;
                         }
                         (KeyCode::Char(c @ '1'..='9'), m)
                             if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                         {
                             state.select_by_number(c);
+                            dirty = true;
                         }
                         (KeyCode::Char(c), m)
                             if !m.intersects(
@@ -1518,6 +1799,7 @@ pub(crate) fn cmd_sidebar() {
                             ) =>
                         {
                             forward_char_to_main(c);
+                            dirty = true;
                         }
                         _ => {}
                     }
@@ -1529,9 +1811,12 @@ pub(crate) fn cmd_sidebar() {
         // Throttle refresh to IDLE cadence — pulse-driven high-fps redraws
         // shouldn't multiply tmux process spawns.
         if last_refresh.elapsed() >= REFRESH_INTERVAL {
+            let before = state.view_fingerprint();
             state.refresh();
+            dirty |= state.view_fingerprint() != before;
             last_refresh = Instant::now();
         }
+        dirty |= agent_animation_active;
     }
 
     leave_tui();

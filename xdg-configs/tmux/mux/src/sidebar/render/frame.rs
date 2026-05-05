@@ -176,10 +176,12 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> Rect 
                 | ItemKind::PullRequestUnresolved { .. }
                 | ItemKind::PullRequestCheck { .. }
         );
-        let is_sel =
-            session_chrome && item.session_id.is_some() && item.session_id == selected_session;
-        let is_hover =
-            session_chrome && item.session_id.is_some() && item.session_id == state.hover;
+        let is_sel = session_chrome
+            && item.session_id.is_some()
+            && item.session_id.as_deref() == selected_session.as_deref();
+        let is_hover = session_chrome
+            && item.session_id.is_some()
+            && item.session_id.as_deref() == state.hover.as_deref();
         let belongs_to_current = item.session_id.as_deref() == Some(state.current.as_str());
         let row = Rect {
             x: area.x,

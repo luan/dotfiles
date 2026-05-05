@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use nucleo_matcher::pattern::{Atom, AtomKind, CaseMatching, Normalization};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
@@ -7,6 +9,22 @@ pub(crate) fn fuzzy_match<T>(
     items: &[T],
     query: &str,
     haystack_fn: impl Fn(&T) -> String,
+) -> Vec<(usize, u16)> {
+    fuzzy_match_core(items, query, |item| Cow::Owned(haystack_fn(item)))
+}
+
+pub(crate) fn fuzzy_match_borrowed<T>(
+    items: &[T],
+    query: &str,
+    haystack_fn: impl Fn(&T) -> &str,
+) -> Vec<(usize, u16)> {
+    fuzzy_match_core(items, query, |item| Cow::Borrowed(haystack_fn(item)))
+}
+
+fn fuzzy_match_core<'a, T>(
+    items: &'a [T],
+    query: &str,
+    haystack_fn: impl Fn(&'a T) -> Cow<'a, str>,
 ) -> Vec<(usize, u16)> {
     if query.is_empty() {
         return Vec::new();
@@ -27,8 +45,7 @@ pub(crate) fn fuzzy_match<T>(
     for (idx, item) in items.iter().enumerate() {
         let hay = haystack_fn(item);
         let haystack = Utf32Str::new(&hay, &mut buf);
-        let mut indices = Vec::new();
-        if let Some(score) = matcher.fuzzy_indices(haystack, needle, &mut indices) {
+        if let Some(score) = matcher.fuzzy_match(haystack, needle) {
             matches.push((idx, score));
         }
         buf.clear();
@@ -101,5 +118,15 @@ mod tests {
             "uppercase query must match lowercase item"
         );
         assert_eq!(result[0].0, 0);
+    }
+
+    #[test]
+    fn borrowed_haystacks_match_owned_haystacks() {
+        let haystack = vec!["project-alpha".to_string(), "project-beta".to_string()];
+
+        assert_eq!(
+            fuzzy_match(&haystack, "pa", |s| s.clone()),
+            fuzzy_match_borrowed(&haystack, "pa", |s| s.as_str())
+        );
     }
 }

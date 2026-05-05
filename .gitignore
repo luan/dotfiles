@@ -22,3 +22,4 @@ indowp
 /.claude/scheduled_tasks.lock
 /xdg-configs/zsh/.zcompdump
 /xdg-configs/zsh/.zsh_history
+/docs/artifacts

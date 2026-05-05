@@ -179,5 +179,56 @@ mux:
     codesign --force --sign - "{{ env("HOME") }}/bin/notch-state"
     @echo "✓ mux built"
 
+# Run mux sidebar performance regression guardrails
+mux-perf:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+    cargo test --manifest-path="$manifest"
+    cargo bench --manifest-path="$manifest" --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+    alloc_output="$(mktemp)"
+    cargo bench --manifest-path="$manifest" --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2 2>&1 | tee "$alloc_output"
+    python3 "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/check-sidebar-alloc-thresholds.py" "$alloc_output"
+    rm -f "$alloc_output"
+    profile_json="$(mktemp)"
+    cargo run --manifest-path="$manifest" -- sidebar profile 4000 > "$profile_json"
+    python3 -c 'import json, sys; p=json.load(open(sys.argv[1])); r={row["state"]: row["counters"] for row in p["sidebar"]}; assert r["visible-idle"]["redraws"] <= 1, r["visible-idle"]; assert r["visible-idle"]["tmux_spawns"] == 0, r["visible-idle"]; assert r["hidden-idle"]["redraws"] == 0, r["hidden-idle"]; assert r["hidden-idle"]["animation_frames"] == 0, r["hidden-idle"]; assert r["hidden-idle"]["tmux_spawns"] <= 1, r["hidden-idle"]; assert r["active-animation"]["animation_frames"] <= 122, r["active-animation"]; assert r["active-animation"]["tmux_spawns"] == 0, r["active-animation"]; assert p["daemon"]["meta_refresh_interval_ms"] >= 5000, p["daemon"]' "$profile_json"
+    rm -f "$profile_json"
+    "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/check-sidebar-first-paint.sh"
+    "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/check-sidebar-window-switch.sh"
+    echo "✓ mux sidebar perf guardrails passed"
+
+# Run allocation-aware mux sidebar benchmark report
+mux-memory:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+    cargo bench --manifest-path="$manifest" --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+
+# Profile live mux sidebar daemon memory in isolated tmux shapes
+mux-memory-live:
+    "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/sidebar-memory-profile.sh"
+
+# Measure sidebar status propagation latency in an isolated tmux server
+mux-status-latency:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+    bin="{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux"
+    cargo build --release --manifest-path="$manifest" >/dev/null
+    socket="mux-sidebar-status-latency-$$"
+    tmp_home="$(mktemp -d)"
+    wrapper_dir="$(mktemp -d)"
+    tmux_bin="$(command -v tmux)"
+    cleanup() {
+        "$tmux_bin" -L "$socket" kill-server >/dev/null 2>&1 || true
+        rm -rf "$tmp_home" "$wrapper_dir"
+    }
+    trap cleanup EXIT
+    printf '%s\n' '#!/usr/bin/env bash' "exec \"$tmux_bin\" -L \"$socket\" \"\$@\"" > "$wrapper_dir/tmux"
+    chmod +x "$wrapper_dir/tmux"
+    "$tmux_bin" -L "$socket" new-session -d -x 120 -y 40 -s mux-latency "sleep 120"
+    PATH="$wrapper_dir:$PATH" HOME="$tmp_home" "$bin" sidebar status-latency-profile 8 750
+
 # Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
 setup: brew cargo repos link gitconfig claude-plugins dev-routing mux sheldon

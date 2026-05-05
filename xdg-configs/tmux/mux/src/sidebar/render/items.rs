@@ -156,6 +156,48 @@ fn pr_number_label(pr: &PullRequestMeta) -> String {
     format!(" #{}", pr.number)
 }
 
+fn push_percolating_word<'a>(
+    line: &mut Vec<Span<'a>>,
+    word: &'a str,
+    pos: usize,
+    base: Color,
+    shine: Color,
+    row_bg: Color,
+) {
+    let mut run_start = 0usize;
+    let mut run_shine = None;
+    let mut last_end = 0usize;
+
+    for (i, (byte_idx, ch)) in word.char_indices().enumerate() {
+        let in_shine = i >= pos.saturating_sub(PERC_WIDTH) && i < pos;
+        match run_shine {
+            None => {
+                run_start = byte_idx;
+                run_shine = Some(in_shine);
+            }
+            Some(current) if current != in_shine => {
+                let fg = if current { shine } else { base };
+                line.push(Span::styled(
+                    &word[run_start..byte_idx],
+                    Style::default().fg(fg).bg(row_bg),
+                ));
+                run_start = byte_idx;
+                run_shine = Some(in_shine);
+            }
+            _ => {}
+        }
+        last_end = byte_idx + ch.len_utf8();
+    }
+
+    if let Some(current) = run_shine {
+        let fg = if current { shine } else { base };
+        line.push(Span::styled(
+            &word[run_start..last_end],
+            Style::default().fg(fg).bg(row_bg),
+        ));
+    }
+}
+
 fn aggregate_stat_spans(cpu_pct: f32, mem_bytes: u64, row_bg: Color) -> Vec<Span<'static>> {
     let cpu_color = cpu_stat_color(cpu_pct);
     let mem_color = mem_stat_color(mem_bytes);
@@ -570,17 +612,10 @@ pub(in crate::sidebar) fn render_item(
                     }
                 };
 
-                let chars: Vec<char> = word.chars().collect();
-                let cycle = chars.len() + PERC_WIDTH;
+                let char_count = word.chars().count();
+                let cycle = char_count + PERC_WIDTH;
                 let pos = perc_step % cycle;
-                for (i, ch) in chars.iter().enumerate() {
-                    let in_shine = i >= pos.saturating_sub(PERC_WIDTH) && i < pos;
-                    let fg = if in_shine { shine } else { base };
-                    line.push(Span::styled(
-                        ch.to_string(),
-                        Style::default().fg(fg).bg(row_bg),
-                    ));
-                }
+                push_percolating_word(&mut line, word, pos, base, shine, row_bg);
             } else {
                 // ── Idle ──
                 line.push(Span::styled(
