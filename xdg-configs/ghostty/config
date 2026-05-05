@@ -67,7 +67,8 @@ keybind = super+j=csi:90;1~
 keybind = super+s=csi:90;2~
 keybind = super+shift+c=csi:90;3~
 keybind = super+alt+shift+c=csi:90;4~
-# terminal-native sidebar focus (super+o)
+# Ghostty sidebars are intentionally disabled. WezTerm owns terminal-hosted
+# sidebars because it can spawn a fixed-width split with a command safely.
 keybind = super+y=csi:71~
 keybind = super+o=ignore
 keybind = super+.=csi:90;6~
@@ -92,10 +93,6 @@ keybind = ctrl+tab=csi:60~
 keybind = ctrl+shift+tab=csi:76~
 # attention session relay (super+;)
 keybind = super+semicolon=csi:61~
-# Terminal sidebar is disabled here until Ghostty has a safe way to spawn a
-# command into a fixed-width split from a keybind. Chaining `new_split` + `text`
-# can type the command into the current tmux pane, which is worse than no
-# binding. Use `mux sidebar-terminal` manually in a split for now.
 keybind = super+shift+e=ignore
 # }}}
 

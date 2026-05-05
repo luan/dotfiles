@@ -68,7 +68,7 @@ config.default_cursor_style = "BlinkingBar"
 config.disable_default_key_bindings = true
 
 -- Shared paths
-local PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+local PATH = wezterm.home_dir .. "/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 -- Helpers
 local tmux_prefix = "\x00" -- Ctrl+Space
@@ -139,16 +139,25 @@ wezterm.on("window-config-reloaded", function(window)
 	update_notched(window)
 end)
 
--- Ctrl+Tab toggles the previous tmux session even when focus is in a
--- tmux-native sidebar pane by spawning tmux directly.
+-- Ctrl+Tab toggles the previous tmux session from any terminal split.
 local function toggle_last_session()
 	return wezterm.action_callback(function(_window, _pane)
 		os.execute("PATH=" .. PATH .. " tmux switch-client -l >/dev/null 2>&1 &")
 	end)
 end
 
-local function cmd_p_handler(window, pane)
-	window:perform_action(act.SendString(csi("63~")), pane)
+local function set_terminal_sidebar_width(width)
+	local cmd
+	if width then
+		cmd = "tmux set-option -g @terminal_sidebar_width " .. tostring(width)
+	else
+		cmd = "tmux set-option -gu @terminal_sidebar_width"
+	end
+	wezterm.background_child_process({
+		"/bin/sh",
+		"-c",
+		"export PATH=" .. PATH .. "; " .. cmd .. " >/dev/null 2>&1; mux update '' \"$(tmux display -p '#{client_width}' 2>/dev/null)\" >/dev/null 2>&1",
+	})
 end
 
 local function sidebar_pane_in_tab(pane)
@@ -168,6 +177,7 @@ end
 local function focus_or_create_terminal_sidebar(window, pane)
 	local existing = sidebar_pane_in_tab(pane)
 	if existing then
+		set_terminal_sidebar_width(45)
 		existing:activate()
 		return
 	end
@@ -176,25 +186,52 @@ local function focus_or_create_terminal_sidebar(window, pane)
 		size = 45,
 		args = { "mux", "sidebar-terminal" },
 		set_environment_variables = {
+			PATH = PATH,
 			MUX_SIDEBAR_HOST = "wezterm",
 			MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
 		},
 	})
 	if sidebar then
+		set_terminal_sidebar_width(45)
 		sidebar:activate()
 	else
+		set_terminal_sidebar_width(45)
 		window:perform_action(act.SplitPane({
 			direction = "Left",
 			size = { Cells = 45 },
 			command = {
 				args = { "mux", "sidebar-terminal" },
 				set_environment_variables = {
+					PATH = PATH,
 					MUX_SIDEBAR_HOST = "wezterm",
 					MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
 				},
 			},
 		}), pane)
 	end
+end
+
+local function toggle_terminal_sidebar(window, pane)
+	local existing = sidebar_pane_in_tab(pane)
+	if existing then
+		existing:activate()
+		window:perform_action(act.CloseCurrentPane({ confirm = false }), existing)
+		set_terminal_sidebar_width(nil)
+		return
+	end
+	focus_or_create_terminal_sidebar(window, pane)
+end
+
+local function sidebar_key_or_fallback(text, fallback)
+	return wezterm.action_callback(function(window, pane)
+		local sidebar = sidebar_pane_in_tab(pane)
+		if sidebar then
+			sidebar:activate()
+			sidebar:send_text(text)
+			return
+		end
+		window:perform_action(fallback, pane)
+	end)
 end
 
 config.keys = {
@@ -228,11 +265,15 @@ config.keys = {
 	{ key = "Enter", mods = "SHIFT", action = act.SendString("\n") },
 
 	-- Session sidebar
-	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(focus_or_create_terminal_sidebar) },
+	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(toggle_terminal_sidebar) },
 	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_or_create_terminal_sidebar) },
 
-	-- Cmd+P: sidebar-aware session chooser (mux dispatches to an open sidebar)
-	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
+	-- Sidebar-aware session actions: use the terminal-hosted sidebar when it is
+	-- open; fall back to the normal tmux popup/command when it is not.
+	{ key = "p", mods = "SUPER", action = sidebar_key_or_fallback("/", act.SendString(csi("63~"))) },
+	{ key = "n", mods = "SUPER", action = sidebar_key_or_fallback("n", act.SendString(csi("62~"))) },
+	{ key = "n", mods = "SUPER|CTRL", action = sidebar_key_or_fallback("w", act.SendString(csi("68~"))) },
+	{ key = "x", mods = "SUPER|ALT", action = sidebar_key_or_fallback("x", act.SendString(tmux_prefix .. "X")) },
 
 	-- Toggle the previous tmux session (works from any pane)
 	{ key = "Tab", mods = "CTRL", action = toggle_last_session() },
@@ -243,7 +284,6 @@ config.keys = {
 -- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf; Cmd+Alt+X ditches session
 local prefix_relay = {
 	{ key = "f", mods = "SUPER|SHIFT", suffix = "F" },
-	{ key = "x", mods = "SUPER|ALT", suffix = "X" },
 }
 for i = 1, 9 do
 	table.insert(prefix_relay, { key = tostring(i), mods = "SUPER", suffix = tostring(i) })
@@ -256,12 +296,10 @@ end
 -- {{{ tmux relay: CSI user-key sequences
 local csi_relay = {
 	{ key = ";", mods = "SUPER", csi = "61~" },
-	{ key = "n", mods = "SUPER", csi = "62~" },
 	{ key = "n", mods = "SUPER|SHIFT", csi = "64~" },
 	{ key = "p", mods = "SUPER|SHIFT", csi = "65~" },
 	{ key = "mapped:<", mods = "SUPER|SHIFT", csi = "66~" },
 	{ key = "mapped:>", mods = "SUPER|SHIFT", csi = "67~" },
-	{ key = "n", mods = "SUPER|CTRL", csi = "68~" },
 	{ key = "[", mods = "CTRL|ALT", csi = "69~" },
 	{ key = "mapped:}", mods = "SUPER|SHIFT", csi = "70~" },
 	{ key = "mapped:{", mods = "SUPER|SHIFT", csi = "73~" },

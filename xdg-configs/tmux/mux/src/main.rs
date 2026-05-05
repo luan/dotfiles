@@ -104,31 +104,25 @@ fn cmd_update_with_args(args: &[String]) {
     let two_row = notched && tmux_cmd(&["show-option", "-gv", "@two_row_status"]) != "0";
     let status_bg = if notched { "#000000" } else { "#11111b" };
     let status_style = format!("bg={status_bg}");
-    let sidebar_width: usize = tmux_cmd(&["show-option", "-gqv", "@sidebar_width"])
-        .parse()
-        .unwrap_or(45);
-    let notch_width: usize = tmux_cmd(&["show-option", "-gqv", "@notch_width"])
-        .parse()
-        .unwrap_or(48);
-    // The status bar spans the full tmux client, while the tmux-native sidebar
-    // consumes the left pane plus one separator column. When the sidebar is
-    // open, centre the window list over the remaining main-pane region instead
-    // of over the whole client/notch.
-    let sidebar_offset = sidebar_width.saturating_add(1).min(client_width);
+    let terminal_sidebar_width: usize =
+        tmux_cmd(&["show-option", "-gqv", "@terminal_sidebar_width"])
+            .parse()
+            .unwrap_or(0);
 
     // status-format[0] is a server-global option — baking session-specific
     // content into it leaks the initiating session's windows onto every
     // other client. Instead, keep the template global and read the
-    // per-session rendered strings from session-local options so each
-    // client draws its own bar. Sidebar-open is evaluated live so toggling
-    // it propagates without needing a re-render per session.
-    let content_fmt = if notched {
+    // per-session rendered strings from session-local options so each client
+    // draws its own bar.
+    let content_fmt = if terminal_sidebar_width > 0 {
+        format!("#[bg={status_bg}]#[align=left]#{{@mux_win}}#[align=right]#{{@sysinfo}}")
+    } else if notched {
         format!(
-            "#[bg={status_bg}]#{{?@sidebar_open,#[align=left]#{{@mux_win_main}},#[align=left]#{{@mux_left}}#{{@mux_win}}}}#[align=right]#{{@sysinfo}}"
+            "#[bg={status_bg}]#[align=left]#{{@mux_left}}#{{@mux_win}}#[align=right]#{{@sysinfo}}"
         )
     } else {
         format!(
-            "#[bg={status_bg}]#{{?@sidebar_open,#[align=left]#{{@mux_win_main}},#[align=left]#{{@mux_left}}#[align=centre]#{{@mux_win}}}}#[align=right]#{{@sysinfo}}"
+            "#[bg={status_bg}]#[align=left]#{{@mux_left}}#[align=centre]#{{@mux_win}}#[align=right]#{{@sysinfo}}"
         )
     };
 
@@ -160,15 +154,10 @@ fn cmd_update_with_args(args: &[String]) {
         let bar = render_bar(&sessions, session, &meta, client_width);
         let windows = query_windows(session);
         let win_str = render_windows(&windows, cur_color);
-        let win_main_str = if notched {
-            status::render_windows_left_of_notch(
-                &win_str,
-                client_width,
-                sidebar_offset,
-                notch_width,
-            )
+        let win_str = if terminal_sidebar_width > 0 || notched {
+            win_str
         } else {
-            status::render_windows_centered_in_main(&win_str, client_width, sidebar_offset)
+            status::render_windows_centered_in_main(&win_str, client_width, 0)
         };
 
         tmux_args.extend([
@@ -186,14 +175,6 @@ fn cmd_update_with_args(args: &[String]) {
             session.clone(),
             "@mux_win".into(),
             win_str,
-        ]);
-        tmux_args.extend([
-            ";".into(),
-            "set-option".into(),
-            "-t".into(),
-            session.clone(),
-            "@mux_win_main".into(),
-            win_main_str,
         ]);
     }
 
@@ -605,25 +586,7 @@ fn cmd_picker(args: &[String]) {
         std::process::exit(1);
     };
 
-    if tmux_cmd(&["show-option", "-gv", "@sidebar_open"]) == "1" && dispatch_sidebar_picker(action)
-    {
-        return;
-    }
-
     open_picker_popup(action);
-}
-
-fn dispatch_sidebar_picker(action: &str) -> bool {
-    let key = match action {
-        "rename" => "r",
-        "chooser" => "/",
-        "new-session" => "n",
-        "new-worktree" => "w",
-        "ditch" => "x",
-        _ => return false,
-    };
-
-    sidebar::send_key_to_current_sidebar(key)
 }
 
 fn open_picker_popup(action: &str) {
