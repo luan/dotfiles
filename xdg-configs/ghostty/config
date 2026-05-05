@@ -69,7 +69,7 @@ keybind = super+shift+c=csi:90;3~
 keybind = super+alt+shift+c=csi:90;4~
 # terminal-native sidebar focus (super+o)
 keybind = super+y=csi:71~
-keybind = super+o=goto_split:left
+keybind = super+o=ignore
 keybind = super+.=csi:90;6~
 keybind = super+e=csi:90;7~
 keybind = super+b=csi:90;8~
@@ -92,9 +92,11 @@ keybind = ctrl+tab=csi:60~
 keybind = ctrl+shift+tab=csi:76~
 # attention session relay (super+;)
 keybind = super+semicolon=csi:61~
-# terminal-native sidebar create (super+shift+e)
-keybind = super+shift+e=new_split:left
-keybind = chain=text:exec env MUX_SIDEBAR_HOST=ghostty MUX_SIDEBAR_TITLE=mux-sidebar-terminal mux sidebar-terminal\n
+# Terminal sidebar is disabled here until Ghostty has a safe way to spawn a
+# command into a fixed-width split from a keybind. Chaining `new_split` + `text`
+# can type the command into the current tmux pane, which is worse than no
+# binding. Use `mux sidebar-terminal` manually in a split for now.
+keybind = super+shift+e=ignore
 # }}}
 
 # new project session (super+n)
