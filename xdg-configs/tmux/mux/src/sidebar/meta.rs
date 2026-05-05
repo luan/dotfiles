@@ -61,46 +61,86 @@ fn build_process_info() -> HashMap<u32, ProcSample> {
     samples
 }
 
-fn parent_map(samples: &HashMap<u32, ProcSample>) -> HashMap<u32, u32> {
-    samples
-        .iter()
-        .map(|(&pid, sample)| (pid, sample.ppid))
-        .collect()
-}
-
-fn name_map(samples: &HashMap<u32, ProcSample>) -> HashMap<u32, String> {
-    samples
-        .iter()
-        .map(|(&pid, sample)| (pid, sample.name.clone()))
-        .collect()
-}
-
-fn build_children(parent_of: &HashMap<u32, u32>) -> HashMap<u32, Vec<u32>> {
+fn build_children(samples: &HashMap<u32, ProcSample>) -> HashMap<u32, Vec<u32>> {
     let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
-    for (&child, &parent) in parent_of {
-        children.entry(parent).or_default().push(child);
+    for (&pid, sample) in samples {
+        children.entry(sample.ppid).or_default().push(pid);
     }
     children
 }
 
-fn query_session_cpu(
-    all_panes: &[PaneInfo],
-    parent_of: &HashMap<u32, u32>,
+pub(super) fn legacy_process_index_allocations_for_bench(process_count: u32) -> usize {
+    let samples = synthetic_proc_samples_for_bench(process_count);
+    let parent_of: HashMap<u32, u32> = samples
+        .iter()
+        .map(|(&pid, sample)| (pid, sample.ppid))
+        .collect();
+    let name_of: HashMap<u32, String> = samples
+        .iter()
+        .map(|(&pid, sample)| (pid, sample.name.clone()))
+        .collect();
+
+    let mut total = parent_of.len() + name_of.len();
+    for _ in 0..3 {
+        let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
+        for (&child, &parent) in &parent_of {
+            children.entry(parent).or_default().push(child);
+        }
+        total += children.len();
+    }
+    total
+}
+
+pub(super) fn shared_process_index_allocations_for_bench(process_count: u32) -> usize {
+    let samples = synthetic_proc_samples_for_bench(process_count);
+    let children = build_children(&samples);
+    // The optimized metadata path reads process names directly from `samples`
+    // and shares this single child index across CPU, memory/process, and agent
+    // detection passes.
+    samples.len() + children.len()
+}
+
+fn synthetic_proc_samples_for_bench(process_count: u32) -> HashMap<u32, ProcSample> {
+    let mut samples = HashMap::with_capacity(process_count as usize);
+    for idx in 1..=process_count {
+        let ppid = if idx == 1 { 0 } else { idx / 2 };
+        samples.insert(
+            idx,
+            ProcSample {
+                ppid,
+                name: if idx % 17 == 0 {
+                    "claude".to_string()
+                } else if idx % 11 == 0 {
+                    "rustc".to_string()
+                } else {
+                    "zsh".to_string()
+                },
+                cpu_pct: if idx % 11 == 0 { 75.0 } else { 0.5 },
+                rss_bytes: u64::from(idx % 128) * 1024 * 1024,
+            },
+        );
+    }
+    samples
+}
+
+fn query_session_cpu<'a>(
+    all_panes: &'a [PaneInfo],
+    children: &HashMap<u32, Vec<u32>>,
     samples: &HashMap<u32, ProcSample>,
-) -> HashMap<String, f32> {
-    let children = build_children(parent_of);
-    let mut result: HashMap<String, f32> = HashMap::new();
-    let mut seen_by_session: HashMap<String, HashSet<u32>> = HashMap::new();
+) -> HashMap<&'a str, f32> {
+    let mut result: HashMap<&'a str, f32> = HashMap::new();
+    let mut seen_by_session: HashMap<&'a str, HashSet<u32>> = HashMap::new();
 
     for pane in all_panes {
-        let seen = seen_by_session.entry(pane.session.clone()).or_default();
+        let session = pane.session.as_str();
+        let seen = seen_by_session.entry(session).or_default();
         let mut stack = vec![pane.pid];
 
         while let Some(pid) = stack.pop() {
             if !seen.insert(pid) {
                 continue;
             }
-            *result.entry(pane.session.clone()).or_default() += samples
+            *result.entry(session).or_default() += samples
                 .get(&pid)
                 .map(|sample| sample.cpu_pct)
                 .unwrap_or_default();
@@ -195,20 +235,23 @@ fn dominant_process_root(
     }
 }
 
-fn query_session_memory_and_processes(
-    all_panes: &[PaneInfo],
-    parent_of: &HashMap<u32, u32>,
+fn query_session_memory_and_processes<'a>(
+    all_panes: &'a [PaneInfo],
+    children: &HashMap<u32, Vec<u32>>,
     samples: &HashMap<u32, ProcSample>,
-) -> (HashMap<String, u64>, HashMap<String, Vec<ProcessTreeInfo>>) {
-    let children = build_children(parent_of);
+) -> (
+    HashMap<&'a str, u64>,
+    HashMap<&'a str, Vec<ProcessTreeInfo>>,
+) {
     let mut memo: HashMap<u32, (f32, u64)> = HashMap::new();
-    let mut session_mem: HashMap<String, u64> = HashMap::new();
-    let mut seen_by_session: HashMap<String, HashSet<u32>> = HashMap::new();
-    let mut roots_by_session: HashMap<String, Vec<(u32, ProcessTreeInfo)>> = HashMap::new();
+    let mut session_mem: HashMap<&str, u64> = HashMap::new();
+    let mut seen_by_session: HashMap<&str, HashSet<u32>> = HashMap::new();
+    let mut roots_by_session: HashMap<&str, Vec<(u32, ProcessTreeInfo)>> = HashMap::new();
     let mut pids_by_pane: Vec<(&PaneInfo, Vec<u32>)> = Vec::new();
 
     for pane in all_panes {
-        let seen = seen_by_session.entry(pane.session.clone()).or_default();
+        let session = pane.session.as_str();
+        let seen = seen_by_session.entry(session).or_default();
         let mut stack = vec![pane.pid];
         let mut pane_pids = HashSet::new();
 
@@ -217,8 +260,8 @@ fn query_session_memory_and_processes(
                 continue;
             }
             if seen.insert(pid) {
-                *session_mem.entry(pane.session.clone()).or_default() = session_mem
-                    .get(&pane.session)
+                *session_mem.entry(session).or_default() = session_mem
+                    .get(session)
                     .copied()
                     .unwrap_or_default()
                     .saturating_add(samples.get(&pid).map(|s| s.rss_bytes).unwrap_or_default());
@@ -270,7 +313,7 @@ fn query_session_memory_and_processes(
                 continue;
             }
             roots_by_session
-                .entry(pane.session.clone())
+                .entry(pane.session.as_str())
                 .or_default()
                 .push((
                     pid,
@@ -382,11 +425,9 @@ fn is_sidebar_pane(marker: &str, token: &str, command: &str) -> bool {
 /// Returns (session, pane_id, agent_name) for every agent found across all panes.
 fn query_agents(
     all_panes: &[PaneInfo],
-    parent_of: &HashMap<u32, u32>,
-    name_of: &HashMap<u32, String>,
+    children: &HashMap<u32, Vec<u32>>,
+    samples: &HashMap<u32, ProcSample>,
 ) -> Vec<(String, String, String)> {
-    let children = build_children(parent_of);
-
     let mut result: Vec<(String, String, String)> = Vec::new();
 
     for pane in all_panes {
@@ -404,7 +445,7 @@ fn query_agents(
             if skip_subtree.contains(&pid) {
                 continue;
             }
-            if let Some(name) = name_of.get(&pid) {
+            if let Some(name) = samples.get(&pid).map(|sample| sample.name.as_str()) {
                 let lower = name.to_ascii_lowercase();
                 let agent_match = AGENTS.iter().find(|(a, _)| lower == *a);
                 if let Some((agent_name, _)) = agent_match {
@@ -951,13 +992,12 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
     }
 
     let samples = build_process_info();
-    let parent_of = parent_map(&samples);
-    let name_of = name_map(&samples);
-    let session_cpu = query_session_cpu(&all_panes, &parent_of, &samples);
+    let children = build_children(&samples);
+    let session_cpu = query_session_cpu(&all_panes, &children, &samples);
     let (session_mem, session_processes) =
-        query_session_memory_and_processes(&all_panes, &parent_of, &samples);
+        query_session_memory_and_processes(&all_panes, &children, &samples);
     let pi_agents = query_pi_agents(&all_panes);
-    let agent_hits = query_agents(&all_panes, &parent_of, &name_of);
+    let agent_hits = query_agents(&all_panes, &children, &samples);
 
     let scrape_targets: Vec<(String, String, String)> = agent_hits
         .iter()
@@ -1054,9 +1094,12 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
                 branch,
                 pr,
                 diff,
-                cpu_pct: session_cpu.get(name).copied().unwrap_or(0.0),
-                mem_bytes: session_mem.get(name).copied().unwrap_or(0),
-                processes: session_processes.get(name).cloned().unwrap_or_default(),
+                cpu_pct: session_cpu.get(name.as_str()).copied().unwrap_or(0.0),
+                mem_bytes: session_mem.get(name.as_str()).copied().unwrap_or(0),
+                processes: session_processes
+                    .get(name.as_str())
+                    .cloned()
+                    .unwrap_or_default(),
                 agents: session_agents,
                 attention: needs_attention,
                 status: statuses.get(name).cloned().unwrap_or_default(),

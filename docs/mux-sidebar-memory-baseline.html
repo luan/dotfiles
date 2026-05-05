@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mux sidebar memory baseline</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #11111b;
+      --panel: #181825;
+      --text: #cdd6f4;
+      --muted: #a6adc8;
+      --accent: #89b4fa;
+      --ok: #a6e3a1;
+      --warn: #f9e2af;
+      --border: #313244;
+    }
+    body {
+      margin: 0;
+      padding: 2rem;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; }
+    h1, h2, h3 { line-height: 1.15; }
+    h1 { margin-bottom: .25rem; }
+    a { color: var(--accent); }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0b0b12;
+    }
+    .meta, .note {
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .card {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+    .card strong {
+      display: block;
+      margin-bottom: .35rem;
+      color: var(--ok);
+      font-size: 1.1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+    th, td {
+      padding: .65rem .75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th {
+      color: var(--accent);
+      font-weight: 700;
+      background: #1e1e2e;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .status-ok { color: var(--ok); font-weight: 700; }
+    .status-warn { color: var(--warn); font-weight: 700; }
+    ul { padding-left: 1.25rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>mux sidebar memory baseline</h1>
+  <p class="meta">
+    Captured 2026-05-05 for task <code>p</code>, before the dedicated memory-reduction tasks.
+    Raw artifacts live under
+    <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/">docs/artifacts/mux-sidebar-memory-baseline-2026-05-05/</a>.
+  </p>
+
+  <section class="grid" aria-label="summary cards">
+    <div class="card">
+      <strong>Baseline RSS</strong>
+      Synthetic sidebar state profiles are clustered at <code>11,124,736 bytes</code> max RSS.
+    </div>
+    <div class="card">
+      <strong>Peak footprint</strong>
+      Sidebar state profiles report <code>5,865,832 bytes</code> peak memory footprint.
+    </div>
+    <div class="card">
+      <strong>Leaks snapshot</strong>
+      macOS <code>leaks --atExit</code> reports <code>0</code> leaked bytes for all captured synthetic scenarios.
+    </div>
+    <div class="card">
+      <strong>UX guardrails observed</strong>
+      Visible idle redraws once, hidden/off-screen does no redraws, active animation remains ~30fps.
+    </div>
+  </section>
+
+  <h2>Environment</h2>
+  <table>
+    <tbody>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>Date</td><td>2026-05-05T02:02:07Z</td></tr>
+      <tr><td>Git SHA</td><td><code>5023825564df9a2fbbad4119762c46540ba11453</code> with dirty working tree from the active sidebar perf work</td></tr>
+      <tr><td>Host</td><td><code>Darwin forge 25.4.0 arm64</code></td></tr>
+      <tr><td>macOS</td><td><code>26.4.1 (25E253)</code></td></tr>
+      <tr><td>Rust</td><td><code>rustc 1.95.0</code>, <code>cargo 1.95.0</code></td></tr>
+      <tr><td>tmux</td><td><code>tmux 3.6a</code></td></tr>
+      <tr><td>Memory tools available</td><td><code>/usr/bin/time -l</code>, <code>/usr/bin/leaks</code>, <code>/usr/bin/heap</code>, <code>/usr/bin/vmmap</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>tmux session shape at capture</h2>
+  <table>
+    <tbody>
+      <tr><th>sessions</th><th>windows</th><th>panes</th><th>Raw output</th></tr>
+      <tr>
+        <td>0</td>
+        <td>0</td>
+        <td>0</td>
+        <td><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/tmux-shape.txt">tmux-shape.txt</a></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    This task establishes the first heap/RSS/allocation baseline from reproducible synthetic sidebar scenarios.
+    The follow-up live profiling task (<code>4v</code>) owns realistic small/medium/large tmux session shapes.
+  </p>
+
+  <h2>Scenario memory baseline</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Duration</th>
+        <th>Primary work</th>
+        <th>Secondary work</th>
+        <th>tmux spawns</th>
+        <th>Visible polls</th>
+        <th>Hidden polls</th>
+        <th>Animation frames</th>
+        <th>Max RSS</th>
+        <th>Peak footprint</th>
+        <th>Malloc nodes</th>
+        <th>Malloc KB</th>
+        <th>Leaked bytes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>visible idle</td>
+        <td>4,000ms</td>
+        <td>1 redraw</td>
+        <td>8 refreshes</td>
+        <td>0</td>
+        <td>8</td>
+        <td>0</td>
+        <td>0</td>
+        <td>11,124,736 B</td>
+        <td>5,865,832 B</td>
+        <td>875</td>
+        <td>4,153</td>
+        <td class="status-ok">0</td>
+      </tr>
+      <tr>
+        <td>hidden/off-screen idle</td>
+        <td>4,000ms</td>
+        <td>0 redraws</td>
+        <td>0 refreshes</td>
+        <td>1</td>
+        <td>0</td>
+        <td>1</td>
+        <td>0</td>
+        <td>11,124,736 B</td>
+        <td>5,865,832 B</td>
+        <td>874</td>
+        <td>4,153</td>
+        <td class="status-ok">0</td>
+      </tr>
+      <tr>
+        <td>active animation</td>
+        <td>4,000ms</td>
+        <td>121 redraws</td>
+        <td>8 refreshes</td>
+        <td>0</td>
+        <td>121</td>
+        <td>0</td>
+        <td>121</td>
+        <td>11,124,736 B</td>
+        <td>5,865,832 B</td>
+        <td>876</td>
+        <td>4,153</td>
+        <td class="status-ok">0</td>
+      </tr>
+      <tr>
+        <td>daemon synthetic</td>
+        <td>30,000ms</td>
+        <td>60 ticks</td>
+        <td>6 metadata refreshes</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0</td>
+        <td>11,108,352 B</td>
+        <td>5,882,216 B</td>
+        <td>875</td>
+        <td>4,153</td>
+        <td class="status-ok">0</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Primary/secondary work means redraws/refreshes for sidebar scenarios and ticks/metadata refreshes for the daemon scenario.
+    The <code>leaks</code> numbers are process-level malloc snapshots from 1,000ms runs; RSS/footprint are from 4,000ms or 30,000ms <code>/usr/bin/time -l</code> runs.
+  </p>
+
+  <h2>Commands</h2>
+  <pre><code>cargo build --release --manifest-path xdg-configs/tmux/mux/Cargo.toml
+cargo test --manifest-path xdg-configs/tmux/mux/Cargo.toml --test sidebar_instrumentation
+cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+
+/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 visible-idle
+/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 hidden-idle
+/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 active-animation
+/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 30000
+
+leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 visible-idle
+leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 hidden-idle
+leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 active-animation
+leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 30000</code></pre>
+
+  <h2>Allocation-aware Criterion harness</h2>
+  <p>
+    The allocation harness is a separate Criterion bench target, <code>sidebar_alloc</code>.
+    It installs a counting allocator in the bench executable, prints a single-invocation
+    malloc-family allocation table, then runs Criterion timing benches for the same hot paths.
+    Run it directly with <code>just mux-memory</code>; it is also included in <code>just mux-perf</code>.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>allocs</th>
+        <th>deallocs</th>
+        <th>alloc bytes</th>
+        <th>dealloc bytes</th>
+        <th>net allocs</th>
+        <th>net bytes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>snapshot_decode/small</td><td>168</td><td>168</td><td>8,746</td><td>8,746</td><td>0</td><td>0</td></tr>
+      <tr><td>snapshot_decode/large</td><td>1,014</td><td>1,014</td><td>61,050</td><td>61,050</td><td>0</td><td>0</td></tr>
+      <tr><td>item_build/small</td><td>439</td><td>439</td><td>58,694</td><td>58,694</td><td>0</td><td>0</td></tr>
+      <tr><td>item_build/large</td><td>2,473</td><td>2,473</td><td>247,729</td><td>247,729</td><td>0</td><td>0</td></tr>
+      <tr><td>render_frame/small_45x32</td><td>1,144</td><td>1,144</td><td>435,437</td><td>435,437</td><td>0</td><td>0</td></tr>
+      <tr><td>render_frame/large_45x48</td><td>4,351</td><td>4,351</td><td>916,953</td><td>916,953</td><td>0</td><td>0</td></tr>
+      <tr><td>filter/small_work</td><td>650</td><td>650</td><td>197,475</td><td>197,475</td><td>0</td><td>0</td></tr>
+      <tr><td>filter/large_perf</td><td>3,394</td><td>3,394</td><td>398,382</td><td>398,382</td><td>0</td><td>0</td></tr>
+      <tr><td>meta_snapshot_conversion/small</td><td>316</td><td>316</td><td>16,635</td><td>16,635</td><td>0</td><td>0</td></tr>
+      <tr><td>meta_snapshot_conversion/large</td><td>1,960</td><td>1,960</td><td>119,659</td><td>119,659</td><td>0</td><td>0</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: compare <strong>alloc bytes</strong> and <strong>allocs</strong> before/after each optimization.
+    Net values should usually return to zero because these hot-path measurements allocate temporary data and then drop it.
+    RSS/footprint answers resident memory; this table answers allocation churn per operation.
+  </p>
+
+  <h2>Live isolated tmux shape profiles</h2>
+  <p>
+    The live profiler creates isolated tmux servers through a wrapper <code>tmux -L</code> socket,
+    starts the real mux sidebar daemon against each shape, churns fast status options, samples
+    daemon RSS over time, and captures state-loop profiles for visible idle, hidden/off-screen,
+    and active animation. Active filter/selection allocation hotspots are covered by the
+    <code>filter/*</code> and <code>render_frame/*</code> allocation rows above.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Shape</th>
+        <th>Sessions</th>
+        <th>Panes</th>
+        <th>Max daemon RSS</th>
+        <th>Max daemon VSZ</th>
+        <th>Max CPU</th>
+        <th>Snapshot bytes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>small</td>
+        <td>1</td>
+        <td>5</td>
+        <td>12,144 KB</td>
+        <td>442,204,368 KB</td>
+        <td>0.6%</td>
+        <td>4,051 B</td>
+      </tr>
+      <tr>
+        <td>medium</td>
+        <td>5</td>
+        <td>50</td>
+        <td>12,256 KB</td>
+        <td>442,212,832 KB</td>
+        <td>0.1%</td>
+        <td>4,934 B</td>
+      </tr>
+      <tr>
+        <td>large</td>
+        <td>20</td>
+        <td>300</td>
+        <td>12,640 KB</td>
+        <td>442,212,352 KB</td>
+        <td>0.3%</td>
+        <td>9,609 B</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: daemon RSS grows slowly across realistic shape sizes in this short status-churn run
+    (<code>~12.1 MB → ~12.6 MB</code> from 5 to 300 panes). Snapshot bytes do scale with live tmux shape.
+    macOS VSZ is included as raw <code>ps</code> output but is not the useful optimization target here.
+  </p>
+
+  <h2>Status propagation latency guardrail</h2>
+  <p>
+    <code>mux sidebar status-latency-profile</code> measures the end-to-end path from changing
+    <code>@attention</code>, <code>@sidebar_status</code>, and <code>@sidebar_progress</code> in tmux
+    to observing those values in the daemon snapshot consumed by sidebars. The local guardrail
+    command is <code>just mux-status-latency</code>; it creates an isolated tmux server and fails
+    when p95 exceeds the target.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Iterations</th>
+        <th>p50</th>
+        <th>p95</th>
+        <th>max</th>
+        <th>target p95</th>
+        <th>timeouts</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>8</td>
+        <td>487 ms</td>
+        <td>505 ms</td>
+        <td>505 ms</td>
+        <td>750 ms</td>
+        <td>0</td>
+        <td class="status-ok">pass</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: p95 should sit near the 500ms daemon lightweight snapshot cadence. A p95 above
+    750ms means a future memory optimization probably slowed status freshness too much.
+  </p>
+
+  <h2>Clone/allocation hotspot audit</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Path / seam</th>
+        <th>Observed churn</th>
+        <th>Category</th>
+        <th>Evidence</th>
+        <th>Implementation note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>daemon.rs</code> snapshot ⇄ runtime conversion</td>
+        <td>Clones every session key plus branch/status/PR/process/agent strings when converting snapshots back into <code>SessionMeta</code>.</td>
+        <td class="status-warn">structural fix</td>
+        <td><code>meta_snapshot_conversion/large</code>: 1,960 allocs / 119,659 B.</td>
+        <td>Task <code>en</code>: avoid full runtime reconstruction where possible; consider borrowed snapshot views or compact snapshot-native render inputs.</td>
+      </tr>
+      <tr>
+        <td><code>tree.rs::build_items</code></td>
+        <td>Builds owned <code>Item</code> rows, cloned <code>session_id</code>, formatted synthetic IDs, cloned process/agent/branch/PR fields.</td>
+        <td class="status-warn">structural fix</td>
+        <td><code>item_build/large</code>: 2,473 allocs / 247,729 B.</td>
+        <td>Task <code>4f</code>: reduce duplicated IDs/display strings; consider compact typed row IDs and shared session strings.</td>
+      </tr>
+      <tr>
+        <td><code>SidebarState::search_matches</code> and overlay filtering</td>
+        <td>Formats <code>"display session_id"</code> for every selectable item on each query and returns a fresh match vector.</td>
+        <td class="status-ok">easy fix candidate</td>
+        <td><code>filter/large_perf</code>: 3,394 allocs / 398,382 B.</td>
+        <td>Task <code>0f</code>: cache/search borrowed haystacks or precomputed search text for the current item set; preserve exact match behavior.</td>
+      </tr>
+      <tr>
+        <td><code>render/items.rs</code></td>
+        <td>Per-frame formatting for CPU/mem/diff/progress/age plus Span/Line construction. Animation redraws amplify this only while active and visible.</td>
+        <td class="status-warn">measure before changing</td>
+        <td><code>render_frame/large_45x48</code>: 4,351 allocs / 916,953 B.</td>
+        <td>Task <code>2</code>: cache stable row fragments only if allocation counters improve without complicating animation/status correctness.</td>
+      </tr>
+      <tr>
+        <td><code>daemon.rs::query_base_snapshot</code></td>
+        <td>Parses tmux output into owned session/status/pane strings and maps every 500ms.</td>
+        <td class="status-ok">easy/structural split</td>
+        <td>Live 300-pane snapshot: 9,609 B; status p95 remains ~505ms.</td>
+        <td>Keep fast status cadence. Optimize representation only if status latency guardrail stays under p95 target.</td>
+      </tr>
+      <tr>
+        <td><code>meta.rs::query_session_meta</code></td>
+        <td>Heavy metadata path clones pane/session IDs, cwd cache keys, agent scrape data, branch/PR cache values.</td>
+        <td>mostly acceptable for now</td>
+        <td>Heavy metadata is already daemon-centralized and 5s-throttled.</td>
+        <td>Task <code>rc</code>: focus on refresh spikes and retained daemon state before broad refactors.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Audit conclusion: the biggest allocation churn is not a leak; it is repeated owned model construction.
+    The first likely wins are filter haystack reuse and item/snapshot representation changes. Pure micro-clone cleanup
+    in cold tmux-management code is not worth touching unless it appears in the allocation harness or live RSS profiles.
+  </p>
+
+  <h2>Accepted optimization: compact snapshot metadata representation</h2>
+  <p>
+    Snapshot metadata is now serialized as a compact vector of <code>(session, meta)</code> pairs instead of
+    a <code>HashMap</code> bucket table. The daemon still exposes the same runtime behavior, but MessagePack
+    decode avoids allocating hash table buckets for metadata. Snapshot version bumped to force daemon refresh.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Before alloc bytes</th>
+        <th>After alloc bytes</th>
+        <th>Delta</th>
+        <th>Alloc count</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>snapshot_decode/small</td><td>8,746</td><td>7,858</td><td class="status-ok">-888 B / -10.2%</td><td>168 → 168</td></tr>
+      <tr><td>snapshot_decode/large</td><td>61,050</td><td>46,226</td><td class="status-ok">-14,824 B / -24.3%</td><td>1,014 → 1,014</td></tr>
+      <tr><td>meta_snapshot_conversion/small</td><td>16,635</td><td>15,747</td><td class="status-ok">-888 B / -5.3%</td><td>316 → 316</td></tr>
+      <tr><td>meta_snapshot_conversion/large</td><td>119,659</td><td>104,835</td><td class="status-ok">-14,824 B / -12.4%</td><td>1,960 → 1,960</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Throughput did not regress materially: <code>snapshot_decode/large</code> measured 88.153µs mean in the
+    post-change focused Criterion run. Status latency guardrail still passed at p95 505ms.
+  </p>
+
+  <h2>Accepted optimization: active render allocation churn</h2>
+  <p>
+    Render allocation measurement now separates setup-inclusive rendering from the real TUI-loop shape
+    where the terminal buffer is reused between frames. Active agent percolation also renders borrowed
+    color runs instead of allocating one <code>String</code> per character.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Before allocs</th>
+        <th>After allocs</th>
+        <th>Before bytes</th>
+        <th>After bytes</th>
+        <th>Delta</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>render_frame/small_45x32</td><td>1,144</td><td>1,101</td><td>435,437</td><td>431,365</td><td class="status-ok">-43 allocs / -4,072 B</td></tr>
+      <tr><td>render_frame/large_45x48</td><td>4,351</td><td>4,231</td><td>916,953</td><td>903,523</td><td class="status-ok">-120 allocs / -13,430 B</td></tr>
+      <tr><td>render_frame_reused/small_45x32</td><td>538</td><td>496</td><td>129,763</td><td>125,755</td><td class="status-ok">-42 allocs / -4,008 B</td></tr>
+      <tr><td>render_frame_reused/large_45x48</td><td>912</td><td>792</td><td>216,836</td><td>203,406</td><td class="status-ok">-120 allocs / -13,430 B</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: the setup-inclusive render benchmark remains useful for total fixture cost, but
+    <code>render_frame_reused/*</code> is the better proxy for visible idle and active animation frames because
+    the application keeps one terminal around. Animation smoothness is preserved because frame pacing did not change.
+  </p>
+
+  <h2>Accepted optimization: tree item construction allocations</h2>
+  <p>
+    Tree item construction now pre-sizes the item vector from the session metadata, shares each row's
+    session id through a cheap reference-counted string, and avoids duplicating display strings for rows
+    rendered directly from their typed <code>ItemKind</code> payload. Regression tests lock down grouped
+    session/detail ordering and exact capacity estimates.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Before allocs</th>
+        <th>After allocs</th>
+        <th>Before bytes</th>
+        <th>After bytes</th>
+        <th>Delta</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>item_build/small</td><td>439</td><td>332</td><td>58,694</td><td>21,479</td><td class="status-ok">-107 allocs / -37,215 B</td></tr>
+      <tr><td>item_build/medium</td><td>new measured shape</td><td>811</td><td>new measured shape</td><td>52,692</td><td>baseline established</td></tr>
+      <tr><td>item_build/large</td><td>2,473</td><td>1,832</td><td>247,729</td><td>120,274</td><td class="status-ok">-641 allocs / -127,455 B</td></tr>
+      <tr><td>filter/small_work</td><td>650</td><td>527</td><td>197,475</td><td>159,700</td><td class="status-ok">-123 allocs / -37,775 B</td></tr>
+      <tr><td>filter/large_perf</td><td>3,394</td><td>2,673</td><td>398,382</td><td>268,067</td><td class="status-ok">-721 allocs / -130,315 B</td></tr>
+      <tr><td>render_frame/large_45x48</td><td>4,231</td><td>3,590</td><td>903,523</td><td>776,054</td><td class="status-ok">-641 allocs / -127,469 B</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: the largest win is removing duplicate per-detail-row session/name strings from the constructed tree.
+    Filter and render also improve because their fixtures build the tree before operating on it.
+  </p>
+
+  <h2>Accepted optimization: filter/search allocations</h2>
+  <p>
+    Filtering now uses borrowed haystacks for sidebar items, precomputes selectable session search text
+    when the tree is rebuilt, and uses score-only fuzzy matching instead of collecting match indices.
+    This preserves visible result ordering while avoiding full label/session formatting on every keystroke.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Allocations</th>
+        <th>Allocated bytes</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>filter_existing/empty</td><td>0</td><td>0</td><td class="status-ok">empty query stays allocation-free</td></tr>
+      <tr><td>filter_existing/short</td><td>11</td><td>135,345</td><td>single-character query over existing large tree</td></tr>
+      <tr><td>filter_existing/fuzzy</td><td>10</td><td>134,324</td><td>fuzzy query over existing large tree</td></tr>
+      <tr><td>filter_existing/high_match</td><td>11</td><td>135,348</td><td>high-match query over existing large tree</td></tr>
+      <tr><td>filter/small_work</td><td>372</td><td>157,459</td><td class="status-ok">fixture-inclusive path; down from 650 / 197,475 baseline</td></tr>
+      <tr><td>filter/large_perf</td><td>1,998</td><td>267,198</td><td class="status-ok">fixture-inclusive path; down from 3,394 / 398,382 baseline</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: <code>filter_existing/*</code> is the real typing/keystroke proxy because the sidebar tree is already built.
+    Precomputed search text intentionally shifts a small amount of allocation into tree construction
+    (<code>item_build/large</code> final: 1,992 allocs / 133,834 B), still far below the original 2,473 allocs / 247,729 B.
+  </p>
+
+  <h2>Compact IDs / string interning investigation</h2>
+  <p>
+    A new diagnostic command, <code>mux sidebar snapshot-string-stats</code>, decodes a MessagePack
+    sidebar snapshot and counts duplicated string payload bytes. This was run against regenerated isolated
+    live tmux shapes after the compact snapshot metadata change.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Shape</th>
+        <th>Snapshot bytes</th>
+        <th>Total strings</th>
+        <th>Total string bytes</th>
+        <th>Unique strings</th>
+        <th>Duplicate occurrences</th>
+        <th>Duplicated bytes</th>
+        <th>Top duplicate</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>small</td><td>4,034</td><td>20</td><td>3,967</td><td>14</td><td>6</td><td>54</td><td><code>muxmem-01</code> ×7</td></tr>
+      <tr><td>medium</td><td>4,921</td><td>126</td><td>4,658</td><td>67</td><td>59</td><td>511</td><td><code>muxmem-01</code> ×12</td></tr>
+      <tr><td>large</td><td>9,611</td><td>686</td><td>8,454</td><td>347</td><td>339</td><td>2,956</td><td><code>muxmem-01</code> ×17</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><strong>Accepted prototype:</strong> tree rows now use shared <code>Rc&lt;str&gt;</code> session IDs. That already produced a large allocation win in <code>build_items</code>.</li>
+    <li><strong>Rejected for snapshots:</strong> adding an interning table to the MessagePack snapshot. The largest measured live shape has only 2,956 duplicated string bytes, and an interning table would add format complexity, migration risk, and lookup overhead.</li>
+    <li><strong>Rejected for status strings:</strong> status/progress churn is latency-sensitive and duplicates were not the dominant memory source.</li>
+    <li><strong>Maybe later:</strong> compact typed pane/session IDs only if a future 1,000+ pane profile shows duplicated bytes dwarfing the current 300-pane result.</li>
+  </ul>
+
+  <h2>Daemon retained-state audit</h2>
+  <p>
+    The daemon's resident state is intentionally small: heavy metadata by session, short-lived agent activity
+    caches, usage bar strings, and counters. Base tmux snapshots are temporary per tick; serialized snapshots
+    are written to disk and not retained beyond the loop iteration.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Resident structure</th>
+        <th>Purpose</th>
+        <th>Retention decision</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>meta: HashMap&lt;String, SessionMeta&gt;</code></td><td>Heavy per-session branch/PR/process/agent/status data</td><td>Retain only live sessions; pruned every daemon tick</td></tr>
+      <tr><td><code>gerund_cache</code></td><td>Grace-window active agent text to prevent flicker</td><td>Retain only live sessions and <code>ACTIVITY_GRACE</code>-fresh entries</td></tr>
+      <tr><td><code>last_active</code></td><td>Agent age display</td><td>Retain only live sessions</td></tr>
+      <tr><td><code>usage_lines</code></td><td>Cached usage bar footer</td><td>Small retained vector; refreshed with heavy metadata cadence</td></tr>
+      <tr><td><code>BaseSnapshotInput</code></td><td>Fast 500ms tmux status/session/pane poll</td><td>Temporary per tick, not retained</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Accepted change: prune daemon metadata/activity caches for sessions no longer present in tmux before
+    each snapshot. This prevents stale session metadata from living until the next heavy metadata refresh
+    or activity grace expiry.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Shape</th>
+        <th>Sessions</th>
+        <th>Panes</th>
+        <th>Max daemon RSS after prune</th>
+        <th>Snapshot bytes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>small</td><td>1</td><td>5</td><td>12,096 KB</td><td>4,031 B</td></tr>
+      <tr><td>medium</td><td>5</td><td>50</td><td>12,112 KB</td><td>4,918 B</td></tr>
+      <tr><td>large</td><td>20</td><td>300</td><td>12,560 KB</td><td>9,608 B</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Interpretation: the steady-state RSS floor is still allocator/process dominated, but stale-session retention is now bounded.
+    The large-shape daemon RSS check remains in the same low-12MB range and no status-latency regression was observed.
+  </p>
+
+  <h2>Multiple sidebar clients / duplicate per-process state</h2>
+  <p>
+    Each attached sidebar pane is a separate <code>mux</code> process, so terminal buffers, tree rows,
+    selection/filter state, and current viewport state are necessarily duplicated per client. The daemon
+    snapshot is the shareable boundary. Before this pass, daemon-backed sidebars also retained the decoded
+    <code>HashMap&lt;String, SessionMeta&gt;</code> after tree rows had already been materialized, duplicating
+    heavy metadata in every sidebar process. The optimized path now drops that decoded map immediately after
+    building rows; direct/non-daemon mode still keeps metadata for skipped expensive refreshes.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Before retained allocs</th>
+        <th>After retained allocs</th>
+        <th>Before retained bytes</th>
+        <th>After retained bytes</th>
+        <th>Reduction</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>large × 1 sidebar</td><td>2,116</td><td>1,170</td><td>167,133 B</td><td>108,524 B</td><td>-58,609 B / -35%</td></tr>
+      <tr><td>large × 4 sidebars</td><td>8,461</td><td>4,677</td><td>668,532 B</td><td>434,096 B</td><td>-234,436 B / -35%</td></tr>
+      <tr><td>large × 8 sidebars</td><td>16,921</td><td>9,353</td><td>1,337,064 B</td><td>868,192 B</td><td>-468,872 B / -35%</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Criterion throughput for constructing daemon-backed large client state after the change:
+    one sidebar <code>3.73ms</code>, four sidebars <code>17.19ms</code>, eight sidebars <code>35.42ms</code>.
+    Hidden/off-screen panes still do not render or animate; their remaining per-process memory is now mostly
+    unavoidable row/viewport state plus the terminal process floor.
+  </p>
+
+  <h2>Collection-type audit</h2>
+  <p>
+    Sidebar hot-path collections were audited after the structural wins above. The rule for this pass was:
+    prototype only where allocation evidence or live snapshot size suggested a plausible win, and keep the
+    simpler structure when data was neutral or negative.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Collection</th>
+        <th>Path</th>
+        <th>Decision</th>
+        <th>Evidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>SidebarSnapshot.meta</code></td><td>snapshot decode/conversion</td><td>Keep compact <code>Vec&lt;(String, SessionMetaSnapshot)&gt;</code></td><td>Already accepted: large decode bytes <code>61,050 → 46,226</code></td></tr>
+      <tr><td><code>tree::build_items</code> output <code>Vec&lt;Item&gt;</code></td><td>item build/render/filter</td><td>Keep exact preallocation</td><td>Already accepted: large item build bytes <code>247,729 → 120,274</code></td></tr>
+      <tr><td><code>SidebarSnapshot.pane_sessions</code></td><td>daemon snapshot/current-pane lookup</td><td>Rejected <code>Vec&lt;(String, String)&gt;</code>; keep <code>HashMap</code></td><td>Synthetic one-pane decode saved only 156 B, but live 300-pane snapshot regressed <code>9,608 B → 9,900 B</code></td></tr>
+      <tr><td><code>SidebarState.visible</code></td><td>selection/filter/render viewport</td><td>Keep <code>Vec&lt;usize&gt;</code></td><td>Large render/filter costs are dominated by rows/spans; replacing with SmallVec would not cover large lists and would add dependency/branch complexity</td></tr>
+      <tr><td><code>DaemonCache.meta</code></td><td>resident daemon metadata</td><td>Keep <code>HashMap</code> with live-session pruning</td><td>Needed for session-keyed hot status updates; stale retention is already bounded by prune</td></tr>
+      <tr><td><code>HashSet</code> alive-session sets</td><td>order computation/filtering live sessions</td><td>Keep</td><td>Temporary per refresh; no retained-memory hotspot after item/meta changes</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Collection conclusion: no additional collection swap survived live measurement. The remaining collection memory is either
+    already compacted/preallocated or tied to necessary keyed lookup semantics.
+  </p>
+
+  <h2>Metadata refresh temporary allocations</h2>
+  <p>
+    Heavy metadata refreshes were audited for temporary allocation spikes in process-tree handling. The previous
+    shape of the code built a <code>parent_of</code> map, cloned a full <code>name_of</code> map, and then rebuilt
+    child indexes separately for CPU aggregation, memory/process detection, and agent detection. The optimized path
+    builds one child index directly from the <code>ps</code> sample map, shares it across all three passes, reads
+    process names from the sample map, and uses borrowed session keys for CPU/memory/process intermediate maps.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Metadata process-index scenario</th>
+        <th>Allocs</th>
+        <th>Allocated bytes</th>
+        <th>Reduction vs legacy</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>legacy 2,048-process index strategy</td><td>7,204</td><td>841,020 B</td><td>baseline</td></tr>
+      <tr><td>shared 2,048-process index strategy</td><td>3,084</td><td>359,084 B</td><td>-4,120 allocs / -481,936 B (-57%)</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Criterion timing for the shared synthetic 2,048-process index path is <code>~188.6µs</code>. Fast status
+    fields remain outside the heavy metadata cadence and status latency stayed below the <code>750ms</code> guardrail.
+  </p>
+
+  <h2>Memory regression guardrails</h2>
+  <p>
+    <code>just mux-perf</code> now captures the <code>sidebar_alloc</code> allocation profile and runs
+    <code>xdg-configs/tmux/mux/scripts/check-sidebar-alloc-thresholds.py</code>. Thresholds are deliberately
+    coarse (roughly 20–30% headroom over the measured optimized rows, with more room for multi-client retained
+    state) so they flag material allocation regressions without being brittle to normal toolchain noise.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Current allocated bytes</th>
+        <th>Guardrail allocated bytes</th>
+        <th>Guardrail alloc count</th>
+        <th>Guardrail net bytes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>snapshot_decode/large</code></td><td>46,226</td><td>60,000</td><td>1,250</td><td>0</td></tr>
+      <tr><td><code>item_build/large</code></td><td>133,834</td><td>170,000</td><td>2,400</td><td>0</td></tr>
+      <tr><td><code>render_frame_reused/large_45x48</code></td><td>203,406</td><td>260,000</td><td>1,000</td><td>0</td></tr>
+      <tr><td><code>filter/large_perf</code></td><td>267,198</td><td>330,000</td><td>2,400</td><td>0</td></tr>
+      <tr><td><code>meta_snapshot_conversion/large</code></td><td>104,835</td><td>130,000</td><td>2,400</td><td>0</td></tr>
+      <tr><td><code>metadata_process_index/shared_2048</code></td><td>359,084</td><td>450,000</td><td>3,800</td><td>0</td></tr>
+      <tr><td><code>daemon_client_states/large_x8</code></td><td>2,179,200</td><td>2,650,000</td><td>41,000</td><td>1,100,000</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Allocator comparison</h2>
+  <p>
+    The default Rust/macOS system allocator was compared with an opt-in <code>mimalloc</code> build
+    (<code>--features mimalloc</code>) using the same isolated small/medium/large live daemon profiler.
+    The feature remains opt-in for experiments; it is not enabled by default.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Allocator</th>
+        <th>Shape</th>
+        <th>Max daemon RSS</th>
+        <th>Snapshot bytes</th>
+        <th>Binary size</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>system</td><td>small</td><td>12,096 KB</td><td>4,018 B</td><td>1,790,720 B</td></tr>
+      <tr><td>system</td><td>medium</td><td>12,208 KB</td><td>4,909 B</td><td>1,790,720 B</td></tr>
+      <tr><td>system</td><td>large</td><td>12,576 KB</td><td>9,614 B</td><td>1,790,720 B</td></tr>
+      <tr><td>mimalloc</td><td>small</td><td>12,368 KB</td><td>4,018 B</td><td>1,895,072 B</td></tr>
+      <tr><td>mimalloc</td><td>medium</td><td>12,416 KB</td><td>4,909 B</td><td>1,895,072 B</td></tr>
+      <tr><td>mimalloc</td><td>large</td><td>12,672 KB</td><td>9,614 B</td><td>1,895,072 B</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Decision: keep the system allocator as the default. Mimalloc did not reduce RSS in the live profiler and
+    increased the stripped release binary by 104,352 B. The optional feature is useful only as a reproducible
+    comparison switch for future allocator experiments.
+  </p>
+
+  <h2>Long-run stability / leak check</h2>
+  <p>
+    A 60s synthetic stress profile covers visible idle, hidden/off-screen idle, active animation, and daemon
+    metadata cadence without waiting on live tmux. Live status-churn profiles then exercise real tmux process
+    RSS and snapshot growth. A requested 120s focused large live daemon run confirmed the daemon exits after
+    the built-in 30s no-sidebar idle grace in this isolated harness, so the practical live stress window without
+    a real attached sidebar client is 30s.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Stress path</th>
+        <th>Duration / samples</th>
+        <th>Redraws</th>
+        <th>Refreshes / ticks</th>
+        <th>Animation frames</th>
+        <th>Leak result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>visible idle synthetic</td><td>60s</td><td>1</td><td>120 refreshes</td><td>0</td><td>covered by active leak check</td></tr>
+      <tr><td>hidden idle synthetic</td><td>60s</td><td>0</td><td>0 refreshes</td><td>0</td><td>covered by active leak check</td></tr>
+      <tr><td>active animation synthetic</td><td>60s</td><td>1,818</td><td>120 refreshes</td><td>1,818</td><td class="status-ok">0 leaks / 0 leaked bytes in 10s active leak run</td></tr>
+      <tr><td>daemon synthetic</td><td>60s</td><td>0</td><td>120 ticks / 12 metadata refreshes</td><td>0</td><td>no retained counter growth</td></tr>
+    </tbody>
+  </table>
+  <table>
+    <thead>
+      <tr>
+        <th>Live status-churn shape</th>
+        <th>Samples</th>
+        <th>Max daemon RSS</th>
+        <th>Last daemon RSS</th>
+        <th>Max snapshot bytes</th>
+        <th>Interpretation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>small 1 session / 5 panes</td><td>30</td><td>12,720 KB</td><td>12,720 KB</td><td>4,019 B</td><td>startup allocator warm-up, bounded by idle exit</td></tr>
+      <tr><td>medium 5 sessions / 50 panes</td><td>30</td><td>12,912 KB</td><td>12,912 KB</td><td>4,914 B</td><td>startup allocator warm-up, bounded by idle exit</td></tr>
+      <tr><td>large 20 sessions / 300 panes</td><td>30</td><td>13,296 KB</td><td>13,296 KB</td><td>9,634 B</td><td>startup allocator warm-up, bounded by idle exit</td></tr>
+      <tr><td>focused large requested 120s</td><td>30 before idle exit</td><td>13,360 KB</td><td>13,360 KB</td><td>9,634 B</td><td>daemon self-terminates without sidebar clients after 30s</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Stability conclusion: no leaked bytes were reported and no unbounded synthetic counter growth was observed.
+    Short live RSS curves rise during initial allocator/page warm-up, then are capped in the isolated no-client
+    harness by daemon idle exit. A true hours-long run would require a real attached sidebar client, but the
+    code paths that would otherwise spin while hidden remain parked by the hidden lifecycle guardrails.
+  </p>
+
+  <h2>Dependency and binary footprint audit</h2>
+  <p>
+    Dependency features were audited for runtime-memory relevance before changing defaults. The only safe
+    trim accepted here is <code>chrono</code>: disable crate defaults while keeping <code>std</code> and
+    <code>clock</code>, which are required by mux status formatting. This removes unused chrono default
+    feature surface such as <code>oldtime</code>/<code>wasmbind</code> without changing behavior.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Release binary</th>
+        <th>Visible profile max RSS</th>
+        <th>Visible profile peak footprint</th>
+        <th>Decision</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>before feature audit</td><td>1,790,720 B</td><td>11,223,040 B</td><td>5,898,600 B</td><td>baseline</td></tr>
+      <tr><td>chrono default-features disabled, <code>std+clock</code> kept</td><td>1,790,720 B</td><td>11,223,040 B</td><td>5,914,984 B</td><td>keep: harmless dependency-surface trim, no runtime-memory claim</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Other large dependencies (<code>ratatui</code>, <code>crossterm</code>, <code>sysinfo</code>, serde/MessagePack)
+    sit on active runtime paths. Since the binary/RSS measurement did not move materially, broader feature churn
+    is deferred unless future profiling ties a specific dependency feature to startup RSS.
+  </p>
+
+  <h2>Final UX regression pass</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>State / guardrail</th>
+        <th>Result</th>
+        <th>Pass criterion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>visible idle</td><td>1 redraw, 8 refresh polls, 0 tmux spawns</td><td class="status-ok">no redraw spam</td></tr>
+      <tr><td>hidden/off-screen idle</td><td>0 redraws, 0 refreshes, 1 visibility poll, 0 animation frames</td><td class="status-ok">near-zero work while parked</td></tr>
+      <tr><td>active animation</td><td>121 redraws / 121 animation frames over 4s</td><td class="status-ok">~30fps smooth animation retained</td></tr>
+      <tr><td>status latency</td><td>p50 493ms, p95 510ms</td><td class="status-ok">p95 below 750ms target</td></tr>
+      <tr><td>build/install</td><td><code>just mux</code> passed and codesigned <code>mux</code>/<code>notch-state</code></td><td class="status-ok">release binary still deploys</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Remaining headroom and rejected directions</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Direction</th>
+        <th>Decision</th>
+        <th>Measured reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Hidden/off-screen rendering</td><td class="status-ok">No further loop work to remove</td><td>Hidden synthetic profile reports 0 redraws, 0 refreshes, 0 animation frames after parking.</td></tr>
+      <tr><td>Snapshot string interning</td><td>Rejected</td><td>Live 300-pane snapshot has only 2,956 duplicated string bytes; interning table complexity is not justified.</td></tr>
+      <tr><td><code>pane_sessions</code> as Vec pairs</td><td>Rejected</td><td>Saved 156 B in synthetic one-pane decode but live 300-pane snapshot regressed 9,608 B → 9,900 B.</td></tr>
+      <tr><td>Per-client decoded metadata cache</td><td class="status-ok">Removed</td><td>Dropping daemon-decoded <code>SessionMeta</code> after row construction saves 468,872 retained bytes for 8 large clients.</td></tr>
+      <tr><td>Skipping daemon metadata for hidden sessions</td><td>Rejected for now</td><td>The daemon snapshot is shared across clients; keeping all live sessions preserves instant switching while hidden clients are already parked.</td></tr>
+      <tr><td>SmallVec/alternate maps in hot collections</td><td>Rejected/no-op</td><td>Large lists exceed SmallVec sweet spots; keyed daemon/session maps are needed for status and lookup semantics.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Command appendix</h2>
+  <pre><code># Synthetic state profiles and leak/time snapshots
+cargo run --manifest-path xdg-configs/tmux/mux/Cargo.toml -- sidebar profile 4000
+/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 visible-idle
+/usr/bin/leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 visible-idle
+
+# Allocation-aware Criterion and throughput suites
+cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+
+# Live isolated tmux small/medium/large daemon profiles
+MUX_SIDEBAR_MEMORY_SAMPLE_SECONDS=5 xdg-configs/tmux/mux/scripts/sidebar-memory-profile.sh docs/artifacts/mux-sidebar-live-memory-2026-05-05
+
+# Latency and guardrails
+just mux-status-latency
+just mux-perf
+
+# Snapshot/string diagnostics
+xdg-configs/tmux/mux/target/release/mux sidebar snapshot-string-stats docs/artifacts/mux-sidebar-live-memory-2026-05-05/large.snapshot.msgpack
+
+# HTML artifact link check
+python3 - &lt;&lt;'PY'
+from pathlib import Path
+import re
+html=Path('docs/mux-sidebar-memory-baseline.html')
+missing=[href for href in re.findall(r'href=&quot;([^&quot;]+)&quot;', html.read_text())
+         if not href.startswith(('http://','https://','#')) and not (html.parent / href).exists()]
+assert not missing, missing
+PY</code></pre>
+
+  <h2>Raw artifacts</h2>
+  <ul>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/environment.txt">environment.txt</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/tmux-shape.txt">tmux-shape.txt</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/memory-summary.tsv">memory-summary.tsv</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-visible-idle-4000.json">sidebar-profile-visible-idle-4000.json</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-visible-idle-4000.time.txt">time</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-visible-idle-1000.leaks.stdout.txt">leaks</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-hidden-idle-4000.json">sidebar-profile-hidden-idle-4000.json</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-hidden-idle-4000.time.txt">time</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-hidden-idle-1000.leaks.stdout.txt">leaks</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-active-animation-4000.json">sidebar-profile-active-animation-4000.json</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-active-animation-4000.time.txt">time</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-profile-active-animation-1000.leaks.stdout.txt">leaks</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/daemon-profile-30000.json">daemon-profile-30000.json</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/daemon-profile-30000.time.txt">time</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/daemon-profile-30000.leaks.stdout.txt">leaks</a></li>
+    <li><a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-alloc-summary.tsv">sidebar-alloc-summary.tsv</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-alloc-bench.stdout.txt">Criterion stdout</a> / <a href="artifacts/mux-sidebar-memory-baseline-2026-05-05/sidebar-alloc-bench.stderr.txt">allocation stderr</a></li>
+    <li><a href="artifacts/mux-sidebar-live-memory-2026-05-05/summary.tsv">live summary.tsv</a> / <a href="artifacts/mux-sidebar-live-memory-2026-05-05/environment.txt">live environment</a> / <a href="artifacts/mux-sidebar-live-memory-2026-05-05/small.daemon-rss.csv">small RSS</a> / <a href="artifacts/mux-sidebar-live-memory-2026-05-05/medium.daemon-rss.csv">medium RSS</a> / <a href="artifacts/mux-sidebar-live-memory-2026-05-05/large.daemon-rss.csv">large RSS</a></li>
+    <li><a href="artifacts/mux-sidebar-status-latency-2026-05-05/status-latency.json">status-latency.json</a> / <a href="artifacts/mux-sidebar-status-latency-2026-05-05/status-latency.stderr.txt">status-latency stderr</a></li>
+    <li><a href="artifacts/mux-sidebar-snapshot-decode-optimization-2026-05-05/sidebar-alloc-after-summary.tsv">snapshot decode allocation after-summary.tsv</a> / <a href="artifacts/mux-sidebar-snapshot-decode-optimization-2026-05-05/sidebar-throughput-after.txt">throughput after</a> / <a href="artifacts/mux-sidebar-snapshot-decode-optimization-2026-05-05/status-latency-after.json">status latency after</a></li>
+    <li><a href="artifacts/mux-sidebar-render-reuse-2026-05-05/render-alloc-summary.tsv">render allocation before.tsv</a> / <a href="artifacts/mux-sidebar-render-reuse-2026-05-05/render-alloc-after-summary.tsv">render allocation after.tsv</a> / <a href="artifacts/mux-sidebar-render-reuse-2026-05-05/sidebar-alloc-render-after.txt">render allocation raw after</a></li>
+    <li><a href="artifacts/mux-sidebar-tree-item-optimization-2026-05-05/item-build-alloc-after.tsv">tree item allocation after.tsv</a> / <a href="artifacts/mux-sidebar-tree-item-optimization-2026-05-05/item-build-throughput-after.txt">tree item throughput after</a> / <a href="artifacts/mux-sidebar-tree-item-optimization-2026-05-05/sidebar-alloc-tree-after.txt">tree item raw allocation output</a></li>
+    <li><a href="artifacts/mux-sidebar-filter-optimization-2026-05-05/filter-alloc-after.tsv">filter allocation after.tsv</a> / <a href="artifacts/mux-sidebar-filter-optimization-2026-05-05/filter-throughput-after.txt">filter throughput after</a> / <a href="artifacts/mux-sidebar-filter-optimization-2026-05-05/sidebar-alloc-filter-after.txt">filter raw allocation output</a></li>
+    <li><a href="artifacts/mux-sidebar-compact-id-investigation-2026-05-05/summary.tsv">compact ID investigation summary.tsv</a> / <a href="artifacts/mux-sidebar-compact-id-investigation-2026-05-05/small-snapshot-string-stats.json">small stats</a> / <a href="artifacts/mux-sidebar-compact-id-investigation-2026-05-05/medium-snapshot-string-stats.json">medium stats</a> / <a href="artifacts/mux-sidebar-compact-id-investigation-2026-05-05/large-snapshot-string-stats.json">large stats</a></li>
+    <li><a href="artifacts/mux-sidebar-daemon-retention-2026-05-05/summary.tsv">daemon retention live summary.tsv</a> / <a href="artifacts/mux-sidebar-daemon-retention-2026-05-05/small.daemon-rss.csv">small daemon RSS</a> / <a href="artifacts/mux-sidebar-daemon-retention-2026-05-05/medium.daemon-rss.csv">medium daemon RSS</a> / <a href="artifacts/mux-sidebar-daemon-retention-2026-05-05/large.daemon-rss.csv">large daemon RSS</a></li>
+    <li><a href="artifacts/mux-sidebar-multi-client-optimization-2026-05-05/daemon-client-retained-summary.tsv">multi-client retained summary.tsv</a> / <a href="artifacts/mux-sidebar-multi-client-optimization-2026-05-05/sidebar-alloc-multiclient-before.txt">allocation before</a> / <a href="artifacts/mux-sidebar-multi-client-optimization-2026-05-05/sidebar-alloc-multiclient-after.txt">allocation after</a> / <a href="artifacts/mux-sidebar-multi-client-optimization-2026-05-05/sidebar-multiclient-throughput-after.txt">throughput after</a></li>
+    <li><a href="artifacts/mux-sidebar-collection-optimization-2026-05-05/collection-experiment-summary.tsv">collection experiment summary.tsv</a> / <a href="artifacts/mux-sidebar-collection-optimization-2026-05-05/sidebar-alloc-collections-after.txt">pane-session Vec allocation experiment</a> / <a href="artifacts/mux-sidebar-collection-optimization-2026-05-05/sidebar-alloc-collections-final.txt">final allocation check</a> / <a href="artifacts/mux-sidebar-collection-optimization-2026-05-05/live/summary.tsv">live Vec experiment summary</a></li>
+    <li><a href="artifacts/mux-sidebar-metadata-refresh-optimization-2026-05-05/metadata-refresh-alloc-summary.tsv">metadata refresh allocation summary.tsv</a> / <a href="artifacts/mux-sidebar-metadata-refresh-optimization-2026-05-05/sidebar-alloc-metadata-after.txt">metadata allocation raw output</a></li>
+    <li><a href="artifacts/mux-sidebar-allocator-comparison-2026-05-05/summary.tsv">allocator comparison summary.tsv</a> / <a href="artifacts/mux-sidebar-allocator-comparison-2026-05-05/binary-size.tsv">allocator binary size.tsv</a> / <a href="artifacts/mux-sidebar-allocator-comparison-2026-05-05/system/summary.tsv">system live summary</a> / <a href="artifacts/mux-sidebar-allocator-comparison-2026-05-05/mimalloc/summary.tsv">mimalloc live summary</a></li>
+    <li><a href="artifacts/mux-sidebar-long-run-stability-2026-05-05/sidebar-profile-60000.json">60s synthetic stability profile</a> / <a href="artifacts/mux-sidebar-long-run-stability-2026-05-05/sidebar-profile-60000.time.txt">60s time output</a> / <a href="artifacts/mux-sidebar-long-run-stability-2026-05-05/active-animation-10000.leaks.stdout.txt">active animation leaks output</a> / <a href="artifacts/mux-sidebar-long-run-stability-2026-05-05/stability-summary.tsv">live 30s stability summary.tsv</a> / <a href="artifacts/mux-sidebar-long-run-stability-2026-05-05/live-large-120s/summary.tsv">focused large idle-exit summary.tsv</a></li>
+    <li><a href="artifacts/mux-sidebar-dependency-footprint-2026-05-05/cargo-tree-features.txt">cargo tree features before</a> / <a href="artifacts/mux-sidebar-dependency-footprint-2026-05-05/cargo-tree-features-after-chrono.txt">cargo tree features after chrono trim</a> / <a href="artifacts/mux-sidebar-dependency-footprint-2026-05-05/footprint-summary.tsv">dependency footprint summary.tsv</a></li>
+    <li><a href="artifacts/mux-sidebar-final-ux-regression-2026-05-05/final-ux-summary.tsv">final UX summary.tsv</a> / <a href="artifacts/mux-sidebar-final-ux-regression-2026-05-05/sidebar-profile-4000.json">final sidebar profile</a> / <a href="artifacts/mux-sidebar-final-ux-regression-2026-05-05/status-latency.json">final status latency</a></li>
+  </ul>
+
+  <h2>Immediate conclusions for the next tasks</h2>
+  <ul>
+    <li>The synthetic state-machine path has a roughly 11.1 MB RSS floor regardless of visible/hidden/animation work, so the next wins are likely structural allocations and retained data, not loop counters alone.</li>
+    <li>Active animation changes CPU/redraw work but does not change this process-level memory floor in the synthetic profile command.</li>
+    <li>No leaks were reported in the captured synthetic runs, so task <code>k</code> should focus on allocation counts/bytes per hot path rather than leak hunting.</li>
+    <li>Live tmux profiling is still required before claiming real-session memory headroom; that is intentionally left to task <code>4v</code>.</li>
+  </ul>
+</main>
+</body>
+</html>

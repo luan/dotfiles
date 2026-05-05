@@ -4,6 +4,10 @@ use std::process::{Command, Stdio};
 
 use tracing::{debug, error};
 
+#[cfg(feature = "mimalloc")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod chooser;
 mod color;
 mod filter;
@@ -291,10 +295,28 @@ fn cmd_click(args: &[String]) {
         tmux_cmd(&["switch-client", "-t", session]);
         sidebar::finish_session_switch();
     } else if let Some(window) = range.strip_prefix("w:") {
-        tmux_cmd(&["select-window", "-t", &format!(":{window}")]);
+        switch_window(&format!(":{window}"));
     } else if range == "caffeine" {
         toggle_caffeine();
     }
+}
+
+fn switch_window(target: &str) {
+    sidebar::prepare_window_switch(target);
+    tmux_cmd(&["select-window", "-t", target]);
+    sidebar::finish_window_switch();
+}
+
+fn cmd_window(args: &[String]) {
+    let Some(target) = args.first() else {
+        return;
+    };
+    let target = if target.starts_with(':') || target.starts_with('+') || target.starts_with('-') {
+        target.clone()
+    } else {
+        format!(":{target}")
+    };
+    switch_window(&target);
 }
 
 fn toggle_caffeine() {
@@ -732,6 +754,7 @@ fn main() {
         "ditch" => project::cmd_ditch(&rest),
         "rename" => cmd_rename(&rest),
         "select" => cmd_select(&rest),
+        "window" => cmd_window(&rest),
         "attention" => cmd_attention(),
         "hide-toggle" => cmd_hide_toggle(&rest),
         "picker" => cmd_picker(&rest),

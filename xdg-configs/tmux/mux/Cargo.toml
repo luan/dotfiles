@@ -9,14 +9,30 @@ crossterm = "^0"
 nucleo-matcher = "^0"
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
-chrono = "^0"
+rmp-serde = "^1"
+chrono = { version = "^0", default-features = false, features = ["std", "clock"] }
 tracing = "^0"
 tracing-subscriber = { version = "^0", features = ["env-filter"] }
 tracing-appender = "^0"
 sysinfo = "^0"
+mimalloc = { version = "^0", optional = true }
+libc = "^0"
+
+[features]
+default = []
+mimalloc = ["dep:mimalloc"]
 
 [dev-dependencies]
+criterion = "^0"
 tempfile = "^3"
+
+[[bench]]
+name = "sidebar"
+harness = false
+
+[[bench]]
+name = "sidebar_alloc"
+harness = false
 
 [profile.release]
 opt-level = "z"

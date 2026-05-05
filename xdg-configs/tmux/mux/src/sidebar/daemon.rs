@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -15,15 +15,16 @@ use crate::usage_bars;
 
 use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
+use super::instrument::{LatencySummary, SidebarCounters};
 use super::meta::{
     AgentInstance, DiffStat, ProcessTreeInfo, PullRequestCheck, PullRequestCheckStatus,
     PullRequestCiState, PullRequestMeta, PullRequestReviewState, SessionMeta, query_session_meta,
 };
 
-const SNAPSHOT_VERSION: u32 = 12;
+const SNAPSHOT_VERSION: u32 = 15;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
-const META_INTERVAL: Duration = Duration::from_secs(3);
+const META_INTERVAL: Duration = Duration::from_secs(5);
 const IDLE_EXIT_AFTER: Duration = Duration::from_secs(30);
 const SIDEBAR_TOKEN: &str = super::SIDEBAR_TOKEN;
 
@@ -34,7 +35,7 @@ pub(super) struct SidebarSnapshot {
     pub(super) notched: bool,
     pub(super) alive_sessions: Vec<String>,
     pub(super) pane_sessions: HashMap<String, String>,
-    meta: HashMap<String, SessionMetaSnapshot>,
+    meta: Vec<(String, SessionMetaSnapshot)>,
     usage_lines: Vec<String>,
 }
 
@@ -120,6 +121,24 @@ struct AgentCtxSnapshot {
     tokens: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct DuplicateStringStat {
+    value: String,
+    count: usize,
+    bytes_each: usize,
+    duplicated_bytes: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct SnapshotStringStats {
+    total_strings: usize,
+    total_string_bytes: usize,
+    unique_strings: usize,
+    duplicated_occurrences: usize,
+    duplicated_bytes: usize,
+    top_duplicates: Vec<DuplicateStringStat>,
+}
+
 impl SidebarSnapshot {
     pub(super) fn age_ms(&self) -> u64 {
         now_ms().saturating_sub(self.generated_at_ms)
@@ -135,9 +154,90 @@ impl SidebarSnapshot {
     pub(super) fn usage_lines(&self) -> Vec<String> {
         self.usage_lines.clone()
     }
+
+    fn string_stats(&self) -> SnapshotStringStats {
+        let mut counts = HashMap::<String, usize>::new();
+        let mut total_strings = 0usize;
+        let mut total_string_bytes = 0usize;
+
+        let mut record = |value: &str| {
+            total_strings += 1;
+            total_string_bytes += value.len();
+            *counts.entry(value.to_string()).or_default() += 1;
+        };
+
+        for session in &self.alive_sessions {
+            record(session);
+        }
+        for (pane, session) in &self.pane_sessions {
+            record(pane);
+            record(session);
+        }
+        for (session, meta) in &self.meta {
+            record(session);
+            meta.record_strings(&mut record);
+        }
+        for line in &self.usage_lines {
+            record(line);
+        }
+
+        let mut top_duplicates: Vec<_> = counts
+            .iter()
+            .filter_map(|(value, count)| {
+                (*count > 1).then(|| DuplicateStringStat {
+                    value: value.clone(),
+                    count: *count,
+                    bytes_each: value.len(),
+                    duplicated_bytes: value.len() * (count - 1),
+                })
+            })
+            .collect();
+        top_duplicates.sort_by(|a, b| {
+            b.duplicated_bytes
+                .cmp(&a.duplicated_bytes)
+                .then(b.count.cmp(&a.count))
+                .then(a.value.cmp(&b.value))
+        });
+        let duplicated_occurrences = top_duplicates.iter().map(|stat| stat.count - 1).sum();
+        let duplicated_bytes = top_duplicates
+            .iter()
+            .map(|stat| stat.duplicated_bytes)
+            .sum();
+        top_duplicates.truncate(20);
+
+        SnapshotStringStats {
+            total_strings,
+            total_string_bytes,
+            unique_strings: counts.len(),
+            duplicated_occurrences,
+            duplicated_bytes,
+            top_duplicates,
+        }
+    }
 }
 
 impl SessionMetaSnapshot {
+    fn record_strings(&self, record: &mut impl FnMut(&str)) {
+        record(&self.branch);
+        if let Some(pr) = &self.pr {
+            pr.record_strings(record);
+        }
+        for process in &self.processes {
+            record(&process.name);
+        }
+        for agent in &self.agents {
+            record(&agent.name);
+            record(&agent.pane_id);
+            if let Some(gerund) = &agent.gerund {
+                record(gerund);
+            }
+            if let Some(ctx) = &agent.ctx {
+                record(&ctx.tokens);
+            }
+        }
+        record(&self.status);
+    }
+
     fn from_runtime(meta: &SessionMeta) -> Self {
         Self {
             branch: meta.branch.clone(),
@@ -198,6 +298,13 @@ impl DiffStatSnapshot {
 }
 
 impl PullRequestSnapshot {
+    fn record_strings(&self, record: &mut impl FnMut(&str)) {
+        record(&self.url);
+        for check in &self.checks {
+            record(&check.name);
+        }
+    }
+
     fn from_runtime(pr: &PullRequestMeta) -> Self {
         Self {
             number: pr.number,
@@ -367,13 +474,21 @@ struct DaemonCache {
     last_active: HashMap<String, Instant>,
     last_meta_refresh: Instant,
     usage_lines: Vec<String>,
+    counters: SidebarCounters,
 }
 
 struct BaseSnapshotInput {
     notched: bool,
     alive_sessions: Vec<String>,
+    quick_meta: HashMap<String, SessionQuickMeta>,
     pane_sessions: HashMap<String, String>,
     sidebar_panes: usize,
+}
+
+struct SessionQuickMeta {
+    attention: bool,
+    status: String,
+    progress: Option<u8>,
 }
 
 impl DaemonCache {
@@ -384,17 +499,22 @@ impl DaemonCache {
             last_active: HashMap::new(),
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
             usage_lines: Vec::new(),
+            counters: SidebarCounters::default(),
         }
     }
 
     fn snapshot(&mut self) -> Option<(SidebarSnapshot, usize)> {
         let base = query_base_snapshot()?;
-        let alive_set = base.alive_sessions.iter().cloned().collect();
+        let alive_set: HashSet<String> = base.alive_sessions.iter().cloned().collect();
+        self.prune_dead_sessions(&alive_set);
         let sessions = compute_order(&alive_set, true);
 
-        if self.last_meta_refresh.elapsed() >= META_INTERVAL {
+        let meta_due = self.last_meta_refresh.elapsed() >= META_INTERVAL;
+        self.counters.record_daemon_tick(meta_due);
+        if meta_due {
             self.refresh_meta(&sessions);
         }
+        self.apply_quick_meta(&base.quick_meta);
 
         let snapshot = SidebarSnapshot {
             version: SNAPSHOT_VERSION,
@@ -410,6 +530,23 @@ impl DaemonCache {
             usage_lines: self.usage_lines.clone(),
         };
         Some((snapshot, base.sidebar_panes))
+    }
+
+    fn apply_quick_meta(&mut self, quick: &HashMap<String, SessionQuickMeta>) {
+        for (session, quick_meta) in quick {
+            let meta = self.meta.entry(session.clone()).or_default();
+            meta.attention = quick_meta.attention;
+            meta.status = quick_meta.status.clone();
+            meta.progress = quick_meta.progress;
+        }
+    }
+
+    fn prune_dead_sessions(&mut self, alive: &HashSet<String>) {
+        self.meta.retain(|session, _| alive.contains(session));
+        self.gerund_cache
+            .retain(|cache_key, _| cache_key_session_alive(cache_key, alive));
+        self.last_active
+            .retain(|cache_key, _| cache_key_session_alive(cache_key, alive));
     }
 
     fn refresh_meta(&mut self, sessions: &[String]) {
@@ -457,6 +594,12 @@ impl DaemonCache {
             "sidebar daemon meta refresh"
         );
     }
+}
+
+fn cache_key_session_alive(cache_key: &str, alive: &HashSet<String>) -> bool {
+    cache_key
+        .rsplit_once(':')
+        .is_some_and(|(session, _)| alive.contains(session))
 }
 
 pub(super) fn ensure_started() {
@@ -526,14 +669,153 @@ pub(crate) fn cmd_sidebar_daemon() {
     let _ = fs::remove_file(pid_path());
 }
 
+pub(super) fn cmd_status_latency_profile(args: &[String]) {
+    let iterations = args
+        .first()
+        .and_then(|arg| arg.parse::<usize>().ok())
+        .unwrap_or(8);
+    let target_p95_ms = args
+        .get(1)
+        .and_then(|arg| arg.parse::<u64>().ok())
+        .unwrap_or(750);
+    let max_wait = Duration::from_millis(
+        args.get(2)
+            .and_then(|arg| arg.parse::<u64>().ok())
+            .unwrap_or(2_000),
+    );
+    let poll_interval = Duration::from_millis(10);
+
+    ensure_started();
+
+    let Some(session) = first_session_name() else {
+        eprintln!("status latency profile requires at least one tmux session");
+        std::process::exit(2);
+    };
+
+    let mut samples = Vec::with_capacity(iterations);
+    let mut timeouts = 0usize;
+
+    for iteration in 0..iterations {
+        let status = format!("latency-{iteration}-{}", now_ms());
+        let progress = ((iteration * 17) % 100) as u8;
+        let attention = iteration % 2 == 0;
+        let progress_text = progress.to_string();
+        let attention_text = if attention { "1" } else { "0" };
+
+        tmux(&[
+            "set-option",
+            "-t",
+            &session,
+            "-q",
+            "@sidebar_status",
+            &status,
+            ";",
+            "set-option",
+            "-t",
+            &session,
+            "-q",
+            "@sidebar_progress",
+            &progress_text,
+            ";",
+            "set-option",
+            "-t",
+            &session,
+            "-q",
+            "@attention",
+            attention_text,
+        ]);
+
+        let started = Instant::now();
+        loop {
+            if snapshot_has_status(&session, &status, progress, attention) {
+                samples.push(started.elapsed().as_millis() as u64);
+                break;
+            }
+            if started.elapsed() >= max_wait {
+                timeouts += 1;
+                samples.push(max_wait.as_millis() as u64);
+                break;
+            }
+            std::thread::sleep(poll_interval);
+        }
+    }
+
+    let summary = LatencySummary::from_samples(samples, target_p95_ms);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "session": session,
+            "iterations": iterations,
+            "timeouts": timeouts,
+            "poll_interval_ms": poll_interval.as_millis() as u64,
+            "max_wait_ms": max_wait.as_millis() as u64,
+            "summary": summary,
+        }))
+        .expect("serialize sidebar status latency profile")
+    );
+
+    if timeouts > 0 || !summary.passed {
+        std::process::exit(1);
+    }
+}
+
+pub(super) fn cmd_snapshot_string_stats(args: &[String]) {
+    let path = args
+        .first()
+        .map(PathBuf::from)
+        .unwrap_or_else(snapshot_path);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("failed to read snapshot {}: {e}", path.display());
+            std::process::exit(2);
+        }
+    };
+    let Some(snapshot) = decode_snapshot_bytes(&bytes) else {
+        eprintln!("failed to decode snapshot {}", path.display());
+        std::process::exit(2);
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "path": path,
+            "snapshot_bytes": bytes.len(),
+            "stats": snapshot.string_stats(),
+        }))
+        .expect("serialize snapshot string stats")
+    );
+}
+
 pub(super) fn load_snapshot() -> Option<SidebarSnapshot> {
-    let contents = fs::read_to_string(snapshot_path()).ok()?;
-    let snapshot: SidebarSnapshot = serde_json::from_str(&contents).ok()?;
+    let contents = fs::read(snapshot_path()).ok()?;
+    let snapshot: SidebarSnapshot = decode_snapshot_bytes(&contents)?;
     if snapshot.version != SNAPSHOT_VERSION || snapshot.age_ms() > SNAPSHOT_STALE.as_millis() as u64
     {
         return None;
     }
     Some(snapshot)
+}
+
+fn first_session_name() -> Option<String> {
+    tmux(&["list-sessions", "-F", "#{session_name}"])
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+}
+
+fn snapshot_has_status(session: &str, status: &str, progress: u8, attention: bool) -> bool {
+    load_snapshot()
+        .and_then(|snapshot| {
+            snapshot
+                .meta
+                .iter()
+                .find(|(candidate, _)| candidate == session)
+                .map(|(_, meta)| meta.clone())
+        })
+        .is_some_and(|meta| {
+            meta.status == status && meta.progress == Some(progress) && meta.attention == attention
+        })
 }
 
 fn query_base_snapshot() -> Option<BaseSnapshotInput> {
@@ -549,7 +831,7 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
         ";",
         "list-sessions",
         "-F",
-        "#S",
+        "#{session_name}\t#{@attention}\t#{@sidebar_status}\t#{@sidebar_progress}",
         ";",
         "display-message",
         "-p",
@@ -571,14 +853,27 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
         .unwrap_or("")
         .trim()
         == "1";
-    let alive_sessions = sections
-        .next()
-        .unwrap_or_default()
-        .lines()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-        .collect();
+    let mut alive_sessions = Vec::new();
+    let mut quick_meta = HashMap::new();
+    for line in sections.next().unwrap_or_default().lines() {
+        let mut parts = line.split('\t');
+        let session = parts.next().unwrap_or_default().trim();
+        if session.is_empty() {
+            continue;
+        }
+        let attention = parts.next().unwrap_or_default() == "1";
+        let status = parts.next().unwrap_or_default().to_string();
+        let progress = parts.next().and_then(|s| s.parse::<u8>().ok());
+        alive_sessions.push(session.to_string());
+        quick_meta.insert(
+            session.to_string(),
+            SessionQuickMeta {
+                attention,
+                status,
+                progress,
+            },
+        );
+    }
 
     let mut pane_sessions = HashMap::new();
     let mut sidebar_panes = 0usize;
@@ -600,6 +895,7 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
     Some(BaseSnapshotInput {
         notched,
         alive_sessions,
+        quick_meta,
         pane_sessions,
         sidebar_panes,
     })
@@ -608,10 +904,57 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
 fn write_snapshot(snapshot: &SidebarSnapshot) -> std::io::Result<()> {
     fs::create_dir_all(state_dir())?;
     let path = snapshot_path();
-    let tmp = path.with_extension("json.tmp");
-    let data = serde_json::to_vec(snapshot)?;
+    let tmp = path.with_extension("msgpack.tmp");
+    let data = encode_snapshot_bytes(snapshot)?;
     fs::write(&tmp, data)?;
     fs::rename(tmp, path)
+}
+
+pub(super) fn snapshot_from_parts_for_bench(
+    generated_at_ms: u64,
+    notched: bool,
+    alive_sessions: Vec<String>,
+    pane_sessions: HashMap<String, String>,
+    meta: HashMap<String, SessionMeta>,
+    usage_lines: Vec<String>,
+) -> SidebarSnapshot {
+    SidebarSnapshot {
+        version: SNAPSHOT_VERSION,
+        generated_at_ms,
+        notched,
+        alive_sessions,
+        pane_sessions,
+        meta: meta
+            .iter()
+            .map(|(session, meta)| (session.clone(), SessionMetaSnapshot::from_runtime(meta)))
+            .collect(),
+        usage_lines,
+    }
+}
+
+pub(super) fn snapshot_json_for_bench(snapshot: &SidebarSnapshot) -> Vec<u8> {
+    serde_json::to_vec(snapshot).expect("serialize sidebar benchmark snapshot")
+}
+
+pub(super) fn decode_snapshot_for_bench(bytes: &[u8]) -> Option<SidebarSnapshot> {
+    decode_snapshot_bytes(bytes)
+}
+
+pub(super) fn decode_snapshot_via_utf8_string_for_bench(bytes: &[u8]) -> Option<SidebarSnapshot> {
+    let contents = String::from_utf8(bytes.to_vec()).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+pub(super) fn snapshot_bytes_for_bench(snapshot: &SidebarSnapshot) -> Vec<u8> {
+    encode_snapshot_bytes(snapshot).expect("serialize sidebar benchmark snapshot")
+}
+
+fn encode_snapshot_bytes(snapshot: &SidebarSnapshot) -> io::Result<Vec<u8>> {
+    rmp_serde::to_vec(snapshot).map_err(io::Error::other)
+}
+
+fn decode_snapshot_bytes(bytes: &[u8]) -> Option<SidebarSnapshot> {
+    rmp_serde::from_slice(bytes).ok()
 }
 
 fn pid_alive() -> bool {
@@ -626,19 +969,15 @@ fn daemon_pid() -> Option<u32> {
 }
 
 fn process_alive(pid: u32) -> bool {
-    Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    // Avoid spawning `/bin/kill` on every sidebar cold start. `kill(pid, 0)` is
+    // the POSIX liveness probe used by the shell command but stays in-process.
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 
 fn snapshot_version_current() -> bool {
-    fs::read_to_string(snapshot_path())
+    fs::read(snapshot_path())
         .ok()
-        .and_then(|contents| serde_json::from_str::<SidebarSnapshot>(&contents).ok())
+        .and_then(|contents| decode_snapshot_bytes(&contents))
         .is_some_and(|snapshot| snapshot.version == SNAPSHOT_VERSION)
 }
 
@@ -692,9 +1031,82 @@ fn state_dir() -> PathBuf {
 }
 
 fn snapshot_path() -> PathBuf {
-    state_dir().join("snapshot.json")
+    state_dir().join("snapshot.msgpack")
 }
 
 fn pid_path() -> PathBuf {
     state_dir().join("daemon.pid")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_string_stats_counts_duplicate_session_names() {
+        let snapshot = SidebarSnapshot {
+            version: SNAPSHOT_VERSION,
+            generated_at_ms: 0,
+            notched: false,
+            alive_sessions: vec!["work".to_string()],
+            pane_sessions: [
+                ("%1".to_string(), "work".to_string()),
+                ("%2".to_string(), "work".to_string()),
+            ]
+            .into(),
+            meta: vec![(
+                "work".to_string(),
+                SessionMetaSnapshot::from_runtime(&SessionMeta {
+                    branch: "main".to_string(),
+                    status: "working".to_string(),
+                    ..SessionMeta::default()
+                }),
+            )],
+            usage_lines: vec![],
+        };
+
+        let stats = snapshot.string_stats();
+
+        assert!(stats.duplicated_bytes >= "work".len() * 3);
+        assert!(
+            stats
+                .top_duplicates
+                .iter()
+                .any(|duplicate| duplicate.value == "work" && duplicate.count == 4)
+        );
+    }
+
+    #[test]
+    fn daemon_cache_prunes_dead_session_state() {
+        let mut cache = DaemonCache::new();
+        cache
+            .meta
+            .insert("alive".to_string(), SessionMeta::default());
+        cache
+            .meta
+            .insert("dead".to_string(), SessionMeta::default());
+        cache.gerund_cache.insert(
+            "alive:%1".to_string(),
+            ("Running…".to_string(), Instant::now()),
+        );
+        cache.gerund_cache.insert(
+            "dead:%2".to_string(),
+            ("Running…".to_string(), Instant::now()),
+        );
+        cache
+            .last_active
+            .insert("alive:%1".to_string(), Instant::now());
+        cache
+            .last_active
+            .insert("dead:%2".to_string(), Instant::now());
+
+        cache.prune_dead_sessions(&["alive".to_string()].into());
+
+        assert!(cache.meta.contains_key("alive"));
+        assert!(!cache.meta.contains_key("dead"));
+        assert!(cache.gerund_cache.contains_key("alive:%1"));
+        assert!(!cache.gerund_cache.contains_key("dead:%2"));
+        assert!(cache.last_active.contains_key("alive:%1"));
+        assert!(!cache.last_active.contains_key("dead:%2"));
+    }
 }
