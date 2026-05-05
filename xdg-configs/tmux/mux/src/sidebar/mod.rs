@@ -72,6 +72,7 @@ impl SidebarRuntime {
         }
     }
 }
+const TERMINAL_SIDEBAR_TITLE: &str = "mux-sidebar-terminal";
 const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
 const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_millis(250);
 
@@ -1459,6 +1460,13 @@ fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
         "\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07\x1b]1337;SetUserVar=mux_sidebar_runtime={}\x07",
         runtime.user_var_value()
     );
+    if matches!(runtime, SidebarRuntime::TerminalHosted) {
+        let title = std::env::var("MUX_SIDEBAR_TITLE")
+            .ok()
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| TERMINAL_SIDEBAR_TITLE.to_string());
+        print!("\x1b]2;{title}\x07");
+    }
     io::stdout().flush().ok();
 
     // Tell tmux status bar to hide the session list while sidebar is open.
@@ -1908,6 +1916,14 @@ mod runtime_tests {
             "dGVybWluYWw="
         );
     }
+
+    #[test]
+    fn applescript_string_literals_escape_input() {
+        assert_eq!(
+            super::applescript_string_literal(r#"a "quote" and \ slash"#),
+            r#""a \"quote\" and \\ slash""#
+        );
+    }
 }
 
 fn refresh_status_bar() {
@@ -1954,6 +1970,10 @@ fn focus_main_pane() {
         tmux(&["select-pane", "-R"]);
         return;
     }
+    if terminal_sidebar_host_is("ghostty") {
+        focus_ghostty_main_split();
+        return;
+    }
 
     let mut command = Command::new("wezterm");
     command
@@ -1961,6 +1981,32 @@ fn focus_main_pane() {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     let _ = spawn_reaped(command);
+}
+
+fn terminal_sidebar_host_is(host: &str) -> bool {
+    std::env::var("MUX_SIDEBAR_HOST").is_ok_and(|value| value.eq_ignore_ascii_case(host))
+}
+
+fn focus_ghostty_main_split() {
+    run_ghostty_applescript(
+        r#"tell application "Ghostty"
+    set term to focused terminal of selected tab of front window
+    perform action "goto_split:right" on term
+end tell"#,
+    );
+}
+
+fn applescript_string_literal(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn run_ghostty_applescript(script: &str) {
+    let _ = Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }
 
 /// Bounce an accidental keystroke to the neighbouring pane so typing `ls` in
@@ -1971,6 +2017,19 @@ fn forward_char_to_main(c: char) {
         let mut buf = [0u8; 4];
         let text = c.encode_utf8(&mut buf);
         tmux(&["send-keys", "-l", text]);
+        return;
+    }
+    if terminal_sidebar_host_is("ghostty") {
+        let mut buf = [0u8; 4];
+        let text = applescript_string_literal(c.encode_utf8(&mut buf));
+        run_ghostty_applescript(&format!(
+            r#"tell application "Ghostty"
+    set term to focused terminal of selected tab of front window
+    perform action "goto_split:right" on term
+    set targetTerm to focused terminal of selected tab of front window
+    input text {text} to targetTerm
+end tell"#
+        ));
         return;
     }
 
