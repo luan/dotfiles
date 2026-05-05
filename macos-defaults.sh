@@ -60,7 +60,8 @@ defaults write NSGlobalDomain "NSWindowShouldDragOnGesture" -bool true
 # Restart affected applications
 echo -e "${BLUE}Restarting affected applications...${NC}"
 for app in "Dock" "Finder" "SystemUIServer"; do
-  killall "${app}" &> /dev/null || true
+  killall "${app}" &>/dev/null || true
 done
 
-echo -e "${GREEN}macOS defaults have been set successfully.${NC}" 
+echo -e "${GREEN}macOS defaults have been set successfully.${NC}"
+
