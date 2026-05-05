@@ -15,13 +15,10 @@ from pathlib import Path
 
 THRESHOLDS = {
     # scenario: (max_allocations, max_allocated_bytes, max_net_bytes)
-    "snapshot_decode/large": (1_250, 60_000, 0),
     "item_build/large": (2_400, 170_000, 0),
     "render_frame_reused/large_45x48": (1_000, 260_000, 0),
     "filter/large_perf": (2_400, 330_000, 0),
-    "meta_snapshot_conversion/large": (2_400, 130_000, 0),
     "metadata_process_index/shared_2048": (3_800, 450_000, 0),
-    "daemon_client_states/large_x8": (41_000, 2_650_000, 1_100_000),
 }
 
 ROW_RE = re.compile(

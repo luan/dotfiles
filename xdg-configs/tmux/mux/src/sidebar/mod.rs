@@ -4,6 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use crossterm::cursor;
@@ -22,7 +23,6 @@ use tracing::debug;
 #[allow(dead_code)]
 pub mod bench_support;
 mod claude;
-mod daemon;
 mod hooks;
 pub mod instrument;
 pub(crate) mod meta;
@@ -32,7 +32,7 @@ mod render;
 mod tree;
 
 use meta::PullRequestCiState;
-use meta::{SessionMeta, query_session_meta};
+use meta::{SessionMeta, query_session_meta, query_session_meta_fast};
 use overlay::{SidebarOverlay, handle_readline_key};
 use render::draw;
 use tree::{Item, ItemKind, build_items};
@@ -100,6 +100,8 @@ struct SidebarState {
     /// Survives gerund_cache pruning so the age timer keeps ticking.
     pub(super) last_active: HashMap<String, Instant>,
     pub(super) last_meta_refresh: Instant,
+    meta_refresh_rx: Option<Receiver<MetaRefreshResult>>,
+    meta_refresh_inflight: bool,
     pub(super) focused: bool,
     pub(super) notched: bool,
     pub(super) mode: SidebarMode,
@@ -126,6 +128,14 @@ struct SidebarState {
 }
 
 pub(super) const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
+const META_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
+
+struct MetaRefreshResult {
+    meta: HashMap<String, SessionMeta>,
+    usage_lines: Vec<String>,
+    tmux_call_count: u32,
+    duration: Duration,
+}
 
 impl SidebarState {
     fn new() -> Self {
@@ -139,7 +149,12 @@ impl SidebarState {
             meta: HashMap::new(),
             gerund_cache: HashMap::new(),
             last_active: HashMap::new(),
+            // Force an immediate rich metadata worker on first refresh. It runs
+            // off the UI thread so startup still paints from the cheap session
+            // snapshot immediately.
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
+            meta_refresh_rx: None,
+            meta_refresh_inflight: false,
             focused: true,
             notched: false,
             mode: SidebarMode::Browse,
@@ -167,6 +182,109 @@ impl SidebarState {
 
     fn force_refresh(&mut self) {
         self.last_meta_refresh = Instant::now() - Duration::from_secs(60);
+    }
+
+    fn start_meta_refresh(&mut self, sessions: Vec<String>) {
+        if self.meta_refresh_inflight {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        self.meta_refresh_rx = Some(rx);
+        self.meta_refresh_inflight = true;
+        self.last_meta_refresh = Instant::now();
+        std::thread::spawn(move || {
+            let t0 = Instant::now();
+            let (meta, tmux_call_count) = query_session_meta_fast(&sessions);
+            let usage_lines = crate::usage_bars::collect(45).lines;
+            let _ = tx.send(MetaRefreshResult {
+                meta,
+                usage_lines,
+                tmux_call_count,
+                duration: t0.elapsed(),
+            });
+        });
+    }
+
+    fn maybe_start_meta_refresh(&mut self, sessions: &[String]) {
+        if self.meta_refresh_inflight {
+            return;
+        }
+        if self.meta.is_empty() || self.last_meta_refresh.elapsed() >= META_REFRESH_INTERVAL {
+            self.start_meta_refresh(sessions.to_vec());
+        }
+    }
+
+    fn drain_meta_refresh(&mut self) -> bool {
+        let Some(rx) = self.meta_refresh_rx.take() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.meta_refresh_inflight = false;
+                self.apply_meta_refresh_result(result);
+                true
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                self.meta_refresh_rx = Some(rx);
+                false
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.meta_refresh_inflight = false;
+                false
+            }
+        }
+    }
+
+    fn apply_meta_refresh_result(&mut self, mut result: MetaRefreshResult) {
+        self.tmux_call_count = self.tmux_call_count.saturating_add(result.tmux_call_count);
+        self.counters
+            .record_tmux_spawns(result.tmux_call_count.into());
+        let now = Instant::now();
+        for (session, m) in result.meta.iter_mut() {
+            for agent in m.agents.iter_mut() {
+                let cache_key = format!("{}:{}", session, agent.pane_id);
+                // Record last_active from the RAW gerund (before cache), so the
+                // timestamp freezes when the agent truly stops.
+                let raw_active = agent.gerund.is_some();
+                if raw_active {
+                    self.last_active.insert(cache_key.clone(), now);
+                }
+                match &agent.gerund {
+                    Some(g) => {
+                        self.gerund_cache
+                            .insert(cache_key.clone(), (g.clone(), now));
+                    }
+                    None => {
+                        if let Some((cached, t)) = self.gerund_cache.get(&cache_key)
+                            && now.duration_since(*t) < ACTIVITY_GRACE
+                        {
+                            agent.gerund = Some(cached.clone());
+                        }
+                    }
+                }
+                // Derive age from last_active for all agents (claude gets JSONL
+                // mtime in query_session_meta, overwritten here only if
+                // last_active is newer).
+                if let Some(&t) = self.last_active.get(&cache_key) {
+                    let from_cache = now.duration_since(t);
+                    // For claude, keep the shorter of JSONL age and cache age.
+                    agent.age = Some(match agent.age {
+                        Some(existing) if existing < from_cache => existing,
+                        _ => from_cache,
+                    });
+                }
+            }
+        }
+        self.gerund_cache
+            .retain(|_, (_, t)| now.duration_since(*t) < ACTIVITY_GRACE);
+        self.meta = result.meta;
+        self.usage_lines_cache = result.usage_lines;
+        self.last_meta_refresh = now;
+        debug!(
+            duration_ms = result.duration.as_millis() as u64,
+            tmux_call_count = result.tmux_call_count,
+            "sidebar async metadata refresh"
+        );
     }
 
     fn open_chooser(&mut self) {
@@ -243,108 +361,19 @@ impl SidebarState {
     }
 
     fn refresh(&mut self) {
-        if let Some(snapshot) = daemon::load_snapshot() {
-            self.counters.record_refresh(0, true);
-            self.refresh_from_snapshot(snapshot);
-            return;
-        }
-
-        self.counters.record_refresh(0, false);
+        self.counters.record_refresh(0);
         self.refresh_direct();
-    }
-
-    fn refresh_from_snapshot(&mut self, snapshot: daemon::SidebarSnapshot) {
-        let t0 = std::time::Instant::now();
-        self.tmux_call_count = 0;
-        self.notched = snapshot.notched;
-
-        let cur = std::env::var("TMUX_PANE")
-            .ok()
-            .and_then(|pane| {
-                snapshot.pane_sessions.get(&pane).cloned().or_else(|| {
-                    // A sidebar pane can be created immediately before a
-                    // session switch, while the daemon snapshot is still
-                    // up to 500ms old. Falling back to the first session
-                    // during that gap makes the sidebar highlight the
-                    // wrong session for a few frames. Query only this
-                    // pane's owning session when the snapshot does not
-                    // know about the fresh pane yet.
-                    let session = tmux(&["display-message", "-p", "-t", &pane, "#{session_name}"]);
-                    self.tmux_call_count += 1;
-                    self.counters.record_tmux_spawns(1);
-                    (!session.is_empty()).then_some(session)
-                })
-            })
-            .or_else(|| (!self.current.is_empty()).then(|| self.current.clone()))
-            .or_else(|| snapshot.alive_sessions.first().cloned())
-            .unwrap_or_default();
-
-        let alive: HashSet<String> = snapshot.alive_sessions.iter().cloned().collect();
-        let sessions = compute_order(&alive, self.show_hidden);
-        let meta = snapshot.meta_runtime();
-
-        self.usage_lines_cache = snapshot.usage_lines();
-
-        let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
-        let current_changed = cur != self.current;
-
-        self.items = build_items(&sessions, &cur, &meta);
-        // Daemon-backed sidebars receive a complete fresh metadata snapshot on
-        // every refresh. Once tree rows have been materialized, retaining the
-        // decoded SessionMeta map only duplicates memory per attached sidebar
-        // process. Direct/non-daemon mode still keeps `self.meta` below for
-        // refreshes where the expensive metadata query is skipped.
-        self.meta = HashMap::new();
-        self.current = cur;
-        self.rebuild_visible();
-
-        let session_count = self.items.len() as u64;
-
-        if !self.focused || current_changed {
-            self.snap_to_current();
-            debug!(
-                duration_ms = t0.elapsed().as_millis() as u64,
-                session_count,
-                tmux_call_count = self.tmux_call_count,
-                snapshot_age_ms = snapshot.age_ms(),
-                "sidebar refresh from daemon"
-            );
-            return;
-        }
-
-        if let Some(ref id) = prev_id
-            && let Some(pos) = self.items.iter().position(|i| i.id == *id)
-            && self.is_visible_index(pos)
-        {
-            self.selected = pos;
-            debug!(
-                duration_ms = t0.elapsed().as_millis() as u64,
-                session_count,
-                tmux_call_count = self.tmux_call_count,
-                snapshot_age_ms = snapshot.age_ms(),
-                "sidebar refresh from daemon"
-            );
-            return;
-        }
-        if self.chooser_active() && !self.filter.is_empty() {
-            self.apply_filter_change();
-        } else {
-            self.snap_to_current();
-        }
-        debug!(
-            duration_ms = t0.elapsed().as_millis() as u64,
-            session_count,
-            tmux_call_count = self.tmux_call_count,
-            snapshot_age_ms = snapshot.age_ms(),
-            "sidebar refresh from daemon"
-        );
     }
 
     fn refresh_direct(&mut self) {
         let t0 = std::time::Instant::now();
         self.tmux_call_count = 0;
 
-        // Batch: notched + current session + session list in one tmux invocation
+        // Batch: notched + focused client sessions + session list in one tmux
+        // invocation. The sidebar's own pane can remain visible while focus is
+        // in the main pane, so "#S" from this process is not a reliable
+        // "current session" signal; use the most recently active tmux client.
+        const DELIM: &str = "\x1e<<MUX_SIDEBAR_DIRECT_DELIM>>\x1e";
         let batch = tmux(&[
             "show-option",
             "-gv",
@@ -352,7 +381,15 @@ impl SidebarState {
             ";",
             "display-message",
             "-p",
-            "#S",
+            DELIM,
+            ";",
+            "list-clients",
+            "-F",
+            "#{client_activity}\t#{client_session}",
+            ";",
+            "display-message",
+            "-p",
+            DELIM,
             ";",
             "list-sessions",
             "-F",
@@ -360,60 +397,38 @@ impl SidebarState {
         ]);
         self.tmux_call_count += 1;
         self.counters.record_tmux_spawns(1);
-        let mut lines = batch.lines();
-        self.notched = lines.next().unwrap_or("") == "1";
-        let cur = lines.next().unwrap_or("").to_string();
-        let alive: HashSet<String> = lines.filter(|l| !l.is_empty()).map(String::from).collect();
+        let mut sections = batch.split(DELIM);
+        self.notched = sections
+            .next()
+            .and_then(|s| s.lines().next())
+            .unwrap_or("")
+            .trim()
+            == "1";
+        let cur = sections
+            .next()
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split('\t');
+                let activity = parts.next()?.parse::<u64>().ok()?;
+                let session = parts.next()?.trim();
+                (!session.is_empty()).then(|| (activity, session.to_string()))
+            })
+            .max_by_key(|(activity, _)| *activity)
+            .map(|(_, session)| session)
+            .or_else(|| (!self.current.is_empty()).then(|| self.current.clone()))
+            .unwrap_or_default();
+        let alive: HashSet<String> = sections
+            .next()
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
         let sessions = compute_order(&alive, self.show_hidden);
 
-        let meta_refreshed = self.last_meta_refresh.elapsed() >= Duration::from_secs(3);
-        if meta_refreshed {
-            let (mut meta, meta_calls) = query_session_meta(&sessions);
-            self.tmux_call_count += meta_calls;
-            self.counters.record_tmux_spawns(meta_calls.into());
-            let now = Instant::now();
-            for (session, m) in meta.iter_mut() {
-                for agent in m.agents.iter_mut() {
-                    let cache_key = format!("{}:{}", session, agent.pane_id);
-                    // Record last_active from the RAW gerund (before cache),
-                    // so the timestamp freezes when the agent truly stops.
-                    let raw_active = agent.gerund.is_some();
-                    if raw_active {
-                        self.last_active.insert(cache_key.clone(), now);
-                    }
-                    match &agent.gerund {
-                        Some(g) => {
-                            self.gerund_cache
-                                .insert(cache_key.clone(), (g.clone(), now));
-                        }
-                        None => {
-                            if let Some((cached, t)) = self.gerund_cache.get(&cache_key)
-                                && now.duration_since(*t) < ACTIVITY_GRACE
-                            {
-                                agent.gerund = Some(cached.clone());
-                            }
-                        }
-                    }
-                    // Derive age from last_active for all agents (claude gets
-                    // JSONL mtime in query_session_meta, overwritten here only
-                    // if last_active is newer).
-                    if let Some(&t) = self.last_active.get(&cache_key) {
-                        let from_cache = now.duration_since(t);
-                        // For claude, keep the shorter of JSONL age and cache age.
-                        agent.age = Some(match agent.age {
-                            Some(existing) if existing < from_cache => existing,
-                            _ => from_cache,
-                        });
-                    }
-                }
-            }
-            self.gerund_cache
-                .retain(|_, (_, t)| now.duration_since(*t) < ACTIVITY_GRACE);
-            self.meta = meta;
-            self.last_meta_refresh = now;
-            let usage_width = 45;
-            self.usage_lines_cache = crate::usage_bars::collect(usage_width).lines;
-        }
+        let meta_changed = self.drain_meta_refresh();
+        self.maybe_start_meta_refresh(&sessions);
 
         let prev_id = self.items.get(self.selected).map(|i| i.id.clone());
         // External session switches (e.g. Ctrl+Tab toggling the last session)
@@ -436,7 +451,8 @@ impl SidebarState {
                 duration_ms = t0.elapsed().as_millis() as u64,
                 session_count,
                 tmux_call_count = self.tmux_call_count,
-                usage_cache_hit = !meta_refreshed,
+                meta_changed,
+                meta_inflight = self.meta_refresh_inflight,
                 "sidebar refresh"
             );
             return;
@@ -451,7 +467,8 @@ impl SidebarState {
                 duration_ms = t0.elapsed().as_millis() as u64,
                 session_count,
                 tmux_call_count = self.tmux_call_count,
-                usage_cache_hit = !meta_refreshed,
+                meta_changed,
+                meta_inflight = self.meta_refresh_inflight,
                 "sidebar refresh"
             );
             return;
@@ -465,7 +482,8 @@ impl SidebarState {
             duration_ms = t0.elapsed().as_millis() as u64,
             session_count,
             tmux_call_count = self.tmux_call_count,
-            usage_cache_hit = !meta_refreshed,
+            meta_changed,
+            meta_inflight = self.meta_refresh_inflight,
             "sidebar refresh"
         );
     }
@@ -544,7 +562,7 @@ impl SidebarState {
     }
 
     fn visible_agent_animation_active(&self, list_h: u16) -> bool {
-        if !self.focused || !self.on_screen {
+        if !self.on_screen {
             return false;
         }
         let visible_rows = (list_h as usize).min(self.visible.len().saturating_sub(self.offset));
@@ -645,7 +663,7 @@ fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
 
 /// Exposed for `mux bench` — runs the full meta query pipeline and discards the result.
 pub(crate) fn bench_query_session_meta(sessions: &[String]) {
-    let _ = query_session_meta(sessions);
+    let _ = query_session_meta_fast(sessions);
 }
 
 pub(crate) fn prepare_session_switch(_target: &str) {}
@@ -667,8 +685,6 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
         Some("close") => {}
         Some("--terminal") | Some("terminal") => cmd_sidebar_terminal(),
         Some("profile") => instrument::cmd_profile(&args[1..]),
-        Some("status-latency-profile") => daemon::cmd_status_latency_profile(&args[1..]),
-        Some("snapshot-string-stats") => daemon::cmd_snapshot_string_stats(&args[1..]),
         _ => {}
     }
 }
@@ -701,7 +717,7 @@ fn cmd_sidebar_terminal_tui() {
 
     let mut state = SidebarState::new();
 
-    // Paint sidebar chrome before any tmux/daemon refresh work. Window/session
+    // Paint sidebar chrome before any tmux refresh work. Window/session
     // switches can make a freshly-spawned pane visible while metadata is still
     // warming; an immediate frame avoids the perception that the sidebar UI is
     // missing until the first full refresh completes.
@@ -710,8 +726,6 @@ fn cmd_sidebar_terminal_tui() {
             let _ = draw(f, &mut state);
         })
         .ok();
-
-    daemon::ensure_started();
 
     // On notched displays, paint this pane's terminal background black via
     // OSC 11 so the wezterm split reads as solid black (matching the status
@@ -767,7 +781,7 @@ fn cmd_sidebar_terminal_tui() {
             state.counters.record_redraw(agent_animation_active);
             dirty = false;
         }
-        let poll_timeout = if agent_animation_active {
+        let poll_timeout = if agent_animation_active || state.meta_refresh_inflight {
             ANIMATION_POLL
         } else {
             IDLE_POLL
@@ -1021,6 +1035,8 @@ fn cmd_sidebar_terminal_tui() {
             }
         }
 
+        dirty |= state.drain_meta_refresh();
+
         // Throttle refresh to IDLE cadence — pulse-driven high-fps redraws
         // shouldn't multiply tmux process spawns.
         if last_refresh.elapsed() >= REFRESH_INTERVAL {
@@ -1039,10 +1055,6 @@ fn cmd_sidebar_terminal_tui() {
         print!("\x1b]111\x1b\\");
         io::stdout().flush().ok();
     }
-}
-
-pub(crate) fn cmd_sidebar_daemon() {
-    daemon::cmd_sidebar_daemon();
 }
 
 pub(crate) fn cmd_hook() {

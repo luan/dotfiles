@@ -901,6 +901,17 @@ fn min_duration(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
 
 /// Returns (meta_map, tmux_call_count).
 pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, SessionMeta>, u32) {
+    query_session_meta_inner(sessions, true)
+}
+
+pub(super) fn query_session_meta_fast(sessions: &[String]) -> (HashMap<String, SessionMeta>, u32) {
+    query_session_meta_inner(sessions, false)
+}
+
+fn query_session_meta_inner(
+    sessions: &[String],
+    include_pr: bool,
+) -> (HashMap<String, SessionMeta>, u32) {
     let mut tmux_calls = 0u32;
 
     // Batch list-panes + list-sessions into one tmux invocation.
@@ -1015,16 +1026,37 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         .collect();
     let claude_age_map = query_claude_ages(&claude_sessions, &cwds);
 
+    let unique_cwds: Vec<String> = cwds
+        .values()
+        .filter(|cwd| !cwd.is_empty())
+        .cloned()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let repo_handles: Vec<_> = unique_cwds
+        .into_iter()
+        .map(|cwd| {
+            std::thread::spawn(move || {
+                let branch = git_branch(&cwd);
+                let diff = git_diff_stat(&cwd);
+                let pr = include_pr
+                    .then(|| cached_gh_pr_meta(&cwd, &branch))
+                    .flatten();
+                (cwd, branch, diff, pr)
+            })
+        })
+        .collect();
+
     let mut branch_cache: HashMap<String, String> = HashMap::new();
     let mut diff_cache: HashMap<String, Option<DiffStat>> = HashMap::new();
     let mut pr_cache: HashMap<String, Option<PullRequestMeta>> = HashMap::new();
-    for cwd in cwds.values() {
-        if !cwd.is_empty() && !branch_cache.contains_key(cwd) {
-            let branch = git_branch(cwd);
-            branch_cache.insert(cwd.clone(), branch.clone());
-            diff_cache.insert(cwd.clone(), git_diff_stat(cwd));
-            pr_cache.insert(cwd.clone(), cached_gh_pr_meta(cwd, &branch));
-        }
+    for handle in repo_handles {
+        let Ok((cwd, branch, diff, pr)) = handle.join() else {
+            continue;
+        };
+        branch_cache.insert(cwd.clone(), branch);
+        diff_cache.insert(cwd.clone(), diff);
+        pr_cache.insert(cwd, pr);
     }
 
     let mut result = HashMap::new();
