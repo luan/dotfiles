@@ -762,6 +762,7 @@ fn main() {
         "click" => cmd_click(&rest),
         "sidebar" if rest.is_empty() => sidebar::cmd_sidebar(),
         "sidebar" => sidebar::cmd_sidebar_control(&rest),
+        "sidebar-terminal" => sidebar::cmd_sidebar_terminal(),
         "sidebar-daemon" => sidebar::cmd_sidebar_daemon(),
         "hook" => sidebar::cmd_hook(),
         "system-info" => cmd_system_info(),

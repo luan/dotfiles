@@ -51,6 +51,27 @@ const SIDEBAR_WIDTH_DEFAULT: &str = "45";
 const SIDEBAR_TOKEN: &str = "mux-sidebar-v1";
 const SIDEBAR_BORDER_COLOR: &str = "#1A1B26";
 const SIDEBAR_OPEN_LOCK: &str = "mux-sidebar-open.lock";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SidebarRuntime {
+    TmuxNative,
+    TerminalHosted,
+}
+
+impl SidebarRuntime {
+    fn is_tmux_native(self) -> bool {
+        matches!(self, Self::TmuxNative)
+    }
+
+    fn user_var_value(self) -> &'static str {
+        match self {
+            // base64("tmux")
+            Self::TmuxNative => "dG11eA==",
+            // base64("terminal")
+            Self::TerminalHosted => "dGVybWluYWw=",
+        }
+    }
+}
 const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
 const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_millis(250);
 
@@ -1411,6 +1432,7 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
         Some("close") => close_all_tmux_sidebars(),
         Some("prune-orphans") => prune_orphan_sidebar_windows(),
         Some("resize") => resize_all_tmux_sidebars(),
+        Some("--terminal") | Some("terminal") => cmd_sidebar_terminal(),
         Some("profile") => instrument::cmd_profile(&args[1..]),
         Some("status-latency-profile") => daemon::cmd_status_latency_profile(&args[1..]),
         Some("snapshot-string-stats") => daemon::cmd_snapshot_string_stats(&args[1..]),
@@ -1419,18 +1441,32 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
 }
 
 pub(crate) fn cmd_sidebar() {
-    mark_current_sidebar_pane();
+    cmd_sidebar_with_runtime(SidebarRuntime::TmuxNative);
+}
+
+pub(crate) fn cmd_sidebar_terminal() {
+    cmd_sidebar_with_runtime(SidebarRuntime::TerminalHosted);
+}
+
+fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
+    if runtime.is_tmux_native() {
+        mark_current_sidebar_pane();
+    }
 
     // Set WezTerm user var for toggle detection
     // "dHJ1ZQ==" is base64("true")
-    print!("\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07");
+    print!(
+        "\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07\x1b]1337;SetUserVar=mux_sidebar_runtime={}\x07",
+        runtime.user_var_value()
+    );
     io::stdout().flush().ok();
 
     // Tell tmux status bar to hide the session list while sidebar is open.
     // Normal pane creation paths already set this in the parent process after
     // splitting the pane. Avoid repeating a tmux set-option and detached status
     // update before the child draws its first frame.
-    if std::env::var("MUX_SIDEBAR_MARKED").ok().as_deref() != Some("1") {
+    if runtime.is_tmux_native() && std::env::var("MUX_SIDEBAR_MARKED").ok().as_deref() != Some("1")
+    {
         tmux(&["set-option", "-g", "@sidebar_open", "1"]);
         refresh_status_bar();
     }
@@ -1491,8 +1527,10 @@ pub(crate) fn cmd_sidebar() {
     const VISIBILITY_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
     loop {
-        state.refresh_visibility(VISIBILITY_CHECK_INTERVAL);
-        if !state.on_screen {
+        if runtime.is_tmux_native() {
+            state.refresh_visibility(VISIBILITY_CHECK_INTERVAL);
+        }
+        if runtime.is_tmux_native() && !state.on_screen {
             match state
                 .hidden_lifecycle
                 .observe(false, sidebar_started.elapsed())
@@ -1833,13 +1871,15 @@ pub(crate) fn cmd_sidebar() {
     // this exit path. Let explicit close_all_tmux_sidebars() own the global
     // close state; otherwise a stale pane exit can race a newly-created pane,
     // hide the sidebar globally, and leave future hooks with nothing to sync.
-    let tmux_native_sidebar = running_as_tmux_sidebar();
-    unmark_current_sidebar_pane();
+    let tmux_native_sidebar = runtime.is_tmux_native() && running_as_tmux_sidebar();
     if tmux_native_sidebar {
+        unmark_current_sidebar_pane();
         refresh_status_bar();
         return;
     }
-    set_sidebar_open(false);
+    if runtime.is_tmux_native() {
+        set_sidebar_open(false);
+    }
 }
 
 pub(crate) fn cmd_sidebar_daemon() {
@@ -1848,6 +1888,26 @@ pub(crate) fn cmd_sidebar_daemon() {
 
 pub(crate) fn cmd_hook() {
     hooks::ingest_stdin();
+}
+
+#[cfg(test)]
+mod runtime_tests {
+    use super::SidebarRuntime;
+
+    #[test]
+    fn terminal_runtime_is_not_tmux_native() {
+        assert!(SidebarRuntime::TmuxNative.is_tmux_native());
+        assert!(!SidebarRuntime::TerminalHosted.is_tmux_native());
+    }
+
+    #[test]
+    fn runtime_user_vars_identify_hosting_model() {
+        assert_eq!(SidebarRuntime::TmuxNative.user_var_value(), "dG11eA==");
+        assert_eq!(
+            SidebarRuntime::TerminalHosted.user_var_value(),
+            "dGVybWluYWw="
+        );
+    }
 }
 
 fn refresh_status_bar() {
