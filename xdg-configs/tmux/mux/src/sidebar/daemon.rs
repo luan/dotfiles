@@ -15,9 +15,12 @@ use crate::usage_bars;
 
 use super::ACTIVITY_GRACE;
 use super::claude::AgentCtx;
-use super::meta::{AgentInstance, DiffStat, ProcessTreeInfo, SessionMeta, query_session_meta};
+use super::meta::{
+    AgentInstance, DiffStat, ProcessTreeInfo, PullRequestCheck, PullRequestCheckStatus,
+    PullRequestCiState, PullRequestMeta, PullRequestReviewState, SessionMeta, query_session_meta,
+};
 
-const SNAPSHOT_VERSION: u32 = 10;
+const SNAPSHOT_VERSION: u32 = 12;
 const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(3);
@@ -38,6 +41,7 @@ pub(super) struct SidebarSnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SessionMetaSnapshot {
     branch: String,
+    pr: Option<PullRequestSnapshot>,
     diff: Option<DiffStatSnapshot>,
     cpu_pct: f32,
     mem_bytes: u64,
@@ -46,6 +50,45 @@ struct SessionMetaSnapshot {
     attention: bool,
     status: String,
     progress: Option<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PullRequestSnapshot {
+    number: u32,
+    url: String,
+    review_state: PullRequestReviewStateSnapshot,
+    ci_state: PullRequestCiStateSnapshot,
+    checks: Vec<PullRequestCheckSnapshot>,
+    unresolved_comments: u32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+enum PullRequestReviewStateSnapshot {
+    Draft,
+    InReview,
+    ChangesRequested,
+    Approved,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+enum PullRequestCiStateSnapshot {
+    Passing,
+    Failing,
+    RunningClean,
+    RunningFailed,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PullRequestCheckSnapshot {
+    name: String,
+    status: PullRequestCheckStatusSnapshot,
+    elapsed_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+enum PullRequestCheckStatusSnapshot {
+    Running,
+    Failing,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -98,6 +141,7 @@ impl SessionMetaSnapshot {
     fn from_runtime(meta: &SessionMeta) -> Self {
         Self {
             branch: meta.branch.clone(),
+            pr: meta.pr.as_ref().map(PullRequestSnapshot::from_runtime),
             diff: meta.diff.map(DiffStatSnapshot::from_runtime),
             cpu_pct: meta.cpu_pct,
             mem_bytes: meta.mem_bytes,
@@ -120,6 +164,7 @@ impl SessionMetaSnapshot {
     fn runtime(&self) -> SessionMeta {
         SessionMeta {
             branch: self.branch.clone(),
+            pr: self.pr.as_ref().map(PullRequestSnapshot::runtime),
             diff: self.diff.map(DiffStatSnapshot::runtime),
             cpu_pct: self.cpu_pct,
             mem_bytes: self.mem_bytes,
@@ -148,6 +193,112 @@ impl DiffStatSnapshot {
         DiffStat {
             added: self.added,
             removed: self.removed,
+        }
+    }
+}
+
+impl PullRequestSnapshot {
+    fn from_runtime(pr: &PullRequestMeta) -> Self {
+        Self {
+            number: pr.number,
+            url: pr.url.clone(),
+            review_state: PullRequestReviewStateSnapshot::from_runtime(pr.review_state),
+            ci_state: PullRequestCiStateSnapshot::from_runtime(pr.ci_state),
+            checks: pr
+                .checks
+                .iter()
+                .map(PullRequestCheckSnapshot::from_runtime)
+                .collect(),
+            unresolved_comments: pr.unresolved_comments,
+        }
+    }
+
+    fn runtime(&self) -> PullRequestMeta {
+        PullRequestMeta {
+            number: self.number,
+            url: self.url.clone(),
+            review_state: self.review_state.runtime(),
+            ci_state: self.ci_state.runtime(),
+            checks: self
+                .checks
+                .iter()
+                .map(PullRequestCheckSnapshot::runtime)
+                .collect(),
+            unresolved_comments: self.unresolved_comments,
+        }
+    }
+}
+
+impl PullRequestReviewStateSnapshot {
+    fn from_runtime(state: PullRequestReviewState) -> Self {
+        match state {
+            PullRequestReviewState::Draft => Self::Draft,
+            PullRequestReviewState::InReview => Self::InReview,
+            PullRequestReviewState::ChangesRequested => Self::ChangesRequested,
+            PullRequestReviewState::Approved => Self::Approved,
+        }
+    }
+
+    fn runtime(self) -> PullRequestReviewState {
+        match self {
+            Self::Draft => PullRequestReviewState::Draft,
+            Self::InReview => PullRequestReviewState::InReview,
+            Self::ChangesRequested => PullRequestReviewState::ChangesRequested,
+            Self::Approved => PullRequestReviewState::Approved,
+        }
+    }
+}
+
+impl PullRequestCiStateSnapshot {
+    fn from_runtime(state: PullRequestCiState) -> Self {
+        match state {
+            PullRequestCiState::Passing => Self::Passing,
+            PullRequestCiState::Failing => Self::Failing,
+            PullRequestCiState::RunningClean => Self::RunningClean,
+            PullRequestCiState::RunningFailed => Self::RunningFailed,
+        }
+    }
+
+    fn runtime(self) -> PullRequestCiState {
+        match self {
+            Self::Passing => PullRequestCiState::Passing,
+            Self::Failing => PullRequestCiState::Failing,
+            Self::RunningClean => PullRequestCiState::RunningClean,
+            Self::RunningFailed => PullRequestCiState::RunningFailed,
+        }
+    }
+}
+
+impl PullRequestCheckSnapshot {
+    fn from_runtime(check: &PullRequestCheck) -> Self {
+        Self {
+            name: check.name.clone(),
+            status: PullRequestCheckStatusSnapshot::from_runtime(check.status),
+            elapsed_ms: check.elapsed.as_millis() as u64,
+        }
+    }
+
+    fn runtime(&self) -> PullRequestCheck {
+        PullRequestCheck {
+            name: self.name.clone(),
+            status: self.status.runtime(),
+            elapsed: Duration::from_millis(self.elapsed_ms),
+        }
+    }
+}
+
+impl PullRequestCheckStatusSnapshot {
+    fn from_runtime(status: PullRequestCheckStatus) -> Self {
+        match status {
+            PullRequestCheckStatus::Running => Self::Running,
+            PullRequestCheckStatus::Failing => Self::Failing,
+        }
+    }
+
+    fn runtime(self) -> PullRequestCheckStatus {
+        match self {
+            Self::Running => PullRequestCheckStatus::Running,
+            Self::Failing => PullRequestCheckStatus::Failing,
         }
     }
 }

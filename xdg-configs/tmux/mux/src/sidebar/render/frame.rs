@@ -6,6 +6,7 @@ use crate::usage_bars;
 
 use super::super::SidebarState;
 use super::super::overlay::SidebarOverlay;
+use super::super::tree::ItemKind;
 use super::hints::{
     chooser_footer_hints, footer_hints, overlay_footer_hints, unfocused_footer_hints,
 };
@@ -169,8 +170,16 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> Rect 
     for vi in 0..list_height.min(total.saturating_sub(state.offset)) {
         let item_idx = state.visible[state.offset + vi];
         let item = &state.items[item_idx];
-        let is_sel = item.session_id.is_some() && item.session_id == selected_session;
-        let is_hover = item.session_id.is_some() && item.session_id == state.hover;
+        let session_chrome = !matches!(
+            item.kind,
+            ItemKind::Branch { .. }
+                | ItemKind::PullRequestUnresolved { .. }
+                | ItemKind::PullRequestCheck { .. }
+        );
+        let is_sel =
+            session_chrome && item.session_id.is_some() && item.session_id == selected_session;
+        let is_hover =
+            session_chrome && item.session_id.is_some() && item.session_id == state.hover;
         let belongs_to_current = item.session_id.as_deref() == Some(state.current.as_str());
         let row = Rect {
             x: area.x,

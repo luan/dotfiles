@@ -28,6 +28,7 @@ mod pi;
 mod render;
 mod tree;
 
+use meta::PullRequestCiState;
 use meta::{SessionMeta, query_session_meta};
 use overlay::{SidebarOverlay, handle_readline_key};
 use render::draw;
@@ -593,6 +594,17 @@ impl SidebarState {
                 matches!(
                     &item.kind,
                     ItemKind::Agent { gerund, asking, .. } if gerund.is_some() || *asking
+                ) || matches!(
+                    &item.kind,
+                    ItemKind::Branch { pr: Some(pr) }
+                        if matches!(
+                            pr.ci_state,
+                            PullRequestCiState::RunningClean | PullRequestCiState::RunningFailed
+                        )
+                ) || matches!(
+                    &item.kind,
+                    ItemKind::PullRequestCheck { check, .. }
+                        if matches!(check.status, meta::PullRequestCheckStatus::Running)
                 )
             })
     }
@@ -1329,8 +1341,23 @@ pub(crate) fn cmd_sidebar() {
                     {
                         let vis_idx = state.offset + (me.row - last_list_area.y) as usize;
                         if let Some(item_idx) = state.visible.get(vis_idx).copied()
-                            && let Some(sid) =
-                                state.items.get(item_idx).and_then(|i| i.session_id.clone())
+                            && let Some(item) = state.items.get(item_idx)
+                            && let ItemKind::Branch { pr: Some(pr) } = &item.kind
+                        {
+                            let label = format!(" #{}", pr.number);
+                            let row_w = last_list_area.width.saturating_sub(1) as usize;
+                            let label_w = label.chars().count();
+                            let label_x = last_list_area.x as usize + row_w.saturating_sub(label_w);
+                            if (me.column as usize) >= label_x {
+                                let _ = Command::new("open").arg(&pr.url).spawn();
+                                continue;
+                            }
+                        }
+                        if let Some(item_idx) = state.visible.get(vis_idx).copied()
+                            && let Some(sid) = state
+                                .items
+                                .get(item_idx)
+                                .and_then(|i| i.selectable.then(|| i.session_id.clone()).flatten())
                             && let Some(row_idx) = state
                                 .items
                                 .iter()
@@ -1354,7 +1381,9 @@ pub(crate) fn cmd_sidebar() {
                                 .visible
                                 .get(vis_idx)
                                 .and_then(|idx| state.items.get(*idx))
-                                .and_then(|it| it.session_id.clone());
+                                .and_then(|it| {
+                                    it.selectable.then(|| it.session_id.clone()).flatten()
+                                });
                         } else {
                             state.hover = None;
                         }

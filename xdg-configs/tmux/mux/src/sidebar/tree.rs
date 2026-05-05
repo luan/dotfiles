@@ -6,7 +6,7 @@ use ratatui::prelude::*;
 use crate::group::{GroupMeta, session_group, session_suffix};
 use crate::palette::{group_glyph, hex_to_color, num_glyph};
 
-use super::meta::{DiffStat, ProcessTreeInfo, SessionMeta};
+use super::meta::{DiffStat, ProcessTreeInfo, PullRequestCheck, PullRequestMeta, SessionMeta};
 
 pub(super) enum ItemKind {
     Session {
@@ -16,7 +16,17 @@ pub(super) enum ItemKind {
     },
     Process(ProcessTreeInfo),
     Group,
-    Branch,
+    Branch {
+        pr: Option<PullRequestMeta>,
+    },
+    PullRequestUnresolved {
+        count: u32,
+        pr: PullRequestMeta,
+    },
+    PullRequestCheck {
+        check: PullRequestCheck,
+        pr: PullRequestMeta,
+    },
     Agent {
         name: String,
         age: Option<Duration>,
@@ -196,8 +206,44 @@ pub(super) fn build_items(
                 dim_color,
                 selectable: false,
                 session_id: Some(name.clone()),
-                kind: ItemKind::Branch,
+                kind: ItemKind::Branch { pr: sm.pr.clone() },
             });
+        }
+        if let Some(pr) = &sm.pr {
+            if pr.unresolved_comments > 0 {
+                items.push(Item {
+                    id: format!("__pr_unresolved__{name}"),
+                    display: format!("{} unresolved", pr.unresolved_comments),
+                    indent: detail_indent,
+                    tree: detail_tree,
+                    color,
+                    dim_color,
+                    selectable: false,
+                    session_id: Some(name.clone()),
+                    kind: ItemKind::PullRequestUnresolved {
+                        count: pr.unresolved_comments,
+                        pr: pr.clone(),
+                    },
+                });
+            }
+            if name == cur {
+                for (ci, check) in pr.checks.iter().enumerate() {
+                    items.push(Item {
+                        id: format!("__pr_check__{name}__{ci}"),
+                        display: check.name.clone(),
+                        indent: detail_indent,
+                        tree: detail_tree,
+                        color,
+                        dim_color,
+                        selectable: false,
+                        session_id: Some(name.clone()),
+                        kind: ItemKind::PullRequestCheck {
+                            check: check.clone(),
+                            pr: pr.clone(),
+                        },
+                    });
+                }
+            }
         }
         if !sm.status.is_empty() {
             items.push(Item {
