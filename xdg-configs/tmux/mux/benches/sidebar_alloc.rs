@@ -83,9 +83,6 @@ fn sidebar_allocation_benchmarks(c: &mut Criterion) {
     let medium = SidebarBenchFixture::synthetic(30, 2);
     let large = SidebarBenchFixture::synthetic(60, 3);
 
-    c.bench_function("sidebar_alloc/snapshot_decode/large", |b| {
-        b.iter(|| large.bench_decode_snapshot())
-    });
     c.bench_function("sidebar_alloc/item_build/large", |b| {
         b.iter(|| large.bench_build_items())
     });
@@ -115,20 +112,8 @@ fn sidebar_allocation_benchmarks(c: &mut Criterion) {
     c.bench_function("sidebar_alloc/filter_existing/large_high_match", |b| {
         b.iter(|| large_filter.filter("work"))
     });
-    c.bench_function("sidebar_alloc/meta_snapshot_conversion/large", |b| {
-        b.iter(|| large.bench_meta_snapshot_roundtrip())
-    });
     c.bench_function("sidebar_alloc/metadata_process_index/shared_2048", |b| {
         b.iter(|| large.shared_process_index_allocations(2048))
-    });
-    c.bench_function("sidebar_alloc/daemon_client_states/large_x8", |b| {
-        b.iter(|| large.bench_daemon_client_states(8))
-    });
-
-    // Keep small decode in the allocation harness so snapshot-size scaling can be
-    // checked without opening the larger throughput benchmark report.
-    c.bench_function("sidebar_alloc/snapshot_decode/small", |b| {
-        b.iter(|| small.bench_decode_snapshot())
     });
 }
 
@@ -143,14 +128,6 @@ fn print_allocation_profile() {
     eprintln!(
         "{:<42} {:>12} {:>12} {:>16} {:>16} {:>12} {:>12}",
         "scenario", "allocs", "deallocs", "alloc_bytes", "dealloc_bytes", "net_allocs", "net_bytes"
-    );
-    print_row(
-        "snapshot_decode/small",
-        measure_allocations(|| small.decode_snapshot()),
-    );
-    print_row(
-        "snapshot_decode/large",
-        measure_allocations(|| large.decode_snapshot()),
     );
     print_row(
         "item_build/small",
@@ -208,32 +185,12 @@ fn print_allocation_profile() {
         measure_allocations(|| large_filter.filter("work")),
     );
     print_row(
-        "meta_snapshot_conversion/small",
-        measure_allocations(|| small.meta_snapshot_roundtrip()),
-    );
-    print_row(
-        "meta_snapshot_conversion/large",
-        measure_allocations(|| large.meta_snapshot_roundtrip()),
-    );
-    print_row(
         "metadata_process_index/legacy_2048",
         measure_allocations(|| large.legacy_process_index_allocations(2048)),
     );
     print_row(
         "metadata_process_index/shared_2048",
         measure_allocations(|| large.shared_process_index_allocations(2048)),
-    );
-    print_row(
-        "daemon_client_states/large_x1",
-        measure_retained_allocations(|| large.daemon_client_state_payloads(1)),
-    );
-    print_row(
-        "daemon_client_states/large_x4",
-        measure_retained_allocations(|| large.daemon_client_state_payloads(4)),
-    );
-    print_row(
-        "daemon_client_states/large_x8",
-        measure_retained_allocations(|| large.daemon_client_state_payloads(8)),
     );
 }
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::hint::black_box;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -8,7 +8,6 @@ use ratatui::backend::TestBackend;
 use crate::filter;
 
 use super::claude::AgentCtx;
-use super::daemon;
 use super::meta::{AgentInstance, DiffStat, ProcessTreeInfo, SessionMeta};
 use super::render::draw;
 use super::tree::{Item, build_items};
@@ -18,9 +17,6 @@ pub struct SidebarBenchFixture {
     sessions: Vec<String>,
     current: String,
     meta: HashMap<String, SessionMeta>,
-    snapshot: daemon::SidebarSnapshot,
-    snapshot_bytes: Vec<u8>,
-    snapshot_json: Vec<u8>,
 }
 
 pub struct RenderMeasurement {
@@ -35,13 +31,6 @@ pub struct ReusableRenderFrame {
 
 pub struct ReusableFilter {
     items: Vec<Item>,
-}
-
-pub struct DaemonClientStatePayload {
-    item_count: usize,
-    visible_count: usize,
-    retained_meta_count: usize,
-    _state: SidebarState,
 }
 
 impl ReusableFilter {
@@ -87,34 +76,12 @@ impl SidebarBenchFixture {
             .collect();
         let current = sessions.first().cloned().unwrap_or_default();
         let meta = synthetic_meta(&sessions, agents_per_session);
-        let snapshot = daemon::snapshot_from_parts_for_bench(
-            now_ms(),
-            false,
-            sessions.clone(),
-            [("%bench".to_string(), current.clone())].into(),
-            meta.clone(),
-            synthetic_usage_lines(),
-        );
-        let snapshot_bytes = daemon::snapshot_bytes_for_bench(&snapshot);
-        let snapshot_json = daemon::snapshot_json_for_bench(&snapshot);
 
         Self {
             sessions,
             current,
             meta,
-            snapshot,
-            snapshot_bytes,
-            snapshot_json,
         }
-    }
-
-    pub fn snapshot_json(&self) -> &[u8] {
-        &self.snapshot_json
-    }
-
-    pub fn decode_snapshot(&self) -> Option<usize> {
-        daemon::decode_snapshot_for_bench(&self.snapshot_bytes)
-            .map(|snapshot| snapshot.alive_sessions.len())
     }
 
     pub fn build_items(&self) -> usize {
@@ -160,65 +127,6 @@ impl SidebarBenchFixture {
         }
     }
 
-    pub fn daemon_client_states(&self, clients: usize) -> Vec<usize> {
-        (0..clients)
-            .map(|_| {
-                let mut state = SidebarState::new();
-                state.refresh_from_snapshot(self.snapshot.clone());
-                state.items.len() + state.visible.len() + state.meta.len()
-            })
-            .collect()
-    }
-
-    pub fn daemon_client_state_payloads(&self, clients: usize) -> Vec<DaemonClientStatePayload> {
-        let mut payloads = Vec::with_capacity(clients);
-        for _ in 0..clients {
-            let mut state = SidebarState::new();
-            state.refresh_from_snapshot(self.snapshot.clone());
-            payloads.push(DaemonClientStatePayload {
-                item_count: state.items.len(),
-                visible_count: state.visible.len(),
-                retained_meta_count: state.meta.len(),
-                _state: state,
-            });
-        }
-        payloads
-    }
-
-    pub fn daemon_client_state_retained_counts(&self, clients: usize) -> (usize, usize, usize) {
-        let payloads = self.daemon_client_state_payloads(clients);
-
-        let item_count = payloads.iter().map(|payload| payload.item_count).sum();
-        let visible_count = payloads.iter().map(|payload| payload.visible_count).sum();
-        let retained_meta_count = payloads
-            .iter()
-            .map(|payload| payload.retained_meta_count)
-            .sum();
-        (item_count, visible_count, retained_meta_count)
-    }
-
-    pub fn meta_snapshot_roundtrip(&self) -> usize {
-        let snapshot = daemon::decode_snapshot_for_bench(&self.snapshot_bytes)
-            .expect("decode synthetic sidebar benchmark snapshot");
-        snapshot.meta_runtime().len()
-    }
-
-    pub fn bench_decode_snapshot(&self) {
-        black_box(daemon::decode_snapshot_for_bench(black_box(
-            &self.snapshot_bytes,
-        )));
-    }
-
-    pub fn bench_decode_snapshot_via_utf8_string(&self) {
-        black_box(daemon::decode_snapshot_via_utf8_string_for_bench(
-            black_box(&self.snapshot_json),
-        ));
-    }
-
-    pub fn bench_encode_snapshot(&self) {
-        black_box(daemon::snapshot_bytes_for_bench(black_box(&self.snapshot)));
-    }
-
     pub fn bench_build_items(&self) {
         black_box(build_items(
             black_box(&self.sessions),
@@ -238,14 +146,6 @@ impl SidebarBenchFixture {
 
     pub fn bench_filter(&self, query: &str) {
         black_box(self.filter(black_box(query)));
-    }
-
-    pub fn bench_meta_snapshot_roundtrip(&self) {
-        black_box(self.meta_snapshot_roundtrip());
-    }
-
-    pub fn bench_daemon_client_states(&self, clients: usize) {
-        black_box(self.daemon_client_states(black_box(clients)));
     }
 
     pub fn legacy_process_index_allocations(&self, process_count: u32) -> usize {
@@ -346,11 +246,4 @@ fn synthetic_usage_lines() -> Vec<String> {
         "codex    ██████░░░░░░░░  38%".to_string(),
         "opencode ███░░░░░░░░░░░  18%".to_string(),
     ]
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use mux::sidebar::instrument::{
     HiddenLifecycle, HiddenLifecycleAction, LatencySummary, LoopState, SidebarCounters,
-    daemon_profile, synthetic_profiles,
+    synthetic_profiles,
 };
 
 #[test]
@@ -12,8 +12,6 @@ fn counters_are_zero_until_events_are_recorded() {
     assert_eq!(counters.redraws, 0);
     assert_eq!(counters.refreshes, 0);
     assert_eq!(counters.tmux_spawns, 0);
-    assert_eq!(counters.snapshot_load_hits, 0);
-    assert_eq!(counters.snapshot_load_misses, 0);
 }
 
 #[test]
@@ -21,20 +19,16 @@ fn counters_track_core_sidebar_events() {
     let mut counters = SidebarCounters::default();
 
     counters.record_redraw(true);
-    counters.record_refresh(3, true);
+    counters.record_refresh(3);
     counters.record_poll(LoopState::VisibleIdle);
     counters.record_poll(LoopState::HiddenIdle);
-    counters.record_daemon_tick(true);
 
     assert_eq!(counters.redraws, 1);
     assert_eq!(counters.animation_frames, 1);
     assert_eq!(counters.refreshes, 1);
     assert_eq!(counters.tmux_spawns, 3);
-    assert_eq!(counters.snapshot_load_hits, 1);
     assert_eq!(counters.visible_polls, 1);
     assert_eq!(counters.hidden_polls, 1);
-    assert_eq!(counters.daemon_ticks, 1);
-    assert_eq!(counters.daemon_meta_refreshes, 1);
 }
 
 #[test]
@@ -90,15 +84,6 @@ fn synthetic_active_animation_profile_uses_responsive_frame_rate() {
 
     assert!((290..=310).contains(&active.counters.animation_frames));
     assert_eq!(active.counters.redraws, active.counters.animation_frames);
-}
-
-#[test]
-fn daemon_profile_uses_slow_metadata_refresh_interval() {
-    let daemon = daemon_profile(Duration::from_secs(30));
-
-    assert_eq!(daemon.daemon_ticks, 60);
-    assert_eq!(daemon.daemon_meta_refreshes, 6);
-    assert_eq!(daemon.meta_refresh_interval_ms, 5_000);
 }
 
 #[test]

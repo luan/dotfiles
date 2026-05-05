@@ -637,7 +637,7 @@ fn cmd_bench(args: &[String]) {
         collect_times.push(t0.elapsed());
     }
 
-    // Bench a full sidebar refresh cycle (the core of what refresh() does)
+    // Bench the cheap startup/refresh path that must stay on the UI thread.
     let alive: std::collections::HashSet<String> = tmux_cmd(&["list-sessions", "-F", "#S"])
         .lines()
         .filter(|l| !l.is_empty())
@@ -645,10 +645,11 @@ fn cmd_bench(args: &[String]) {
         .collect();
     let sessions = compute_order(&alive, false);
 
-    let mut refresh_times = Vec::with_capacity(iterations);
+    let mut startup_times = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let t0 = std::time::Instant::now();
-        // Simulate the refresh hot path: batch tmux query + meta + usage_bars
+        // Simulate the direct sidebar UI-thread refresh: notch, focused client,
+        // and session list. Rich metadata runs asynchronously in the sidebar.
         let _batch = tmux_cmd(&[
             "show-option",
             "-gv",
@@ -656,15 +657,29 @@ fn cmd_bench(args: &[String]) {
             ";",
             "display-message",
             "-p",
-            "#S",
+            "\x1e<<MUX_SIDEBAR_DIRECT_DELIM>>\x1e",
+            ";",
+            "list-clients",
+            "-F",
+            "#{client_activity}\t#{client_session}",
+            ";",
+            "display-message",
+            "-p",
+            "\x1e<<MUX_SIDEBAR_DIRECT_DELIM>>\x1e",
             ";",
             "list-sessions",
             "-F",
             "#S",
         ]);
+        startup_times.push(t0.elapsed());
+    }
+
+    let mut metadata_times = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let t0 = std::time::Instant::now();
         sidebar::bench_query_session_meta(&sessions);
         let _ = usage_bars::collect(80);
-        refresh_times.push(t0.elapsed());
+        metadata_times.push(t0.elapsed());
     }
 
     let stats = |times: &[std::time::Duration]| -> (u128, u128, u128) {
@@ -686,11 +701,13 @@ fn cmd_bench(args: &[String]) {
     }
 
     let (cmin, cavg, cmax) = stats(&collect_times);
-    let (rmin, ravg, rmax) = stats(&refresh_times);
+    let (stmin, stavg, stmax) = stats(&startup_times);
+    let (mmin, mavg, mmax) = stats(&metadata_times);
     let (smin, savg, smax) = stats(&sysinfo_times);
 
     println!("usage_bars::collect()  n={iterations}  min={cmin}µs  avg={cavg}µs  max={cmax}µs");
-    println!("refresh() simulation   n={iterations}  min={rmin}µs  avg={ravg}µs  max={rmax}µs");
+    println!("sidebar startup path   n={iterations}  min={stmin}µs  avg={stavg}µs  max={stmax}µs");
+    println!("async metadata payload n={iterations}  min={mmin}µs  avg={mavg}µs  max={mmax}µs");
     println!("sysinfo daemon tick    n={iterations}  min={smin}µs  avg={savg}µs  max={smax}µs");
 }
 
@@ -726,7 +743,6 @@ fn main() {
         "sidebar" if rest.is_empty() => sidebar::cmd_sidebar(),
         "sidebar" => sidebar::cmd_sidebar_control(&rest),
         "sidebar-terminal" => sidebar::cmd_sidebar_terminal(),
-        "sidebar-daemon" => sidebar::cmd_sidebar_daemon(),
         "hook" => sidebar::cmd_hook(),
         "system-info" => cmd_system_info(),
         "sysinfo-daemon" => cmd_sysinfo_daemon(),
