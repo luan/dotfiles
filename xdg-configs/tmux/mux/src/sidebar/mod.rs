@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
-use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use crossterm::cursor;
@@ -47,34 +45,8 @@ pub(super) const KEY_CTRL: &str = "\u{F0634}";
 pub(super) const KEY_OPT: &str = "\u{F0635}";
 pub(super) const KEY_SHIFT: &str = "\u{F0636}";
 pub(super) const KEY_TAB: &str = "\u{F0312}";
-const SIDEBAR_WIDTH_DEFAULT: &str = "45";
-const SIDEBAR_TOKEN: &str = "mux-sidebar-v1";
-const SIDEBAR_BORDER_COLOR: &str = "#1A1B26";
-const SIDEBAR_OPEN_LOCK: &str = "mux-sidebar-open.lock";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SidebarRuntime {
-    TmuxNative,
-    TerminalHosted,
-}
-
-impl SidebarRuntime {
-    fn is_tmux_native(self) -> bool {
-        matches!(self, Self::TmuxNative)
-    }
-
-    fn user_var_value(self) -> &'static str {
-        match self {
-            // base64("tmux")
-            Self::TmuxNative => "dG11eA==",
-            // base64("terminal")
-            Self::TerminalHosted => "dGVybWluYWw=",
-        }
-    }
-}
+const TERMINAL_RUNTIME_USER_VAR: &str = "dGVybWluYWw="; // base64("terminal")
 const TERMINAL_SIDEBAR_TITLE: &str = "mux-sidebar-terminal";
-const SIDEBAR_OPEN_LOCK_STALE: Duration = Duration::from_secs(30);
-const SIDEBAR_OPEN_LOCK_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub(crate) fn attention_target(sessions: &[String]) -> Option<String> {
     let (meta, _) = query_session_meta(sessions);
@@ -82,46 +54,6 @@ pub(crate) fn attention_target(sessions: &[String]) -> Option<String> {
         .iter()
         .find(|session| meta.get(*session).is_some_and(|m| m.attention))
         .cloned()
-}
-
-struct SidebarOpenLock {
-    path: std::path::PathBuf,
-}
-
-impl Drop for SidebarOpenLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir(&self.path);
-    }
-}
-
-fn acquire_sidebar_open_lock() -> Option<SidebarOpenLock> {
-    let path = std::env::temp_dir().join(SIDEBAR_OPEN_LOCK);
-    let start = Instant::now();
-
-    loop {
-        match fs::create_dir(&path) {
-            Ok(()) => return Some(SidebarOpenLock { path }),
-            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                let stale = fs::metadata(&path)
-                    .and_then(|meta| meta.modified())
-                    .ok()
-                    .and_then(|modified| modified.elapsed().ok())
-                    .is_some_and(|age| age > SIDEBAR_OPEN_LOCK_STALE);
-
-                if stale {
-                    let _ = fs::remove_dir(&path);
-                    continue;
-                }
-
-                if start.elapsed() > SIDEBAR_OPEN_LOCK_TIMEOUT {
-                    return None;
-                }
-
-                thread::sleep(Duration::from_millis(20));
-            }
-            Err(_) => return None,
-        }
-    }
 }
 
 pub(super) fn truncate(s: &str, max: usize) -> String {
@@ -189,7 +121,6 @@ struct SidebarState {
     /// attached tmux client. Hidden panes keep their process alive, so avoid
     /// redraws/refreshes there.
     pub(super) on_screen: bool,
-    pub(super) last_visibility_check: Instant,
     pub(super) counters: instrument::SidebarCounters,
     pub(super) hidden_lifecycle: instrument::HiddenLifecycle,
 }
@@ -221,7 +152,6 @@ impl SidebarState {
             tmux_call_count: 0,
             show_hidden: false,
             on_screen: true,
-            last_visibility_check: Instant::now() - Duration::from_secs(60),
             counters: instrument::SidebarCounters::default(),
             hidden_lifecycle: instrument::HiddenLifecycle::default(),
         }
@@ -481,7 +411,7 @@ impl SidebarState {
                 .retain(|_, (_, t)| now.duration_since(*t) < ACTIVITY_GRACE);
             self.meta = meta;
             self.last_meta_refresh = now;
-            let usage_width = sidebar_width().parse::<u16>().unwrap_or(36);
+            let usage_width = 45;
             self.usage_lines_cache = crate::usage_bars::collect(usage_width).lines;
         }
 
@@ -587,17 +517,7 @@ impl SidebarState {
 
     fn switch_to_selected(&self) {
         if let Some(id) = self.selected_session_id() {
-            // A tmux-native sidebar lives inside a tmux window. Pre-create
-            // only the target session's current window synchronously so the
-            // switch itself stays fast; the rest of the attached session is
-            // synced in the background after switching.
-            if running_as_tmux_sidebar() {
-                open_tmux_sidebar_in_target(Some(&id), false);
-            }
             tmux(&["switch-client", "-t", &id]);
-            if running_as_tmux_sidebar() {
-                spawn_detached_sidebar_sync();
-            }
         }
     }
 
@@ -650,17 +570,6 @@ impl SidebarState {
                         if matches!(check.status, meta::PullRequestCheckStatus::Running)
                 )
             })
-    }
-
-    fn refresh_visibility(&mut self, interval: Duration) {
-        if self.last_visibility_check.elapsed() < interval {
-            return;
-        }
-        self.last_visibility_check = Instant::now();
-        if running_as_tmux_sidebar() {
-            self.counters.record_tmux_spawns(1);
-        }
-        self.on_screen = current_sidebar_pane_is_on_screen();
     }
 
     fn view_fingerprint(&self) -> u64 {
@@ -739,700 +648,23 @@ pub(crate) fn bench_query_session_meta(sessions: &[String]) {
     let _ = query_session_meta(sessions);
 }
 
-fn pane_is_sidebar_line(line: &str) -> Option<String> {
-    let mut parts = line.split('\t');
-    let pane = parts.next()?;
-    let marker = parts.next()?;
-    let token = parts.next()?;
-    let command = parts.next().unwrap_or_default();
-    (marker == "1" && token == SIDEBAR_TOKEN && command == "mux" && !pane.is_empty())
-        .then(|| pane.to_string())
-}
+pub(crate) fn prepare_session_switch(_target: &str) {}
 
-fn running_as_tmux_sidebar() -> bool {
-    std::env::var("MUX_SIDEBAR_TMUX").ok().as_deref() == Some(SIDEBAR_TOKEN)
-}
+pub(crate) fn finish_session_switch() {}
 
-fn current_pane_id() -> String {
-    if let Ok(pane) = std::env::var("TMUX_PANE")
-        && !pane.trim().is_empty()
-    {
-        return pane;
-    }
-    tmux(&["display-message", "-p", "#{pane_id}"])
-}
+pub(crate) fn prepare_window_switch(_target: &str) {}
 
-fn current_window_id() -> Option<String> {
-    let window = tmux(&["display-message", "-p", "#{window_id}"]);
-    (!window.trim().is_empty()).then_some(window)
-}
-
-fn mark_current_sidebar_pane() {
-    if !running_as_tmux_sidebar() {
-        return;
-    }
-    if std::env::var("MUX_SIDEBAR_MARKED").ok().as_deref() == Some("1") {
-        return;
-    }
-    let pane = current_pane_id();
-    if pane.is_empty() {
-        return;
-    }
-    tmux(&["set-option", "-p", "-t", &pane, "@mux_sidebar", "1"]);
-    tmux(&[
-        "set-option",
-        "-p",
-        "-t",
-        &pane,
-        "@mux_sidebar_token",
-        SIDEBAR_TOKEN,
-    ]);
-}
-
-fn unmark_current_sidebar_pane() {
-    if !running_as_tmux_sidebar() {
-        return;
-    }
-    let pane = current_pane_id();
-    if pane.is_empty() {
-        return;
-    }
-    tmux(&["set-option", "-pu", "-t", &pane, "@mux_sidebar"]);
-    tmux(&["set-option", "-pu", "-t", &pane, "@mux_sidebar_token"]);
-}
-
-fn sidebar_pane_in_target(target: Option<&str>) -> Option<String> {
-    let format = "#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}";
-    let output = if let Some(target) = target {
-        tmux(&["list-panes", "-t", target, "-F", format])
-    } else {
-        tmux(&["list-panes", "-F", format])
-    };
-
-    output.lines().find_map(pane_is_sidebar_line)
-}
-
-fn current_sidebar_pane() -> Option<String> {
-    sidebar_pane_in_target(None)
-}
-
-fn attached_session_window_ids() -> HashSet<String> {
-    let mut windows: HashSet<String> = tmux(&["list-clients", "-F", "#{window_id}"])
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect();
-
-    // When tmux is executing a hook without a normal client context,
-    // list-clients can be empty. Fall back to the command's current window so
-    // an explicit `mux sidebar open/sync` still does the useful thing.
-    if windows.is_empty() {
-        if let Some(window) = current_window_id() {
-            windows.insert(window);
-        }
-    }
-
-    windows
-}
-
-fn current_sidebar_pane_is_on_screen() -> bool {
-    if !running_as_tmux_sidebar() {
-        return true;
-    }
-
-    let pane = std::env::var("TMUX_PANE").unwrap_or_default();
-    if pane.is_empty() {
-        return true;
-    }
-
-    let output = tmux(&[
-        "display-message",
-        "-p",
-        "-t",
-        &pane,
-        "#{session_attached}\t#{window_active}",
-    ]);
-    let Some((attached, active)) = output.trim().split_once('\t') else {
-        // Fail open: a bad/empty tmux response should not freeze an actually
-        // visible sidebar.
-        return true;
-    };
-
-    attached.parse::<u16>().unwrap_or(0) > 0 && active == "1"
-}
-
-fn all_sidebar_panes_by_window() -> HashMap<String, Vec<String>> {
-    let output = tmux(&[
-        "list-panes",
-        "-a",
-        "-F",
-        "#{window_id}\t#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
-    ]);
-
-    let mut panes_by_window: HashMap<String, Vec<String>> = HashMap::new();
-    for line in output.lines() {
-        let mut parts = line.split('\t');
-        let Some(window) = parts.next().filter(|s| !s.is_empty()) else {
-            continue;
-        };
-        let Some(pane) = parts.next().filter(|s| !s.is_empty()) else {
-            continue;
-        };
-        let marker = parts.next().unwrap_or_default();
-        let token = parts.next().unwrap_or_default();
-        let command = parts.next().unwrap_or_default();
-        if marker == "1" && token == SIDEBAR_TOKEN && command == "mux" {
-            panes_by_window
-                .entry(window.to_string())
-                .or_default()
-                .push(pane.to_string());
-        }
-    }
-    panes_by_window
-}
-
-fn all_sidebar_panes() -> Vec<String> {
-    tmux(&[
-        "list-panes",
-        "-a",
-        "-F",
-        "#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
-    ])
-    .lines()
-    .filter_map(pane_is_sidebar_line)
-    .collect()
-}
-
-fn any_sidebar_pane() -> bool {
-    !all_sidebar_panes().is_empty()
-}
-
-fn active_pane_is_sidebar() -> bool {
-    tmux(&[
-        "display-message",
-        "-p",
-        "#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
-    ]) == format!("1\t{SIDEBAR_TOKEN}\tmux")
-}
-
-fn sidebar_enabled() -> bool {
-    tmux(&["show-option", "-gv", "@sidebar_enabled"]) != "0"
-}
-
-fn sidebar_width() -> String {
-    let width = tmux(&["show-option", "-gqv", "@sidebar_width"]);
-    if width.is_empty() {
-        SIDEBAR_WIDTH_DEFAULT.to_string()
-    } else {
-        width
-    }
-}
-
-fn resize_sidebar_pane(pane: &str) {
-    let width = sidebar_width();
-    tmux(&["resize-pane", "-t", pane, "-x", &width]);
-}
-
-fn resize_all_tmux_sidebars() {
-    batch_resize_sidebar_panes(&all_sidebar_panes(), &sidebar_width());
-}
-
-fn batch_resize_sidebar_panes(panes: &[String], width: &str) {
-    if panes.is_empty() {
-        return;
-    }
-    let mut args: Vec<String> = Vec::new();
-    for (idx, pane) in panes.iter().enumerate() {
-        if idx > 0 {
-            args.push(";".into());
-        }
-        args.extend([
-            "resize-pane".into(),
-            "-t".into(),
-            pane.clone(),
-            "-x".into(),
-            width.to_string(),
-        ]);
-    }
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    tmux(&refs);
-}
-
-fn batch_mark_and_resize_sidebar_panes(panes: &[String], width: &str) {
-    if panes.is_empty() {
-        return;
-    }
-    let mut args: Vec<String> = Vec::new();
-    for (idx, pane) in panes.iter().enumerate() {
-        if idx > 0 {
-            args.push(";".into());
-        }
-        args.extend([
-            "set-option".into(),
-            "-p".into(),
-            "-t".into(),
-            pane.clone(),
-            "@mux_sidebar".into(),
-            "1".into(),
-            ";".into(),
-            "set-option".into(),
-            "-p".into(),
-            "-t".into(),
-            pane.clone(),
-            "@mux_sidebar_token".into(),
-            SIDEBAR_TOKEN.into(),
-            ";".into(),
-            "resize-pane".into(),
-            "-t".into(),
-            pane.clone(),
-            "-x".into(),
-            width.to_string(),
-        ]);
-    }
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    tmux(&refs);
-}
-
-fn split_sidebar_panes_in_windows(windows: &[String], width: &str) -> Vec<String> {
-    if windows.is_empty() {
-        return Vec::new();
-    }
-
-    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
-    let command = format!(
-        "exec env MUX_SIDEBAR_TMUX={} MUX_SIDEBAR_MARKED=1 {} sidebar",
-        SIDEBAR_TOKEN,
-        exe.display()
-    );
-    let mut args: Vec<String> = Vec::new();
-    for (idx, window) in windows.iter().enumerate() {
-        if idx > 0 {
-            args.push(";".into());
-        }
-        args.extend([
-            "split-window".into(),
-            "-t".into(),
-            window.clone(),
-            "-h".into(),
-            "-b".into(),
-            "-f".into(),
-            "-l".into(),
-            width.to_string(),
-            "-d".into(),
-            "-P".into(),
-            "-F".into(),
-            "#{pane_id}".into(),
-            command.clone(),
-        ]);
-    }
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    tmux(&refs)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
-fn sidebar_borderless() -> bool {
-    tmux(&["show-option", "-gqv", "@sidebar_borderless"]) != "0"
-}
-
-fn sidebar_border_color() -> String {
-    let color = tmux(&["show-option", "-gqv", "@sidebar_border_color"]);
-    if color.is_empty() {
-        SIDEBAR_BORDER_COLOR.to_string()
-    } else {
-        color
-    }
-}
-
-fn local_pane_option(pane: &str, option: &str) -> String {
-    let raw = tmux(&["show-option", "-pq", "-t", pane, option]);
-    raw.strip_prefix(option)
-        .and_then(|value| value.strip_prefix(' '))
-        .unwrap_or_default()
-        .trim_matches('"')
-        .to_string()
-}
-
-fn set_pane_option(pane: &str, option: &str, value: &str) {
-    tmux(&["set-option", "-p", "-t", pane, option, value]);
-}
-
-fn unset_pane_option(pane: &str, option: &str) {
-    tmux(&["set-option", "-pu", "-t", pane, option]);
-}
-
-fn apply_borderless_to_pane(pane: &str) {
-    if !sidebar_borderless() {
-        return;
-    }
-
-    let style = format!("fg={}", sidebar_border_color());
-    if local_pane_option(pane, "@mux_sidebar_border_touched") != "1" {
-        let prev_border = local_pane_option(pane, "pane-border-style");
-        let prev_active = local_pane_option(pane, "pane-active-border-style");
-        set_pane_option(pane, "@mux_sidebar_prev_pane_border_style", &prev_border);
-        set_pane_option(
-            pane,
-            "@mux_sidebar_prev_pane_active_border_style",
-            &prev_active,
-        );
-        set_pane_option(pane, "@mux_sidebar_border_touched", "1");
-    }
-
-    set_pane_option(pane, "pane-border-style", &style);
-    set_pane_option(pane, "pane-active-border-style", &style);
-}
-
-fn restore_sidebar_borders() {
-    let output = tmux(&[
-        "list-panes",
-        "-a",
-        "-F",
-        "#{pane_id}\t#{@mux_sidebar_border_touched}",
-    ]);
-
-    for pane in output.lines().filter_map(|line| {
-        let (pane, touched) = line.split_once('\t')?;
-        (touched == "1" && !pane.is_empty()).then_some(pane.to_string())
-    }) {
-        let prev_border = local_pane_option(&pane, "@mux_sidebar_prev_pane_border_style");
-        let prev_active = local_pane_option(&pane, "@mux_sidebar_prev_pane_active_border_style");
-
-        if prev_border.is_empty() {
-            unset_pane_option(&pane, "pane-border-style");
-        } else {
-            set_pane_option(&pane, "pane-border-style", &prev_border);
-        }
-
-        if prev_active.is_empty() {
-            unset_pane_option(&pane, "pane-active-border-style");
-        } else {
-            set_pane_option(&pane, "pane-active-border-style", &prev_active);
-        }
-
-        unset_pane_option(&pane, "@mux_sidebar_prev_pane_border_style");
-        unset_pane_option(&pane, "@mux_sidebar_prev_pane_active_border_style");
-        unset_pane_option(&pane, "@mux_sidebar_border_touched");
-    }
-}
-
-fn set_sidebar_open(open: bool) {
-    if open {
-        tmux(&["set-option", "-g", "@sidebar_open", "1"]);
-    } else if !any_sidebar_pane() {
-        tmux(&["set-option", "-gu", "@sidebar_open"]);
-    }
-    refresh_status_bar();
-}
-
-fn open_tmux_sidebar_in_target(target: Option<&str>, select: bool) -> Option<String> {
-    if !sidebar_enabled() {
-        return None;
-    }
-
-    // session-created/after-new-window hooks can fire in a burst while the
-    // three-window session template is being assembled. Without serializing the
-    // check+split sequence, those background jobs can all observe "no sidebar"
-    // and briefly create duplicate sidebar panes that prune-orphans cleans up a
-    // moment later. The final layout was right, but the visible pop-in/pop-out
-    // was jarring.
-    let _lock = acquire_sidebar_open_lock()?;
-
-    open_tmux_sidebar_in_target_locked(target, select)
-}
-
-fn open_tmux_sidebar_in_target_locked(target: Option<&str>, select: bool) -> Option<String> {
-    if let Some(pane) = sidebar_pane_in_target(target) {
-        resize_sidebar_pane(&pane);
-        apply_borderless_to_pane(&pane);
-        if select {
-            tmux(&["select-pane", "-t", &pane]);
-        }
-        set_sidebar_open(true);
-        return Some(pane);
-    }
-
-    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
-    let command = format!(
-        "exec env MUX_SIDEBAR_TMUX={} MUX_SIDEBAR_MARKED=1 {} sidebar",
-        SIDEBAR_TOKEN,
-        exe.display()
-    );
-    let width = sidebar_width();
-    let pane = if let Some(target) = target {
-        tmux(&[
-            "split-window",
-            "-t",
-            target,
-            "-h",
-            "-b",
-            "-f",
-            "-l",
-            &width,
-            "-d",
-            "-P",
-            "-F",
-            "#{pane_id}",
-            &command,
-        ])
-    } else {
-        tmux(&[
-            "split-window",
-            "-h",
-            "-b",
-            "-f",
-            "-l",
-            &width,
-            "-d",
-            "-P",
-            "-F",
-            "#{pane_id}",
-            &command,
-        ])
-    };
-
-    if pane.is_empty() {
-        return None;
-    }
-
-    tmux(&["set-option", "-p", "-t", &pane, "@mux_sidebar", "1"]);
-    tmux(&[
-        "set-option",
-        "-p",
-        "-t",
-        &pane,
-        "@mux_sidebar_token",
-        SIDEBAR_TOKEN,
-    ]);
-    resize_sidebar_pane(&pane);
-    apply_borderless_to_pane(&pane);
-    set_sidebar_open(true);
-    if select {
-        tmux(&["select-pane", "-t", &pane]);
-    }
-    Some(pane)
-}
-
-fn open_tmux_sidebar(select: bool) -> Option<String> {
-    open_tmux_sidebar_in_target(None, select)
-}
-
-fn spawn_detached_sidebar_sync() {
-    let exe = std::env::current_exe().unwrap_or_else(|_| "mux".into());
-    let mut command = Command::new(exe);
-    command
-        .args(["sidebar", "sync"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    let _ = spawn_reaped(command);
-}
-
-fn sync_sidebars_to_attached_session_windows() {
-    if !sidebar_enabled() {
-        return;
-    }
-
-    daemon::ensure_started();
-
-    let _lock = match acquire_sidebar_open_lock() {
-        Some(lock) => lock,
-        None => return,
-    };
-
-    let attached = attached_session_window_ids();
-    if attached.is_empty() {
-        return;
-    }
-
-    let width = sidebar_width();
-    let existing = all_sidebar_panes_by_window();
-    for (window, panes) in &existing {
-        if !attached.contains(window) {
-            for pane in panes {
-                tmux(&["kill-pane", "-t", pane]);
-            }
-        }
-    }
-
-    let mut attached_windows: Vec<String> = attached.into_iter().collect();
-    attached_windows.sort();
-    let missing_windows: Vec<String> = attached_windows
-        .iter()
-        .filter(|window| !existing.contains_key(*window))
-        .cloned()
-        .collect();
-    let mut panes: Vec<String> = existing
-        .iter()
-        .filter(|(window, _)| attached_windows.iter().any(|attached| attached == *window))
-        .flat_map(|(_, panes)| panes.iter().cloned())
-        .collect();
-    panes.extend(split_sidebar_panes_in_windows(&missing_windows, &width));
-
-    batch_mark_and_resize_sidebar_panes(&panes, &width);
-    if sidebar_borderless() {
-        for pane in &panes {
-            apply_borderless_to_pane(pane);
-        }
-    }
-
-    set_sidebar_open(any_sidebar_pane());
-}
-
-fn close_all_tmux_sidebars() {
-    for pane in all_sidebar_panes() {
-        tmux(&["kill-pane", "-t", &pane]);
-    }
-    restore_sidebar_borders();
-    set_sidebar_open(false);
-}
-
-fn prune_orphan_sidebar_windows() {
-    let output = tmux(&[
-        "list-panes",
-        "-a",
-        "-F",
-        "#{window_id}\t#{pane_id}\t#{pane_left}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
-    ]);
-
-    let mut windows: std::collections::HashMap<String, (Vec<(u16, String)>, usize)> =
-        std::collections::HashMap::new();
-
-    for line in output.lines() {
-        let mut parts = line.split('\t');
-        let Some(window_id) = parts.next() else {
-            continue;
-        };
-        let Some(pane_id) = parts.next() else {
-            continue;
-        };
-        let pane_left: u16 = parts
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(u16::MAX);
-        if window_id.is_empty() || pane_id.is_empty() {
-            continue;
-        }
-        let marker = parts.next().unwrap_or_default();
-        let token = parts.next().unwrap_or_default();
-        let command = parts.next().unwrap_or_default();
-        let is_sidebar = marker == "1" && token == SIDEBAR_TOKEN && command == "mux";
-
-        let entry = windows.entry(window_id.to_string()).or_default();
-        if is_sidebar {
-            entry.0.push((pane_left, pane_id.to_string()));
-        } else {
-            entry.1 += 1;
-        }
-    }
-
-    for (window_id, (mut sidebars, content)) in windows {
-        if !sidebars.is_empty() && content == 0 {
-            tmux(&["kill-window", "-t", &window_id]);
-            continue;
-        }
-
-        // If multiple global-open jobs race (for example new-session hooks),
-        // keep the leftmost marked sidebar and kill the duplicates. Only panes
-        // passing the full marker+token+command check above are eligible.
-        if sidebars.len() > 1 {
-            sidebars.sort_by_key(|(left, _)| *left);
-            for (_, pane) in sidebars.into_iter().skip(1) {
-                tmux(&["kill-pane", "-t", &pane]);
-            }
-        }
-    }
-}
-
-fn focus_tmux_sidebar() {
-    if active_pane_is_sidebar() {
-        let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
-        if !target.is_empty() {
-            open_tmux_sidebar_in_target(Some(&target), false);
-        }
-        tmux(&["switch-client", "-l"]);
-        finish_session_switch();
-        tmux(&["select-pane", "-R"]);
-    } else if let Some(window) = current_window_id()
-        && let Some(pane) = sidebar_pane_in_target(Some(&window))
-    {
-        tmux(&["select-pane", "-t", &pane]);
-    } else if let Some(pane) = current_sidebar_pane() {
-        tmux(&["select-pane", "-t", &pane]);
-    } else {
-        open_tmux_sidebar(true);
-    }
-}
-
-pub(crate) fn send_key_to_current_sidebar(key: &str) -> bool {
-    let Some(pane) = current_sidebar_pane() else {
-        return false;
-    };
-    tmux(&["select-pane", "-t", &pane]);
-    tmux(&["send-keys", "-t", &pane, "-l", key]);
-    true
-}
-
-pub(crate) fn prepare_session_switch(target: &str) {
-    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        open_tmux_sidebar_in_target(Some(target), false);
-    }
-}
-
-pub(crate) fn finish_session_switch() {
-    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        wake_current_sidebar_pane();
-        spawn_detached_sidebar_sync();
-    }
-}
-
-pub(crate) fn prepare_window_switch(target: &str) {
-    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        open_tmux_sidebar_in_target(Some(target), false);
-    }
-}
-
-pub(crate) fn finish_window_switch() {
-    if tmux(&["show-option", "-gqv", "@sidebar_open"]) == "1" {
-        wake_current_sidebar_pane();
-        spawn_detached_sidebar_sync();
-    }
-}
-
-fn wake_current_sidebar_pane() {
-    if let Some(pane) = current_sidebar_pane() {
-        // Parked off-screen sidebars sit in crossterm::event::poll(). Send an
-        // otherwise ignored function key after the target window/session is
-        // visible so the pane rechecks visibility immediately instead of
-        // waiting for the hidden poll timeout.
-        tmux(&["send-keys", "-t", &pane, "F20"]);
-    }
-}
+pub(crate) fn finish_window_switch() {}
 
 pub(crate) fn cmd_sidebar_control(args: &[String]) {
     match args.first().map(String::as_str) {
-        Some("toggle") => {
-            let attached = attached_session_window_ids();
-            let attached_has_sidebar = all_sidebar_panes_by_window()
-                .keys()
-                .any(|window| attached.contains(window));
-            if attached_has_sidebar {
-                close_all_tmux_sidebars();
-            } else {
-                sync_sidebars_to_attached_session_windows();
-            }
-        }
-        Some("open") => {
-            sync_sidebars_to_attached_session_windows();
-        }
-        Some("sync") => sync_sidebars_to_attached_session_windows(),
-        Some("focus") => focus_tmux_sidebar(),
-        Some("close") => close_all_tmux_sidebars(),
-        Some("prune-orphans") => prune_orphan_sidebar_windows(),
-        Some("resize") => resize_all_tmux_sidebars(),
+        Some("toggle")
+        | Some("open")
+        | Some("sync")
+        | Some("focus")
+        | Some("prune-orphans")
+        | Some("resize") => {}
+        Some("close") => {}
         Some("--terminal") | Some("terminal") => cmd_sidebar_terminal(),
         Some("profile") => instrument::cmd_profile(&args[1..]),
         Some("status-latency-profile") => daemon::cmd_status_latency_profile(&args[1..]),
@@ -1442,42 +674,26 @@ pub(crate) fn cmd_sidebar_control(args: &[String]) {
 }
 
 pub(crate) fn cmd_sidebar() {
-    cmd_sidebar_with_runtime(SidebarRuntime::TmuxNative);
+    cmd_sidebar_terminal();
 }
 
 pub(crate) fn cmd_sidebar_terminal() {
-    cmd_sidebar_with_runtime(SidebarRuntime::TerminalHosted);
+    cmd_sidebar_terminal_tui();
 }
 
-fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
-    if runtime.is_tmux_native() {
-        mark_current_sidebar_pane();
-    }
-
+fn cmd_sidebar_terminal_tui() {
     // Set WezTerm user var for toggle detection
     // "dHJ1ZQ==" is base64("true")
     print!(
         "\x1b]1337;SetUserVar=is_sidebar=dHJ1ZQ==\x07\x1b]1337;SetUserVar=mux_sidebar_runtime={}\x07",
-        runtime.user_var_value()
+        TERMINAL_RUNTIME_USER_VAR
     );
-    if matches!(runtime, SidebarRuntime::TerminalHosted) {
-        let title = std::env::var("MUX_SIDEBAR_TITLE")
-            .ok()
-            .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| TERMINAL_SIDEBAR_TITLE.to_string());
-        print!("\x1b]2;{title}\x07");
-    }
+    let title = std::env::var("MUX_SIDEBAR_TITLE")
+        .ok()
+        .filter(|title| !title.is_empty())
+        .unwrap_or_else(|| TERMINAL_SIDEBAR_TITLE.to_string());
+    print!("\x1b]2;{title}\x07");
     io::stdout().flush().ok();
-
-    // Tell tmux status bar to hide the session list while sidebar is open.
-    // Normal pane creation paths already set this in the parent process after
-    // splitting the pane. Avoid repeating a tmux set-option and detached status
-    // update before the child draws its first frame.
-    if runtime.is_tmux_native() && std::env::var("MUX_SIDEBAR_MARKED").ok().as_deref() != Some("1")
-    {
-        tmux(&["set-option", "-g", "@sidebar_open", "1"]);
-        refresh_status_bar();
-    }
 
     enter_tui();
     let backend = CrosstermBackend::new(io::stdout());
@@ -1531,53 +747,8 @@ fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
     const IDLE_POLL: Duration = Duration::from_millis(500);
     const ANIMATION_POLL: Duration = Duration::from_millis(33); // ~30 fps during animation
     const REFRESH_INTERVAL: Duration = Duration::from_millis(500);
-    const HIDDEN_POLL: Duration = Duration::from_secs(2);
-    const VISIBILITY_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
     loop {
-        if runtime.is_tmux_native() {
-            state.refresh_visibility(VISIBILITY_CHECK_INTERVAL);
-        }
-        if runtime.is_tmux_native() && !state.on_screen {
-            match state
-                .hidden_lifecycle
-                .observe(false, sidebar_started.elapsed())
-            {
-                instrument::HiddenLifecycleAction::Exit => break,
-                instrument::HiddenLifecycleAction::Run => {}
-                instrument::HiddenLifecycleAction::Park => {
-                    state
-                        .counters
-                        .record_poll(instrument::LoopState::HiddenIdle);
-                }
-            }
-            if event::poll(HIDDEN_POLL).unwrap_or(false) {
-                match event::read() {
-                    Ok(Event::FocusGained) => {
-                        state.focused = true;
-                        state.on_screen = true;
-                        state.force_refresh();
-                        dirty = true;
-                    }
-                    Ok(Event::FocusLost) => {
-                        state.focused = false;
-                        state.hover = None;
-                        state.close_overlay();
-                        state.close_chooser();
-                        state.snap_to_current();
-                    }
-                    _ => {
-                        state.refresh_visibility(Duration::ZERO);
-                        if state.on_screen {
-                            state.force_refresh();
-                            dirty = true;
-                        }
-                    }
-                }
-            }
-            last_refresh = Instant::now();
-            continue;
-        }
         state
             .hidden_lifecycle
             .observe(true, sidebar_started.elapsed());
@@ -1766,10 +937,6 @@ fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
                         // Cmd+O from WezTerm arrives as Ctrl+O (see wezterm.lua
                         // focus_sidebar) — toggle to the last session.
                         (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
-                            let target = tmux(&["display-message", "-p", "#{client_last_session}"]);
-                            if !target.is_empty() {
-                                open_tmux_sidebar_in_target(Some(&target), false);
-                            }
                             tmux(&["switch-client", "-l"]);
                             finish_session_switch();
                             focus_main_pane();
@@ -1872,22 +1039,6 @@ fn cmd_sidebar_with_runtime(runtime: SidebarRuntime) {
         print!("\x1b]111\x1b\\");
         io::stdout().flush().ok();
     }
-
-    // Restore status bar. For tmux-native sidebars, only unmark this pane. Do
-    // not close every sidebar or unset @sidebar_open from here: background
-    // sync intentionally kills stale sidebar panes, and each killed pane runs
-    // this exit path. Let explicit close_all_tmux_sidebars() own the global
-    // close state; otherwise a stale pane exit can race a newly-created pane,
-    // hide the sidebar globally, and leave future hooks with nothing to sync.
-    let tmux_native_sidebar = runtime.is_tmux_native() && running_as_tmux_sidebar();
-    if tmux_native_sidebar {
-        unmark_current_sidebar_pane();
-        refresh_status_bar();
-        return;
-    }
-    if runtime.is_tmux_native() {
-        set_sidebar_open(false);
-    }
 }
 
 pub(crate) fn cmd_sidebar_daemon() {
@@ -1900,21 +1051,11 @@ pub(crate) fn cmd_hook() {
 
 #[cfg(test)]
 mod runtime_tests {
-    use super::SidebarRuntime;
+    use super::TERMINAL_RUNTIME_USER_VAR;
 
     #[test]
-    fn terminal_runtime_is_not_tmux_native() {
-        assert!(SidebarRuntime::TmuxNative.is_tmux_native());
-        assert!(!SidebarRuntime::TerminalHosted.is_tmux_native());
-    }
-
-    #[test]
-    fn runtime_user_vars_identify_hosting_model() {
-        assert_eq!(SidebarRuntime::TmuxNative.user_var_value(), "dG11eA==");
-        assert_eq!(
-            SidebarRuntime::TerminalHosted.user_var_value(),
-            "dGVybWluYWw="
-        );
+    fn runtime_user_var_identifies_terminal_hosting_model() {
+        assert_eq!(TERMINAL_RUNTIME_USER_VAR, "dGVybWluYWw=");
     }
 
     #[test]
@@ -1924,10 +1065,6 @@ mod runtime_tests {
             r#""a \"quote\" and \\ slash""#
         );
     }
-}
-
-fn refresh_status_bar() {
-    crate::process::spawn_detached_update();
 }
 
 fn enter_tui() {
@@ -1966,10 +1103,6 @@ fn toggle_hidden(session: &str) {
 }
 
 fn focus_main_pane() {
-    if running_as_tmux_sidebar() {
-        tmux(&["select-pane", "-R"]);
-        return;
-    }
     if terminal_sidebar_host_is("ghostty") {
         focus_ghostty_main_split();
         return;
@@ -2012,13 +1145,6 @@ fn run_ghostty_applescript(script: &str) {
 /// Bounce an accidental keystroke to the neighbouring pane so typing `ls` in
 /// the sidebar by mistake still lands where the user expected.
 fn forward_char_to_main(c: char) {
-    if running_as_tmux_sidebar() {
-        tmux(&["select-pane", "-R"]);
-        let mut buf = [0u8; 4];
-        let text = c.encode_utf8(&mut buf);
-        tmux(&["send-keys", "-l", text]);
-        return;
-    }
     if terminal_sidebar_host_is("ghostty") {
         let mut buf = [0u8; 4];
         let text = applescript_string_literal(c.encode_utf8(&mut buf));

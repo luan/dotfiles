@@ -194,8 +194,6 @@ mux-perf:
     cargo run --manifest-path="$manifest" -- sidebar profile 4000 > "$profile_json"
     python3 -c 'import json, sys; p=json.load(open(sys.argv[1])); r={row["state"]: row["counters"] for row in p["sidebar"]}; assert r["visible-idle"]["redraws"] <= 1, r["visible-idle"]; assert r["visible-idle"]["tmux_spawns"] == 0, r["visible-idle"]; assert r["hidden-idle"]["redraws"] == 0, r["hidden-idle"]; assert r["hidden-idle"]["animation_frames"] == 0, r["hidden-idle"]; assert r["hidden-idle"]["tmux_spawns"] <= 1, r["hidden-idle"]; assert r["active-animation"]["animation_frames"] <= 122, r["active-animation"]; assert r["active-animation"]["tmux_spawns"] == 0, r["active-animation"]; assert p["daemon"]["meta_refresh_interval_ms"] >= 5000, p["daemon"]' "$profile_json"
     rm -f "$profile_json"
-    "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/check-sidebar-first-paint.sh"
-    "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/check-sidebar-window-switch.sh"
     echo "✓ mux sidebar perf guardrails passed"
 
 # Run allocation-aware mux sidebar benchmark report

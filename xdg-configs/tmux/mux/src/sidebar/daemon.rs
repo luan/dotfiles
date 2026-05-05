@@ -26,7 +26,6 @@ const SNAPSHOT_STALE: Duration = Duration::from_secs(5);
 const TICK: Duration = Duration::from_millis(500);
 const META_INTERVAL: Duration = Duration::from_secs(5);
 const IDLE_EXIT_AFTER: Duration = Duration::from_secs(30);
-const SIDEBAR_TOKEN: &str = super::SIDEBAR_TOKEN;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct SidebarSnapshot {
@@ -840,7 +839,7 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
         "list-panes",
         "-a",
         "-F",
-        "#{pane_id}\t#{session_name}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
+        "#{pane_id}\t#{session_name}",
     ]);
     if raw.is_empty() {
         return None;
@@ -876,19 +875,13 @@ fn query_base_snapshot() -> Option<BaseSnapshotInput> {
     }
 
     let mut pane_sessions = HashMap::new();
-    let mut sidebar_panes = 0usize;
+    let sidebar_panes = 1usize;
     for line in sections.next().unwrap_or_default().lines() {
         let mut parts = line.split('\t');
         let pane = parts.next().unwrap_or_default();
         let session = parts.next().unwrap_or_default();
-        let marker = parts.next().unwrap_or_default();
-        let token = parts.next().unwrap_or_default();
-        let command = parts.next().unwrap_or_default();
         if !pane.is_empty() && !session.is_empty() {
             pane_sessions.insert(pane.to_string(), session.to_string());
-        }
-        if marker == "1" && token == SIDEBAR_TOKEN && command == "mux" {
-            sidebar_panes += 1;
         }
     }
 
@@ -1016,7 +1009,7 @@ fn claim_daemon_pid() -> bool {
 }
 
 fn usage_width() -> u16 {
-    super::sidebar_width().parse::<u16>().unwrap_or(36)
+    45
 }
 
 fn now_ms() -> u64 {

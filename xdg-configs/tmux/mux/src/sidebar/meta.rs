@@ -418,10 +418,6 @@ impl SessionCwdCandidate {
     }
 }
 
-fn is_sidebar_pane(marker: &str, token: &str, command: &str) -> bool {
-    marker == "1" && token == super::SIDEBAR_TOKEN && command == "mux"
-}
-
 /// Returns (session, pane_id, agent_name) for every agent found across all panes.
 fn query_agents(
     all_panes: &[PaneInfo],
@@ -915,7 +911,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_active}\t#{pane_active}\t#{pane_current_path}\t#{pane_pid}\t#{pane_id}\t#{@mux_sidebar}\t#{@mux_sidebar_token}\t#{pane_current_command}",
+        "#{session_name}\t#{window_active}\t#{pane_active}\t#{pane_current_path}\t#{pane_pid}\t#{pane_id}",
         ";",
         "display-message",
         "-p",
@@ -939,7 +935,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
 
     for line in panes_section.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 9 {
+        if parts.len() < 6 {
             continue;
         }
         let session = parts[0].to_string();
@@ -948,7 +944,7 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         let cwd = parts[3];
         let pid_str = parts[4];
         let pane_id = parts[5].to_string();
-        let is_sidebar = is_sidebar_pane(parts[6], parts[7], parts[8]);
+        let is_sidebar = false;
 
         if let Ok(pid) = pid_str.parse::<u32>() {
             all_panes.push(PaneInfo {
@@ -1132,13 +1128,5 @@ mod tests {
         candidate.observe(true, true, false, "/repo/active");
 
         assert_eq!(candidate.selected().as_deref(), Some("/repo/active"));
-    }
-
-    #[test]
-    fn sidebar_pane_requires_marker_token_and_mux_command() {
-        assert!(is_sidebar_pane("1", super::super::SIDEBAR_TOKEN, "mux"));
-        assert!(!is_sidebar_pane("1", "wrong-token", "mux"));
-        assert!(!is_sidebar_pane("1", super::super::SIDEBAR_TOKEN, "zsh"));
-        assert!(!is_sidebar_pane("", super::super::SIDEBAR_TOKEN, "mux"));
     }
 }

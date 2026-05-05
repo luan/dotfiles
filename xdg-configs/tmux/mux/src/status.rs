@@ -154,30 +154,6 @@ pub(crate) fn render_windows_centered_in_main(
     format!("{}{}", " ".repeat(pad), rendered_windows)
 }
 
-pub(crate) fn render_windows_left_of_notch(
-    rendered_windows: &str,
-    client_width: usize,
-    sidebar_offset: usize,
-    notch_width: usize,
-) -> String {
-    if rendered_windows.is_empty() {
-        return String::new();
-    }
-
-    let win_width = tmux_visible_width(rendered_windows);
-    let notch_left = client_width.saturating_sub(notch_width) / 2;
-    let safe_end = notch_left.saturating_sub(2);
-
-    let pad = if safe_end <= sidebar_offset || win_width >= safe_end.saturating_sub(sidebar_offset)
-    {
-        sidebar_offset
-    } else {
-        safe_end - win_width
-    };
-
-    format!("{}{}", " ".repeat(pad), rendered_windows)
-}
-
 fn tmux_visible_width(s: &str) -> usize {
     let mut width = 0;
     let mut chars = s.chars().peekable();
