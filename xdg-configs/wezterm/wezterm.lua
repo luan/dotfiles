@@ -18,7 +18,9 @@ config.font_size = 11
 config.warn_about_missing_glyphs = false
 config.line_height = 1.45
 config.underline_position = "-0.25cell"
-config.underline_thickness = "3px"
+-- 3px triggers a WezTerm customglyph panic when rendering box-drawing-heavy
+-- TUIs like lazygit; 2px keeps the heavier underline without crashing.
+config.underline_thickness = "2px"
 config.enable_kitty_keyboard = true
 
 -- Window [info]
