@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::tmux::tmux;
@@ -11,7 +12,7 @@ use crate::tmux::tmux;
 // + ٪ (U+066A ARABIC PERCENT SIGN) pattern emitted by statusline.py.
 // The FIRST ٪ in the statusline is the context percentage.
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct AgentCtx {
     pub(super) pct: u8,
     pub(super) tokens: String,
