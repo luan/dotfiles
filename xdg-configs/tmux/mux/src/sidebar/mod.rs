@@ -3,9 +3,10 @@ use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::cursor;
 use crossterm::event::{
@@ -14,6 +15,7 @@ use crossterm::event::{
 };
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::order::compute_order;
 use crate::process::spawn_reaped;
@@ -32,7 +34,7 @@ mod render;
 mod tree;
 
 use meta::PullRequestCiState;
-use meta::{SessionMeta, query_session_meta, query_session_meta_fast};
+use meta::{SessionMeta, query_session_meta};
 use overlay::{SidebarOverlay, handle_readline_key};
 use render::draw;
 use tree::{Item, ItemKind, build_items};
@@ -47,6 +49,71 @@ pub(super) const KEY_SHIFT: &str = "\u{F0636}";
 pub(super) const KEY_TAB: &str = "\u{F0312}";
 const TERMINAL_RUNTIME_USER_VAR: &str = "dGVybWluYWw="; // base64("terminal")
 const TERMINAL_SIDEBAR_TITLE: &str = "mux-sidebar-terminal";
+const BOOT_CACHE_VERSION: u32 = 1;
+const BOOT_CACHE_MAX_AGE: Duration = Duration::from_secs(60);
+
+#[derive(Serialize, Deserialize)]
+struct SidebarBootCache {
+    version: u32,
+    written_at_ms: u128,
+    current: String,
+    sessions: Vec<String>,
+    notched: bool,
+    meta: HashMap<String, SessionMeta>,
+    usage_lines: Vec<String>,
+}
+
+fn boot_cache_path() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("mux-sidebar-boot-cache.json")
+}
+
+fn now_epoch_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn read_boot_cache() -> Option<SidebarBootCache> {
+    let cache: SidebarBootCache =
+        serde_json::from_slice(&std::fs::read(boot_cache_path()).ok()?).ok()?;
+    if cache.version != BOOT_CACHE_VERSION {
+        return None;
+    }
+    let age = now_epoch_ms().saturating_sub(cache.written_at_ms);
+    (age <= BOOT_CACHE_MAX_AGE.as_millis()).then_some(cache)
+}
+
+fn write_boot_cache(
+    current: &str,
+    sessions: &[String],
+    notched: bool,
+    meta: &HashMap<String, SessionMeta>,
+    usage_lines: &[String],
+) {
+    let cache = SidebarBootCache {
+        version: BOOT_CACHE_VERSION,
+        written_at_ms: now_epoch_ms(),
+        current: current.to_string(),
+        sessions: sessions.to_vec(),
+        notched,
+        meta: meta.clone(),
+        usage_lines: usage_lines.to_vec(),
+    };
+    let Ok(json) = serde_json::to_vec(&cache) else {
+        return;
+    };
+    let path = boot_cache_path();
+    std::thread::spawn(move || {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, json).is_ok() {
+            let _ = std::fs::rename(tmp, path);
+        }
+    });
+}
 
 pub(crate) fn attention_target(sessions: &[String]) -> Option<String> {
     let (meta, _) = query_session_meta(sessions);
@@ -111,6 +178,7 @@ struct SidebarState {
     /// Cached usage section lines rendered by `ct tui usage-bars`, refreshed on
     /// the 3s meta cycle, not every 500ms draw.
     pub(super) usage_lines_cache: Vec<String>,
+    last_boot_cache_write: Instant,
     /// y-origin and height of the usage bars rect from the last draw — used
     /// to map mouse clicks to bar labels for manual pulse triggers.
     pub(super) last_bars_y: u16,
@@ -162,6 +230,7 @@ impl SidebarState {
             filter: String::new(),
             filter_cursor: 0,
             usage_lines_cache: Vec::new(),
+            last_boot_cache_write: Instant::now() - Duration::from_secs(60),
             last_bars_y: 0,
             last_bars_h: 0,
             tmux_call_count: 0,
@@ -184,6 +253,33 @@ impl SidebarState {
         self.last_meta_refresh = Instant::now() - Duration::from_secs(60);
     }
 
+    fn hydrate_from_boot_cache(&mut self, mut cache: SidebarBootCache) {
+        let cache_age = Duration::from_millis(
+            now_epoch_ms()
+                .saturating_sub(cache.written_at_ms)
+                .min(u64::MAX as u128) as u64,
+        );
+        for meta in cache.meta.values_mut() {
+            for agent in &mut meta.agents {
+                if let Some(age) = agent.age {
+                    agent.age = Some(age.saturating_add(cache_age));
+                }
+            }
+            if let Some(pr) = &mut meta.pr {
+                for check in &mut pr.checks {
+                    check.elapsed = check.elapsed.saturating_add(cache_age);
+                }
+            }
+        }
+        self.current = cache.current.clone();
+        self.notched = cache.notched;
+        self.meta = cache.meta;
+        self.usage_lines_cache = cache.usage_lines;
+        self.items = build_items(&cache.sessions, &cache.current, &self.meta);
+        self.rebuild_visible();
+        self.snap_to_current();
+    }
+
     fn start_meta_refresh(&mut self, sessions: Vec<String>) {
         if self.meta_refresh_inflight {
             return;
@@ -194,7 +290,7 @@ impl SidebarState {
         self.last_meta_refresh = Instant::now();
         std::thread::spawn(move || {
             let t0 = Instant::now();
-            let (meta, tmux_call_count) = query_session_meta_fast(&sessions);
+            let (meta, tmux_call_count) = query_session_meta(&sessions);
             let usage_lines = crate::usage_bars::collect(45).lines;
             let _ = tx.send(MetaRefreshResult {
                 meta,
@@ -280,6 +376,20 @@ impl SidebarState {
         self.meta = result.meta;
         self.usage_lines_cache = result.usage_lines;
         self.last_meta_refresh = now;
+        let sessions: Vec<String> = self
+            .items
+            .iter()
+            .filter(|item| item.selectable)
+            .map(|item| item.id.clone())
+            .collect();
+        write_boot_cache(
+            &self.current,
+            &sessions,
+            self.notched,
+            &self.meta,
+            &self.usage_lines_cache,
+        );
+        self.last_boot_cache_write = now;
         debug!(
             duration_ms = result.duration.as_millis() as u64,
             tmux_call_count = result.tmux_call_count,
@@ -440,6 +550,19 @@ impl SidebarState {
         self.items = build_items(&sessions, &cur, &self.meta);
         self.current = cur;
         self.rebuild_visible();
+        if current_changed
+            || meta_changed
+            || self.last_boot_cache_write.elapsed() >= Duration::from_secs(5)
+        {
+            write_boot_cache(
+                &self.current,
+                &sessions,
+                self.notched,
+                &self.meta,
+                &self.usage_lines_cache,
+            );
+            self.last_boot_cache_write = Instant::now();
+        }
 
         let session_count = self.items.len() as u64;
 
@@ -663,7 +786,7 @@ fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
 
 /// Exposed for `mux bench` — runs the full meta query pipeline and discards the result.
 pub(crate) fn bench_query_session_meta(sessions: &[String]) {
-    let _ = query_session_meta_fast(sessions);
+    let _ = query_session_meta(sessions);
 }
 
 pub(crate) fn prepare_session_switch(_target: &str) {}
@@ -716,8 +839,13 @@ fn cmd_sidebar_terminal_tui() {
     let mut terminal = Terminal::new(backend).expect("create terminal");
 
     let mut state = SidebarState::new();
+    if let Some(cache) = read_boot_cache() {
+        state.hydrate_from_boot_cache(cache);
+    }
 
-    // Paint sidebar chrome before any tmux refresh work. Window/session
+    // Paint sidebar before any tmux refresh work. A fresh boot cache gives us
+    // the previous fully-hydrated sidebar frame immediately; the exact tmux
+    // state and rich metadata still refresh asynchronously right after this.
     // switches can make a freshly-spawned pane visible while metadata is still
     // warming; an immediate frame avoids the perception that the sidebar UI is
     // missing until the first full refresh completes.
@@ -727,16 +855,22 @@ fn cmd_sidebar_terminal_tui() {
         })
         .ok();
 
-    // On notched displays, paint this pane's terminal background black via
-    // OSC 11 so the wezterm split reads as solid black (matching the status
-    // filler) without affecting the main pane's bg.
-    let notched_pane = tmux(&["show-option", "-gv", "@notched"]) == "1";
-    if notched_pane {
+    // On notched displays, paint this pane's terminal background black via OSC
+    // 11. Use the boot cache first so startup doesn't block on an extra tmux
+    // spawn; the immediate refresh below corrects the value and reapplies it.
+    let mut notched_bg_applied = false;
+    if state.notched {
         print!("\x1b]11;rgb:0000/0000/0000\x1b\\");
         io::stdout().flush().ok();
+        notched_bg_applied = true;
     }
 
     state.refresh();
+    if state.notched {
+        print!("\x1b]11;rgb:0000/0000/0000\x1b\\");
+        io::stdout().flush().ok();
+        notched_bg_applied = true;
+    }
     let sidebar_started = Instant::now();
 
     // Cache layout for mouse mapping between draws.
@@ -1051,7 +1185,7 @@ fn cmd_sidebar_terminal_tui() {
     leave_tui();
 
     // Reset pane background (OSC 111) to whatever the user's theme defines.
-    if notched_pane {
+    if notched_bg_applied {
         print!("\x1b]111\x1b\\");
         io::stdout().flush().ok();
     }

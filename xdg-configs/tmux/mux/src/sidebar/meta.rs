@@ -4,6 +4,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ratatui::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::palette::{BLUE, MAUVE, PEACH, SUBTEXT0};
 use crate::tmux::tmux;
@@ -14,7 +15,7 @@ use super::pi::query_pi_agents;
 
 // ── Process info ─────────────────────────────────────────────
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct ProcessTreeInfo {
     pub(super) name: String,
     pub(super) cpu_pct: f32,
@@ -477,7 +478,7 @@ fn query_agents(
 
 // ── Rich metadata ────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct AgentInstance {
     pub(super) name: String,
     pub(super) pane_id: String,
@@ -487,7 +488,7 @@ pub(super) struct AgentInstance {
     pub(super) asking: bool,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub(super) struct SessionMeta {
     pub(super) branch: String,
     pub(super) pr: Option<PullRequestMeta>,
@@ -501,7 +502,7 @@ pub(super) struct SessionMeta {
     pub(super) progress: Option<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct PullRequestMeta {
     pub(super) number: u32,
     pub(super) url: String,
@@ -511,7 +512,7 @@ pub(super) struct PullRequestMeta {
     pub(super) unresolved_comments: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum PullRequestReviewState {
     Draft,
     InReview,
@@ -519,7 +520,7 @@ pub(super) enum PullRequestReviewState {
     Approved,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum PullRequestCiState {
     Passing,
     Failing,
@@ -527,20 +528,20 @@ pub(super) enum PullRequestCiState {
     RunningFailed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct PullRequestCheck {
     pub(super) name: String,
     pub(super) status: PullRequestCheckStatus,
     pub(super) elapsed: Duration,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum PullRequestCheckStatus {
     Running,
     Failing,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize)]
 pub(super) struct DiffStat {
     pub(super) added: u32,
     pub(super) removed: u32,
@@ -901,17 +902,6 @@ fn min_duration(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
 
 /// Returns (meta_map, tmux_call_count).
 pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, SessionMeta>, u32) {
-    query_session_meta_inner(sessions, true)
-}
-
-pub(super) fn query_session_meta_fast(sessions: &[String]) -> (HashMap<String, SessionMeta>, u32) {
-    query_session_meta_inner(sessions, false)
-}
-
-fn query_session_meta_inner(
-    sessions: &[String],
-    include_pr: bool,
-) -> (HashMap<String, SessionMeta>, u32) {
     let mut tmux_calls = 0u32;
 
     // Batch list-panes + list-sessions into one tmux invocation.
@@ -1039,9 +1029,7 @@ fn query_session_meta_inner(
             std::thread::spawn(move || {
                 let branch = git_branch(&cwd);
                 let diff = git_diff_stat(&cwd);
-                let pr = include_pr
-                    .then(|| cached_gh_pr_meta(&cwd, &branch))
-                    .flatten();
+                let pr = cached_gh_pr_meta(&cwd, &branch);
                 (cwd, branch, diff, pr)
             })
         })
