@@ -139,11 +139,6 @@ wezterm.on("window-config-reloaded", function(window)
 	update_notched(window)
 end)
 
-local function toggle_sidebar(window, pane)
-	window:perform_action(act.SendString(csi("74~")), pane)
-end
-
-
 -- Ctrl+Tab toggles the previous tmux session even when focus is in a
 -- tmux-native sidebar pane by spawning tmux directly.
 local function toggle_last_session()
@@ -156,8 +151,50 @@ local function cmd_p_handler(window, pane)
 	window:perform_action(act.SendString(csi("63~")), pane)
 end
 
-local function focus_sidebar(window, pane)
-	window:perform_action(act.SendString(csi("75~")), pane)
+local function sidebar_pane_in_tab(pane)
+	local tab = pane:tab()
+	if not tab then
+		return nil
+	end
+	for _, item in ipairs(tab:panes_with_info()) do
+		local vars = item.pane:get_user_vars()
+		if vars.is_sidebar == "true" and vars.mux_sidebar_runtime == "terminal" then
+			return item.pane
+		end
+	end
+	return nil
+end
+
+local function focus_or_create_terminal_sidebar(window, pane)
+	local existing = sidebar_pane_in_tab(pane)
+	if existing then
+		existing:activate()
+		return
+	end
+	local sidebar = pane:split({
+		direction = "Left",
+		size = 45,
+		args = { "mux", "sidebar-terminal" },
+		set_environment_variables = {
+			MUX_SIDEBAR_HOST = "wezterm",
+			MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
+		},
+	})
+	if sidebar then
+		sidebar:activate()
+	else
+		window:perform_action(act.SplitPane({
+			direction = "Left",
+			size = { Cells = 45 },
+			command = {
+				args = { "mux", "sidebar-terminal" },
+				set_environment_variables = {
+					MUX_SIDEBAR_HOST = "wezterm",
+					MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
+				},
+			},
+		}), pane)
+	end
 end
 
 config.keys = {
@@ -191,8 +228,8 @@ config.keys = {
 	{ key = "Enter", mods = "SHIFT", action = act.SendString("\n") },
 
 	-- Session sidebar
-	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(toggle_sidebar) },
-	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_sidebar) },
+	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(focus_or_create_terminal_sidebar) },
+	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_or_create_terminal_sidebar) },
 
 	-- Cmd+P: sidebar-aware session chooser (mux dispatches to an open sidebar)
 	{ key = "p", mods = "SUPER", action = wezterm.action_callback(cmd_p_handler) },
