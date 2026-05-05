@@ -7,6 +7,8 @@ default:
 
 # Link stow configs + create convenience symlinks in dotfiles dir
 link:
+    mkdir -p "{{ env("HOME") }}/bin"
+    mkdir -p "{{ config_dir }}"
     stow -R xdg-configs -t "{{ config_dir }}"
     stow -R bin -t "{{ env("HOME") }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
@@ -150,10 +152,6 @@ cargo:
         exit 1
     fi
 
-    crates=(
-        "ck-search"
-    )
-
     for crate in "${crates[@]}"; do
         echo "→ $crate"
         cargo binstall "$crate" --no-confirm --quiet 2>/dev/null || echo "✗ $crate install failed"
@@ -229,4 +227,4 @@ mux-status-latency:
     PATH="$wrapper_dir:$PATH" HOME="$tmp_home" "$bin" sidebar status-latency-profile 8 750
 
 # Full setup: brew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
-setup: brew cargo repos link gitconfig claude-plugins dev-routing mux sheldon
+setup: brew cargo repos link gitconfig claude-plugins dev-routing sheldon mux

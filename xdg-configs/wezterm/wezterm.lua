@@ -14,6 +14,9 @@ config.font = wezterm.font_with_fallback({
 	"Font Awesome 7 Brands",
 	"Maple Mono NF",
 })
+-- Maple ships programming ligatures (including `ff`/`ffi`). In a terminal cell
+-- grid those reshapes make the edit line appear to jump while typing plain text.
+config.harfbuzz_features = { "calt=0", "clig=0", "liga=0" }
 config.font_size = 11
 config.warn_about_missing_glyphs = false
 config.line_height = 1.45
