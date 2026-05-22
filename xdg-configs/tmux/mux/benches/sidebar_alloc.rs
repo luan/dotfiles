@@ -79,7 +79,6 @@ fn main() {
 }
 
 fn sidebar_allocation_benchmarks(c: &mut Criterion) {
-    let small = SidebarBenchFixture::synthetic(12, 2);
     let medium = SidebarBenchFixture::synthetic(30, 2);
     let large = SidebarBenchFixture::synthetic(60, 3);
 
@@ -221,22 +220,6 @@ where
         black_box(result);
     }
     allocation_snapshot()
-}
-
-fn measure_retained_allocations<F, R>(mut work: F) -> AllocationStats
-where
-    F: FnMut() -> R,
-{
-    {
-        let warmup = work();
-        black_box(warmup);
-    }
-    reset_allocations();
-    let result = work();
-    black_box(&result);
-    let stats = allocation_snapshot();
-    drop(result);
-    stats
 }
 
 fn reset_allocations() {

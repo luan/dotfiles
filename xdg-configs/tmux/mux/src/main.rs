@@ -68,6 +68,7 @@ fn cmd_order(args: &[String]) {
 }
 
 fn cmd_update_with_args(args: &[String]) {
+    sidebar::request_sync();
     probe_and_sync_notched();
     let st = query_state();
     let initiating = args
