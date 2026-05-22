@@ -34,6 +34,10 @@ harness = false
 name = "sidebar_alloc"
 harness = false
 
+[[bench]]
+name = "mux_features"
+harness = false
+
 [profile.release]
 opt-level = "z"
 lto = true

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
+use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -67,6 +68,13 @@ fn boot_cache_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
         .join("mux-sidebar-boot-cache.json")
+}
+
+fn sync_marker_path() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("mux-sidebar-sync")
 }
 
 fn now_epoch_ms() -> u128 {
@@ -166,8 +174,13 @@ struct SidebarState {
     /// Survives gerund_cache pruning so the age timer keeps ticking.
     pub(super) last_active: HashMap<String, Instant>,
     pub(super) last_meta_refresh: Instant,
+    last_sync_marker_ms: u128,
+    pending_meta_sync: bool,
     meta_refresh_rx: Option<Receiver<MetaRefreshResult>>,
     meta_refresh_inflight: bool,
+    usage_refresh_rx: Option<Receiver<UsageRefreshResult>>,
+    usage_refresh_inflight: bool,
+    last_usage_refresh: Instant,
     pub(super) focused: bool,
     pub(super) notched: bool,
     pub(super) mode: SidebarMode,
@@ -195,12 +208,18 @@ struct SidebarState {
 }
 
 pub(super) const ACTIVITY_GRACE: Duration = Duration::from_secs(15);
-const META_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
+const AGENT_ANIMATION_POLL: Duration = Duration::from_millis(33);
+const META_INFLIGHT_POLL: Duration = Duration::from_millis(100);
 
 struct MetaRefreshResult {
     meta: HashMap<String, SessionMeta>,
     usage_lines: Vec<String>,
     tmux_call_count: u32,
+    duration: Duration,
+}
+
+struct UsageRefreshResult {
+    usage_lines: Vec<String>,
     duration: Duration,
 }
 
@@ -220,8 +239,13 @@ impl SidebarState {
             // off the UI thread so startup still paints from the cheap session
             // snapshot immediately.
             last_meta_refresh: Instant::now() - Duration::from_secs(60),
+            last_sync_marker_ms: 0,
+            pending_meta_sync: false,
             meta_refresh_rx: None,
             meta_refresh_inflight: false,
+            usage_refresh_rx: None,
+            usage_refresh_inflight: false,
+            last_usage_refresh: Instant::now() - Duration::from_secs(60),
             focused: true,
             notched: false,
             mode: SidebarMode::Browse,
@@ -295,13 +319,50 @@ impl SidebarState {
         });
     }
 
+    fn start_usage_refresh(&mut self) {
+        if self.usage_refresh_inflight {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        self.usage_refresh_rx = Some(rx);
+        self.usage_refresh_inflight = true;
+        self.last_usage_refresh = Instant::now();
+        std::thread::spawn(move || {
+            let t0 = Instant::now();
+            let usage_lines = crate::usage_bars::collect(45).lines;
+            let _ = tx.send(UsageRefreshResult {
+                usage_lines,
+                duration: t0.elapsed(),
+            });
+        });
+    }
+
+    fn maybe_start_usage_refresh(&mut self, interval: Duration) {
+        if self.usage_refresh_inflight {
+            return;
+        }
+        if self.last_usage_refresh.elapsed() >= interval {
+            self.start_usage_refresh();
+        }
+    }
+
     fn maybe_start_meta_refresh(&mut self, sessions: &[String]) {
         if self.meta_refresh_inflight {
             return;
         }
-        if self.meta.is_empty() || self.last_meta_refresh.elapsed() >= META_REFRESH_INTERVAL {
+        if self.meta.is_empty() || self.pending_meta_sync || self.consume_sync_marker() {
+            self.pending_meta_sync = false;
             self.start_meta_refresh(sessions.to_vec());
         }
+    }
+
+    fn consume_sync_marker(&mut self) -> bool {
+        let marker_ms = read_sync_marker().unwrap_or_default();
+        if marker_ms <= self.last_sync_marker_ms {
+            return false;
+        }
+        self.last_sync_marker_ms = marker_ms;
+        true
     }
 
     fn drain_meta_refresh(&mut self) -> bool {
@@ -320,6 +381,26 @@ impl SidebarState {
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.meta_refresh_inflight = false;
+                false
+            }
+        }
+    }
+
+    fn drain_usage_refresh(&mut self) -> bool {
+        let Some(rx) = self.usage_refresh_rx.take() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.usage_refresh_inflight = false;
+                self.apply_usage_refresh_result(result)
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                self.usage_refresh_rx = Some(rx);
+                false
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.usage_refresh_inflight = false;
                 false
             }
         }
@@ -370,6 +451,7 @@ impl SidebarState {
         self.meta = result.meta;
         self.usage_lines_cache = result.usage_lines;
         self.last_meta_refresh = now;
+        self.last_usage_refresh = now;
         let sessions: Vec<String> = self
             .items
             .iter()
@@ -389,6 +471,34 @@ impl SidebarState {
             tmux_call_count = result.tmux_call_count,
             "sidebar async metadata refresh"
         );
+    }
+
+    fn apply_usage_refresh_result(&mut self, result: UsageRefreshResult) -> bool {
+        self.last_usage_refresh = Instant::now();
+        if result.usage_lines == self.usage_lines_cache {
+            return false;
+        }
+
+        self.usage_lines_cache = result.usage_lines;
+        let sessions: Vec<String> = self
+            .items
+            .iter()
+            .filter(|item| item.selectable)
+            .map(|item| item.id.clone())
+            .collect();
+        write_boot_cache(
+            &self.current,
+            &sessions,
+            self.notched,
+            &self.meta,
+            &self.usage_lines_cache,
+        );
+        self.last_boot_cache_write = Instant::now();
+        debug!(
+            duration_ms = result.duration.as_millis() as u64,
+            "sidebar async usage refresh"
+        );
+        true
     }
 
     fn open_chooser(&mut self) {
@@ -678,9 +788,9 @@ impl SidebarState {
         }
     }
 
-    fn visible_agent_animation_active(&self, list_h: u16) -> bool {
+    fn visible_animation_cadence(&self, list_h: u16) -> Option<Duration> {
         if !self.on_screen {
-            return false;
+            return None;
         }
         let visible_rows = (list_h as usize).min(self.visible.len().saturating_sub(self.offset));
         self.visible
@@ -694,6 +804,11 @@ impl SidebarState {
                     ItemKind::Agent { gerund, asking, .. } if gerund.is_some() || *asking
                 )
             })
+            .then_some(AGENT_ANIMATION_POLL)
+    }
+
+    fn visible_agent_animation_active(&self, list_h: u16) -> bool {
+        self.visible_animation_cadence(list_h) == Some(AGENT_ANIMATION_POLL)
     }
 
     fn view_fingerprint(&self) -> u64 {
@@ -754,6 +869,22 @@ fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
     }
 }
 
+fn read_sync_marker() -> Option<u128> {
+    fs::read_to_string(sync_marker_path())
+        .ok()?
+        .trim()
+        .parse::<u128>()
+        .ok()
+}
+
+fn write_sync_marker() {
+    let _ = fs::write(sync_marker_path(), now_epoch_ms().to_string());
+}
+
+pub(crate) fn request_sync() {
+    write_sync_marker();
+}
+
 // ── Main loop ────────────────────────────────────────────────
 
 /// Exposed for `mux bench` — runs the full meta query pipeline and discards the result.
@@ -771,12 +902,8 @@ pub(crate) fn finish_window_switch() {}
 
 pub(crate) fn cmd_sidebar_control(args: &[String]) {
     match args.first().map(String::as_str) {
-        Some("toggle")
-        | Some("open")
-        | Some("sync")
-        | Some("focus")
-        | Some("prune-orphans")
-        | Some("resize") => {}
+        Some("toggle") | Some("open") | Some("focus") | Some("prune-orphans") | Some("resize") => {}
+        Some("sync") => write_sync_marker(),
         Some("close") => {}
         Some("--terminal") | Some("terminal") => cmd_sidebar_terminal(),
         Some("profile") => instrument::cmd_profile(&args[1..]),
@@ -865,8 +992,8 @@ fn cmd_sidebar_terminal_tui() {
         dirty = false;
     }
     const IDLE_POLL: Duration = Duration::from_millis(500);
-    const ANIMATION_POLL: Duration = Duration::from_millis(33); // ~30 fps during animation
-    const REFRESH_INTERVAL: Duration = Duration::from_millis(500);
+    const SAFETY_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+    const USAGE_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
     loop {
         state
@@ -882,16 +1009,15 @@ fn cmd_sidebar_terminal_tui() {
         }
 
         // High-frequency redraw while any gerund percolation is mid-flight.
-        let agent_animation_active = state.visible_agent_animation_active(last_list_area.height);
+        let animation_cadence = state.visible_animation_cadence(last_list_area.height);
+        let agent_animation_active = animation_cadence == Some(AGENT_ANIMATION_POLL);
         if dirty {
             state.counters.record_redraw(agent_animation_active);
             dirty = false;
         }
-        let poll_timeout = if agent_animation_active || state.meta_refresh_inflight {
-            ANIMATION_POLL
-        } else {
-            IDLE_POLL
-        };
+        let poll_timeout = animation_cadence
+            .or_else(|| state.meta_refresh_inflight.then_some(META_INFLIGHT_POLL))
+            .unwrap_or(IDLE_POLL);
         state.counters.record_poll(if agent_animation_active {
             instrument::LoopState::ActiveAnimation
         } else {
@@ -1129,10 +1255,18 @@ fn cmd_sidebar_terminal_tui() {
         }
 
         dirty |= state.drain_meta_refresh();
+        dirty |= state.drain_usage_refresh();
+        state.maybe_start_usage_refresh(USAGE_REFRESH_INTERVAL);
 
-        // Throttle refresh to IDLE cadence — pulse-driven high-fps redraws
-        // shouldn't multiply tmux process spawns.
-        if last_refresh.elapsed() >= REFRESH_INTERVAL {
+        let sync_changed = state.consume_sync_marker();
+        if sync_changed {
+            state.pending_meta_sync = true;
+        }
+
+        // Hook-driven refresh keeps session/window/current-client state fresh
+        // without spawning tmux twice a second. The slow safety refresh covers
+        // missed hooks and out-of-band state edits while preserving features.
+        if sync_changed || last_refresh.elapsed() >= SAFETY_REFRESH_INTERVAL {
             let before = state.view_fingerprint();
             state.refresh();
             dirty |= state.view_fingerprint() != before;

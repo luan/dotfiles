@@ -4,6 +4,7 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+pub mod bench_support;
 pub mod chooser;
 pub mod color;
 pub mod filter;
