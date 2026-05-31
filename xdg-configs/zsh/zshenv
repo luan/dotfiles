@@ -18,7 +18,7 @@ export VCPKG_ROOT="$HOME/vcpkg"
 export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
 
 typeset -U path
-path=("/opt/homebrew/bin" "/opt/homebrew/sbin" "$HOME/bin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)
+path=("$HOME/.local/share/mise/shims" "/opt/zerobrew/bin" "/opt/homebrew/bin" "/opt/homebrew/sbin" "$HOME/bin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)
 
 # Slack MCP OAuth client registers this localhost redirect port.
 export MCP_OAUTH_CALLBACK_PORT=3118
