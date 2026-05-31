@@ -1,2 +1,4 @@
 /.ck/
 .DS_Store
+.pi/openai-codex-images/
+.pi/subagent-schedules/

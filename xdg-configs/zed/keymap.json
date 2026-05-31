@@ -3,14 +3,8 @@
     "context": "Editor && edit_prediction",
     "bindings": {
       "alt-;": "editor::AcceptEditPrediction",
-      "tab": null
-    }
-  },
-  {
-    "context": "Workspace",
-    "bindings": {
-      "alt-x": ["task::Spawn", { "task_name": "open_in_xcode" }]
-    }
+      "tab": null,
+    },
   },
   // emacs bindings
   {
@@ -25,8 +19,8 @@
       "alt-t": "task::Spawn",
       "alt-shift-t": "task::Rerun",
       "alt-v": ["editor::MovePageUp", { "center_cursor": true }],
-      "alt-z": "editor::ToggleSoftWrap"
-    }
+      "alt-z": "editor::ToggleSoftWrap",
+    },
   },
   {
     "bindings": {
@@ -35,13 +29,7 @@
       "ctrl-c": "editor::ToggleComments",
       "cmd-e": "project_panel::ToggleFocus",
       "cmd-shift-c": "workspace::CopyRelativePath",
-      "cmd-shift-e": [
-        "buffer_search::Deploy",
-        {
-          "focus": false
-        }
-      ]
-    }
+    },
   },
   {
     "bindings": {
@@ -78,11 +66,11 @@
       "space b p": "pane::ActivatePreviousItem",
       "space g g": [
         "task::Spawn",
-        { "task_name": "lazygit", "reveal_target": "center" }
+        { "task_name": "lazygit", "reveal_target": "center" },
       ],
       "space g shift-g": [
         "task::Spawn",
-        { "task_name": "lazygit", "reveal_target": "center" }
+        { "task_name": "lazygit", "reveal_target": "center" },
       ],
       "space g l": "editor::ToggleGitBlameInline",
       "space g d": "editor::GoToHunk",
@@ -111,33 +99,33 @@
       "ctrl-l": "workspace::ActivatePaneRight",
       "ctrl-g": [
         "task::Spawn",
-        { "task_name": "lazygit", "reveal_target": "center" }
-      ]
+        { "task_name": "lazygit", "reveal_target": "center" },
+      ],
     },
-    "context": "Editor && (vim_mode == normal || vim_mode == helix_normal || vim_mode == visual) && !VimWaiting && !menu"
+    "context": "Editor && (vim_mode == normal || vim_mode == helix_normal || vim_mode == visual) && !VimWaiting && !menu",
   },
   {
     "bindings": {
-      "alt-;": "editor::ShowEditPrediction"
+      "alt-;": "editor::ShowEditPrediction",
     },
-    "context": "Editor && (vim_mode == insert) && !VimWaiting && !menu && !edit_prediction"
+    "context": "Editor && (vim_mode == insert) && !VimWaiting && !menu && !edit_prediction",
   },
   {
     "bindings": {},
-    "context": "Editor && vim_mode == visual && !VimWaiting && !menu"
+    "context": "Editor && vim_mode == visual && !VimWaiting && !menu",
   },
   {
     "bindings": {
       ">": "editor::Indent",
-      "<": "editor::Outdent"
+      "<": "editor::Outdent",
     },
-    "context": "Editor && vim_mode == visual && !VimWaiting && !menu"
+    "context": "Editor && vim_mode == visual && !VimWaiting && !menu",
   },
   {
     "context": "ProjectPanel",
     "bindings": {
-      "enter": "project_panel::Open"
-    }
+      "enter": "project_panel::Open",
+    },
   },
   {
     "context": "ProjectPanel && not_editing",
@@ -157,8 +145,8 @@
       "d": "project_panel::Delete",
       "?": "project_panel::NewSearchInDirectory",
       "j": "menu::SelectNext",
-      "k": "menu::SelectPrevious"
-    }
+      "k": "menu::SelectPrevious",
+    },
   },
   {
     "context": "Workspace",
@@ -170,8 +158,32 @@
       "ctrl-l": "workspace::ActivatePaneRight",
       "ctrl-g": [
         "task::Spawn",
-        { "task_name": "lazygit", "reveal_target": "center" }
-      ]
+        { "task_name": "lazygit", "reveal_target": "center" },
+      ],
+    },
+  },
+  {
+    "context": "Editor && mode == full",
+    "bindings": {
+      "cmd-k": "assistant::InlineAssist"
+    }
+  },
+  {
+    "context": "Editor && mode == full",
+    "unbind": {
+      "cmd-k": "assistant::InlineAssist"
+    }
+  },
+  {
+    "context": "Terminal",
+    "unbind": {
+      "cmd-k": "assistant::InlineAssist"
+    }
+  },
+  {
+    "context": "KeymapEditor",
+    "unbind": {
+      "cmd-k": "keymap_editor::OpenCreateKeybindingModal"
     }
   }
 ]

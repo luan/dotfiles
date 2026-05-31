@@ -14,6 +14,7 @@ typeset -g _zcompdump="$HOME/.cache/zsh/.zcompdump"
 [[ -d ${_zcompdump:h} ]] || mkdir -p "${_zcompdump:h}"
 
 # Completion functions need to be on fpath before compinit runs.
+typeset -gaU fpath
 fpath=("$ZSH_CONFIG_HOME/functions" $fpath)
 if [[ -d $HOME/.rustup/toolchains ]]; then
   for site_functions in "$HOME/.rustup/toolchains"/*/share/zsh/site-functions; do
@@ -21,15 +22,16 @@ if [[ -d $HOME/.rustup/toolchains ]]; then
   done
 fi
 
+typeset -a _zsh_existing_fpath
+_zsh_existing_fpath=()
+for site_functions in $fpath; do
+  [[ -d $site_functions ]] && _zsh_existing_fpath+=("$site_functions")
+done
+fpath=("${_zsh_existing_fpath[@]}")
+unset _zsh_existing_fpath site_functions
+
 autoload -Uz compinit && compinit -C -d "$_zcompdump"
 zstyle ':completion:*' menu select
-
-# rustup installs cargo's completion in a toolchain-specific site-functions
-# dir, so wire it up explicitly instead of relying on the cache to discover it.
-if [[ -d $HOME/.rustup/toolchains ]]; then
-  autoload -Uz _cargo
-  compdef _cargo cargo
-fi
 
 # rustup ships its zsh completion via `rustup completions zsh`; cache the
 # generated file instead of spawning rustup on every shell startup.
@@ -56,6 +58,90 @@ for f in "$ZSH_CONFIG_HOME"/conf.d/*.zsh; do
   source "$f"
 done
 unset f
+
+# Carapace registers itself for cargo, but its cargo completer can surface cargo
+# runtime errors while completing target flags. Wrap rustup's native completer so
+# `cargo run --bin <tab>` also completes local binary target names.
+if [[ -d $HOME/.rustup/toolchains ]]; then
+  autoload -Uz +X _cargo
+  functions[_cargo_rustup]=$functions[_cargo]
+
+  _cargo_dotfiles_arg_value() {
+    local name=$1 i
+    for (( i = 3; i < CURRENT; i++ )); do
+      if [[ ${words[i]} == "$name" ]]; then
+        print -r -- "${words[i + 1]}"
+        return 0
+      fi
+      if [[ ${words[i]} == ${name}=* ]]; then
+        print -r -- "${words[i]#${name}=}"
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  _cargo_dotfiles_package_arg() {
+    local i
+    for (( i = 3; i < CURRENT; i++ )); do
+      case ${words[i]} in
+        -p|--package)
+          print -r -- "${words[i + 1]}"
+          return 0
+          ;;
+        --package=*)
+          print -r -- "${words[i]#--package=}"
+          return 0
+          ;;
+        -p?*)
+          print -r -- "${words[i]#-p}"
+          return 0
+          ;;
+      esac
+    done
+    return 1
+  }
+
+  _cargo_dotfiles_bin_targets() {
+    (( $+commands[jq] )) || return 1
+
+    local package manifest_path
+    local -a manifest_args targets
+    package=$(_cargo_dotfiles_package_arg)
+    manifest_path=$(_cargo_dotfiles_arg_value --manifest-path)
+    [[ -n $manifest_path ]] && manifest_args=(--manifest-path "$manifest_path")
+
+    targets=("${(@f)$(cargo metadata --no-deps --format-version 1 "${manifest_args[@]}" 2>/dev/null \
+      | jq -r --arg package "$package" '
+          .packages[]
+          | select($package == "" or .name == $package)
+          | .targets[]
+          | select(.kind | index("bin"))
+          | .name
+        ')}")
+
+    targets=("${(@ou)targets}")
+    (( ${#targets} )) || return 1
+    _describe -t cargo-bin-targets 'binary target' targets
+  }
+
+  _cargo_dotfiles_completing_bin_target() {
+    [[ ${words[2]} == (bench|build|b|check|c|doc|d|run|r|rustc|test|t) ]] || return 1
+    (( CURRENT > 3 )) || return 1
+    [[ ${words[$(( CURRENT - 1 ))]} == --bin || ${words[CURRENT]} == --bin=* ]]
+  }
+
+  _cargo_dotfiles() {
+    if _cargo_dotfiles_completing_bin_target; then
+      [[ ${words[CURRENT]} == --bin=* ]] && compset -P '--bin='
+      _cargo_dotfiles_bin_targets && return
+    fi
+
+    _cargo_rustup "$@"
+  }
+
+  compdef _cargo_dotfiles cargo
+fi
 
 command -v sheldon >/dev/null && eval "$(sheldon source)"
 

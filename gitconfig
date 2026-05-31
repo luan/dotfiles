@@ -19,6 +19,9 @@
   old = red bold
   new = green bold
 
+[difftool]
+  prompt = false
+
 [alias]
   ci = commit
   commit = commit

@@ -1,6 +1,6 @@
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
-    set --export PATH /opt/homebrew/bin /usr/local/bin $HOME/bin $HOME/.local/bin $PATH
+    set --export PATH $HOME/.local/share/mise/shims /opt/zerobrew/bin /opt/homebrew/bin /usr/local/bin $HOME/bin $HOME/.local/bin $PATH
     return
 end
 
@@ -58,3 +58,7 @@ end
 
 # opencode
 fish_add_path $HOME/.opencode/bin
+
+# Keep mise shims ahead of language/package-manager bins added above.
+fish_add_path --path --move $HOME/.local/share/mise/shims
+fish_add_path --path --move /opt/zerobrew/bin
