@@ -4,6 +4,7 @@ alias ls='eza --icons'
 alias ll='eza --icons -l'
 alias la='eza --icons -la'
 alias lt='eza --icons --tree'
+alias gs='git-spice'
 
 lg() {
   local -x LAZYGIT_NEW_DIR_FILE=~/.lazygit/newdir
