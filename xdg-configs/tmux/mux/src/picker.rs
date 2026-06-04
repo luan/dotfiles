@@ -164,28 +164,22 @@ fn run_loop(
                 refilter(items, state);
                 snap_to_first_selectable(items, state);
             }
-            (KeyCode::Backspace, _) => {
-                if state.cursor > 0 {
-                    state.cursor -= 1;
-                    state.input.remove(state.cursor);
-                    refilter(items, state);
-                    snap_to_first_selectable(items, state);
-                }
+            (KeyCode::Backspace, _) if state.cursor > 0 => {
+                state.cursor -= 1;
+                state.input.remove(state.cursor);
+                refilter(items, state);
+                snap_to_first_selectable(items, state);
             }
-            (KeyCode::Delete, _) => {
-                if state.cursor < state.input.len() {
-                    state.input.remove(state.cursor);
-                    refilter(items, state);
-                    snap_to_first_selectable(items, state);
-                }
+            (KeyCode::Delete, _) if state.cursor < state.input.len() => {
+                state.input.remove(state.cursor);
+                refilter(items, state);
+                snap_to_first_selectable(items, state);
             }
             (KeyCode::Left, _) => {
                 state.cursor = state.cursor.saturating_sub(1);
             }
-            (KeyCode::Right, _) => {
-                if state.cursor < state.input.len() {
-                    state.cursor += 1;
-                }
+            (KeyCode::Right, _) if state.cursor < state.input.len() => {
+                state.cursor += 1;
             }
             (KeyCode::Home, _) | (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
                 state.cursor = 0;
@@ -674,24 +668,18 @@ pub(crate) fn run_text_input(config: TextInputConfig) -> TextInputAction {
                 input.insert(cursor, c);
                 cursor += 1;
             }
-            (KeyCode::Backspace, _) => {
-                if cursor > 0 {
-                    cursor -= 1;
-                    input.remove(cursor);
-                }
+            (KeyCode::Backspace, _) if cursor > 0 => {
+                cursor -= 1;
+                input.remove(cursor);
             }
-            (KeyCode::Delete, _) => {
-                if cursor < input.len() {
-                    input.remove(cursor);
-                }
+            (KeyCode::Delete, _) if cursor < input.len() => {
+                input.remove(cursor);
             }
             (KeyCode::Left, _) => {
                 cursor = cursor.saturating_sub(1);
             }
-            (KeyCode::Right, _) => {
-                if cursor < input.len() {
-                    cursor += 1;
-                }
+            (KeyCode::Right, _) if cursor < input.len() => {
+                cursor += 1;
             }
             (KeyCode::Home, _) | (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
                 cursor = 0;
