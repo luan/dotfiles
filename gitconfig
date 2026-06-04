@@ -33,23 +33,6 @@
 
   fixup = commit --amend --no-edit
 
-  # git town
-  sync = town sync
-  sw = town switch
-  append = town append
-  compress = town compress
-  contribute = town contribute
-  diff-parent = town diff-parent
-  hack = town hack
-  delete = town delete
-  observe = town observe
-  park = town park
-  prepend = town prepend
-  propose = town propose
-  rename = town rename
-  repo = town repo
-  set-parent = town set-parent
-
 [merge]
   summary = true
   verbosity = 1

@@ -27,6 +27,19 @@ if command -v jj >/dev/null; then
   unset _jj_completion _jj_bin
 fi
 
+if command -v git-spice >/dev/null; then
+  _git_spice_completion="$_zsh_completion_cache/_git-spice.zsh"
+  _git_spice_bin="${commands[git-spice]}"
+  if [[ ! -s $_git_spice_completion || $_git_spice_completion -ot $_git_spice_bin ]]; then
+    git-spice shell completion zsh >| "$_git_spice_completion" 2>/dev/null
+  fi
+  if [[ -s $_git_spice_completion ]]; then
+    source "$_git_spice_completion"
+    complete -C "$_git_spice_bin" gs 2>/dev/null
+  fi
+  unset _git_spice_completion _git_spice_bin
+fi
+
 unset _zsh_completion_cache
 
 [[ -f ~/.orbstack/shell/init2.zsh ]] && source ~/.orbstack/shell/init2.zsh
