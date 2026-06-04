@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -298,18 +297,18 @@ fn query_session_memory_and_processes<'a>(
             if is_shell_or_tmux_root(&sample.name) {
                 continue;
             }
-            let (cpu_pct, mem_bytes) = subtree_usage(pid, &children, samples, &mut memo);
+            let (cpu_pct, mem_bytes) = subtree_usage(pid, children, samples, &mut memo);
             if !is_hot(cpu_pct, mem_bytes) {
                 continue;
             }
-            let pid = dominant_process_root(pid, &children, samples, &mut memo);
+            let pid = dominant_process_root(pid, children, samples, &mut memo);
             if claimed.contains(&pid) {
                 continue;
             }
             let Some(sample) = samples.get(&pid) else {
                 continue;
             };
-            let (cpu_pct, mem_bytes) = subtree_usage(pid, &children, samples, &mut memo);
+            let (cpu_pct, mem_bytes) = subtree_usage(pid, children, samples, &mut memo);
             if is_agent_process(&sample.name) {
                 continue;
             }
@@ -491,7 +490,6 @@ pub(super) struct AgentInstance {
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub(super) struct SessionMeta {
     pub(super) branch: String,
-    pub(super) pr: Option<PullRequestMeta>,
     pub(super) diff: Option<DiffStat>,
     pub(super) cpu_pct: f32,
     pub(super) mem_bytes: u64,
@@ -500,45 +498,6 @@ pub(super) struct SessionMeta {
     pub(super) attention: bool,
     pub(super) status: String,
     pub(super) progress: Option<u8>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct PullRequestMeta {
-    pub(super) number: u32,
-    pub(super) url: String,
-    pub(super) review_state: PullRequestReviewState,
-    pub(super) ci_state: PullRequestCiState,
-    pub(super) checks: Vec<PullRequestCheck>,
-    pub(super) unresolved_comments: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) enum PullRequestReviewState {
-    Draft,
-    InReview,
-    ChangesRequested,
-    Approved,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) enum PullRequestCiState {
-    Passing,
-    Failing,
-    RunningClean,
-    RunningFailed,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct PullRequestCheck {
-    pub(super) name: String,
-    pub(super) status: PullRequestCheckStatus,
-    pub(super) elapsed: Duration,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) enum PullRequestCheckStatus {
-    Running,
-    Failing,
 }
 
 #[derive(Default, Clone, Copy, Serialize, Deserialize)]
@@ -581,314 +540,6 @@ fn git_diff_stat(dir: &str) -> Option<DiffStat> {
     }
 
     (stat.added > 0 || stat.removed > 0).then_some(stat)
-}
-
-fn now_epoch_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
-fn parse_gh_time_secs(raw: &str) -> Option<u64> {
-    chrono::DateTime::parse_from_rfc3339(raw)
-        .ok()
-        .map(|dt| dt.timestamp().max(0) as u64)
-}
-
-fn check_name(check: &serde_json::Value) -> String {
-    check
-        .get("name")
-        .or_else(|| check.get("context"))
-        .or_else(|| check.get("workflowName"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("check")
-        .to_string()
-}
-
-fn check_elapsed(check: &serde_json::Value, now_secs: u64) -> Duration {
-    check
-        .get("startedAt")
-        .or_else(|| check.get("createdAt"))
-        .and_then(|v| v.as_str())
-        .and_then(parse_gh_time_secs)
-        .map(|started| Duration::from_secs(now_secs.saturating_sub(started)))
-        .unwrap_or_default()
-}
-
-fn is_running_check(check: &serde_json::Value) -> bool {
-    let status = check
-        .get("status")
-        .or_else(|| check.get("state"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    matches!(
-        status,
-        "ACTION_REQUIRED"
-            | "EXPECTED"
-            | "IN_PROGRESS"
-            | "PENDING"
-            | "QUEUED"
-            | "REQUESTED"
-            | "WAITING"
-    )
-}
-
-fn is_failing_check(check: &serde_json::Value) -> bool {
-    let conclusion = check
-        .get("conclusion")
-        .or_else(|| check.get("state"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    matches!(
-        conclusion,
-        "ACTION_REQUIRED" | "CANCELLED" | "ERROR" | "FAILURE" | "STARTUP_FAILURE" | "TIMED_OUT"
-    )
-}
-
-fn selected_pr_checks(
-    status_rollup: &[serde_json::Value],
-) -> (PullRequestCiState, Vec<PullRequestCheck>) {
-    let now_secs = now_epoch_secs();
-    let mut failing = Vec::new();
-    let mut running = Vec::new();
-
-    for check in status_rollup {
-        if is_failing_check(check) {
-            failing.push(PullRequestCheck {
-                name: check_name(check),
-                status: PullRequestCheckStatus::Failing,
-                elapsed: check_elapsed(check, now_secs),
-            });
-        } else if is_running_check(check) {
-            running.push(PullRequestCheck {
-                name: check_name(check),
-                status: PullRequestCheckStatus::Running,
-                elapsed: check_elapsed(check, now_secs),
-            });
-        }
-    }
-
-    running.sort_by(|a, b| b.elapsed.cmp(&a.elapsed).then_with(|| a.name.cmp(&b.name)));
-
-    let ci_state = if !running.is_empty() {
-        if failing.is_empty() {
-            PullRequestCiState::RunningClean
-        } else {
-            PullRequestCiState::RunningFailed
-        }
-    } else if failing.is_empty() {
-        PullRequestCiState::Passing
-    } else {
-        PullRequestCiState::Failing
-    };
-
-    let mut selected = failing;
-    selected.sort_by(|a, b| b.elapsed.cmp(&a.elapsed).then_with(|| a.name.cmp(&b.name)));
-    selected.truncate(2);
-    selected.extend(running.into_iter().take(2));
-    (ci_state, selected)
-}
-
-fn git_config(dir: &str, key: &str) -> String {
-    Command::new("git")
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .args(["-C", dir, "config", "--get", key])
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
-}
-
-fn graphite_url_from_github_url(github_url: &str, number: u32) -> Option<String> {
-    let (owner, repo) = github_owner_repo(github_url)?;
-    Some(format!(
-        "https://app.graphite.com/github/pr/{owner}/{repo}/{number}"
-    ))
-}
-
-fn github_owner_repo(github_url: &str) -> Option<(String, String)> {
-    let path = github_url
-        .strip_prefix("https://github.com/")
-        .or_else(|| github_url.strip_prefix("http://github.com/"))?;
-    let mut parts = path.split('/');
-    Some((parts.next()?.to_string(), parts.next()?.to_string()))
-}
-
-fn pr_link_url(dir: &str, github_url: &str, number: u32) -> String {
-    if git_config(dir, "agents.git-tool") == "graphite" {
-        graphite_url_from_github_url(github_url, number).unwrap_or_else(|| github_url.to_string())
-    } else {
-        github_url.to_string()
-    }
-}
-
-fn unresolved_review_thread_count(dir: &str, github_url: &str, number: u32) -> u32 {
-    let Some((owner, repo)) = github_owner_repo(github_url) else {
-        return 0;
-    };
-    let query = r#"query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}"#;
-    let Ok(mut child) = Command::new("gh")
-        .args([
-            "api",
-            "graphql",
-            "-f",
-            &format!("query={query}"),
-            "-F",
-            &format!("owner={owner}"),
-            "-F",
-            &format!("repo={repo}"),
-            "-F",
-            &format!("number={number}"),
-        ])
-        .env("GH_PROMPT_DISABLED", "1")
-        .current_dir(dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return 0;
-    };
-
-    let start = Instant::now();
-    let out = loop {
-        if child.try_wait().ok().flatten().is_some() {
-            break child.wait_with_output().ok();
-        }
-        if start.elapsed() > Duration::from_millis(1500) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return 0;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    };
-    let Some(out) = out.filter(|o| o.status.success()) else {
-        return 0;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
-        return 0;
-    };
-    json.pointer("/data/repository/pullRequest/reviewThreads/nodes")
-        .and_then(|v| v.as_array())
-        .map(|nodes| {
-            nodes
-                .iter()
-                .filter(|node| {
-                    !node
-                        .get("isResolved")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true)
-                })
-                .count() as u32
-        })
-        .unwrap_or_default()
-}
-
-fn gh_pr_meta(dir: &str, branch: &str) -> Option<PullRequestMeta> {
-    if branch.is_empty() || matches!(branch, "HEAD" | "main" | "master" | "trunk") {
-        return None;
-    }
-
-    let mut child = Command::new("gh")
-        .args([
-            "pr",
-            "view",
-            "--json",
-            "number,url,isDraft,reviewDecision,statusCheckRollup",
-        ])
-        .env("GH_PROMPT_DISABLED", "1")
-        .current_dir(dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    let start = Instant::now();
-    let out = loop {
-        if child.try_wait().ok().flatten().is_some() {
-            break child.wait_with_output().ok()?;
-        }
-        if start.elapsed() > Duration::from_millis(1500) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return None;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    };
-    if !out.status.success() {
-        return None;
-    }
-
-    let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    let number = json.get("number").and_then(|v| v.as_u64())? as u32;
-    let github_url = json
-        .get("url")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    if github_url.is_empty() {
-        return None;
-    }
-    let url = pr_link_url(dir, &github_url, number);
-
-    let review_state = if json
-        .get("isDraft")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-    {
-        PullRequestReviewState::Draft
-    } else {
-        match json
-            .get("reviewDecision")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-        {
-            "APPROVED" => PullRequestReviewState::Approved,
-            "CHANGES_REQUESTED" => PullRequestReviewState::ChangesRequested,
-            _ => PullRequestReviewState::InReview,
-        }
-    };
-
-    let rollup = json
-        .get("statusCheckRollup")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let (ci_state, checks) = selected_pr_checks(&rollup);
-    let unresolved_comments = unresolved_review_thread_count(dir, &github_url, number);
-
-    Some(PullRequestMeta {
-        number,
-        url,
-        review_state,
-        ci_state,
-        checks,
-        unresolved_comments,
-    })
-}
-
-fn cached_gh_pr_meta(dir: &str, branch: &str) -> Option<PullRequestMeta> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Option<PullRequestMeta>)>>> =
-        OnceLock::new();
-    const HIT_TTL: Duration = Duration::from_secs(60);
-    const MISS_TTL: Duration = Duration::from_secs(10);
-
-    let key = format!("{dir}\x1f{branch}");
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(guard) = cache.lock()
-        && let Some((fetched_at, value)) = guard.get(&key)
-        && fetched_at.elapsed() < if value.is_some() { HIT_TTL } else { MISS_TTL }
-    {
-        return value.clone();
-    }
-
-    let value = gh_pr_meta(dir, branch);
-    if let Ok(mut guard) = cache.lock() {
-        guard.insert(key, (Instant::now(), value.clone()));
-    }
-    value
 }
 
 fn min_duration(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
@@ -1029,22 +680,19 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             std::thread::spawn(move || {
                 let branch = git_branch(&cwd);
                 let diff = git_diff_stat(&cwd);
-                let pr = cached_gh_pr_meta(&cwd, &branch);
-                (cwd, branch, diff, pr)
+                (cwd, branch, diff)
             })
         })
         .collect();
 
     let mut branch_cache: HashMap<String, String> = HashMap::new();
     let mut diff_cache: HashMap<String, Option<DiffStat>> = HashMap::new();
-    let mut pr_cache: HashMap<String, Option<PullRequestMeta>> = HashMap::new();
     for handle in repo_handles {
-        let Ok((cwd, branch, diff, pr)) = handle.join() else {
+        let Ok((cwd, branch, diff)) = handle.join() else {
             continue;
         };
         branch_cache.insert(cwd.clone(), branch);
-        diff_cache.insert(cwd.clone(), diff);
-        pr_cache.insert(cwd, pr);
+        diff_cache.insert(cwd, diff);
     }
 
     let mut result = HashMap::new();
@@ -1052,7 +700,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
         let cwd = cwds.get(name).cloned().unwrap_or_default();
         let branch = branch_cache.get(&cwd).cloned().unwrap_or_default();
         let diff = diff_cache.get(&cwd).copied().flatten();
-        let pr = pr_cache.get(&cwd).cloned().flatten();
 
         let mut session_agents: Vec<AgentInstance> = agent_hits
             .iter()
@@ -1063,10 +710,10 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             .map(|(s, pane_id, agent_name)| {
                 let scrape = scrape_map.get(&(s.clone(), pane_id.clone()));
                 let hook = if agent_name == "claude" || agent_name == "codex" {
-                    if let Some(cwd) = pane_cwds.get(&(s.clone(), pane_id.clone())) {
-                        if agent_name == "claude" {
-                            hooks::install(cwd);
-                        }
+                    if agent_name == "claude"
+                        && let Some(cwd) = pane_cwds.get(&(s.clone(), pane_id.clone()))
+                    {
+                        hooks::install(cwd);
                     }
                     hooks::read_signal(pane_id)
                 } else {
@@ -1108,7 +755,6 @@ pub(super) fn query_session_meta(sessions: &[String]) -> (HashMap<String, Sessio
             name.clone(),
             SessionMeta {
                 branch,
-                pr,
                 diff,
                 cpu_pct: session_cpu.get(name.as_str()).copied().unwrap_or(0.0),
                 mem_bytes: session_mem.get(name.as_str()).copied().unwrap_or(0),

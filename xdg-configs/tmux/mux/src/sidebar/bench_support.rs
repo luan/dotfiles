@@ -214,7 +214,6 @@ fn synthetic_meta(sessions: &[String], agents_per_session: usize) -> HashMap<Str
                 session.clone(),
                 SessionMeta {
                     branch: format!("luan/perf-{idx:02}"),
-                    pr: None,
                     diff: Some(DiffStat {
                         added: (idx * 3) as u32,
                         removed: idx as u32,

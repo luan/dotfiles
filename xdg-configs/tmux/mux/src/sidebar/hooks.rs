@@ -160,7 +160,11 @@ pub(super) fn read_signal(pane_id: &str) -> Option<HookSignal> {
     if age > Duration::from_secs(60 * 60) {
         return None;
     }
-    Some(match rec.event {
+    Some(signal_from_record(&rec, age))
+}
+
+fn signal_from_record(rec: &HookRecord, age: Duration) -> HookSignal {
+    match rec.event {
         HookEvent::UserPromptSubmit => HookSignal {
             gerund: Some("Thinking…".to_string()),
             asking: false,
@@ -178,9 +182,19 @@ pub(super) fn read_signal(pane_id: &str) -> Option<HookSignal> {
             age: Some(age),
             idle: false,
         },
-        HookEvent::PermissionRequest | HookEvent::Notification => HookSignal {
+        HookEvent::PermissionRequest => HookSignal {
             gerund: None,
             asking: true,
+            age: Some(age),
+            idle: true,
+        },
+        HookEvent::Notification => HookSignal {
+            gerund: None,
+            // Claude fires Notification both for permission prompts and for
+            // the idle "waiting for your input" nudge ~60s after a turn ends.
+            // Only the former is a real question; the idle nudge must not pin
+            // the pane in the attention/"waiting" state once the turn is done.
+            asking: !is_idle_notification(rec.message.as_deref()),
             age: Some(age),
             idle: true,
         },
@@ -196,7 +210,14 @@ pub(super) fn read_signal(pane_id: &str) -> Option<HookSignal> {
             age: Some(age),
             idle: false,
         },
-    })
+    }
+}
+
+/// Claude's idle nudge ("Claude is waiting for your input") fires when a turn
+/// ends and the pane stays unfocused. It carries no pending question, unlike a
+/// permission prompt, so it must not flag the pane as asking.
+fn is_idle_notification(message: Option<&str>) -> bool {
+    message.is_some_and(|m| m.contains("waiting for your input"))
 }
 
 fn read_record(pane_id: &str) -> Option<HookRecord> {
@@ -314,4 +335,41 @@ fn shell_escape(s: &str) -> String {
     }
     out.push('\'');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn notification(message: &str) -> HookRecord {
+        HookRecord {
+            pane_id: "%1".into(),
+            session_id: "s".into(),
+            event: HookEvent::Notification,
+            timestamp_ms: 0,
+            tool_name: None,
+            message: Some(message.into()),
+        }
+    }
+
+    #[test]
+    fn idle_nudge_does_not_pin_pane_as_asking() {
+        // The 60s "waiting for your input" nudge overwrites the Stop record;
+        // treating it as asking is what left panes stuck in "waiting".
+        let sig = signal_from_record(
+            &notification("Claude is waiting for your input"),
+            Duration::ZERO,
+        );
+        assert!(!sig.asking);
+        assert!(sig.idle);
+    }
+
+    #[test]
+    fn permission_notification_still_asks() {
+        let sig = signal_from_record(
+            &notification("Claude needs your permission to use Bash"),
+            Duration::ZERO,
+        );
+        assert!(sig.asking);
+    }
 }

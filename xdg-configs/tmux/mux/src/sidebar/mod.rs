@@ -33,7 +33,6 @@ mod pi;
 mod render;
 mod tree;
 
-use meta::PullRequestCiState;
 use meta::{SessionMeta, query_session_meta};
 use overlay::{SidebarOverlay, handle_readline_key};
 use render::draw;
@@ -49,7 +48,7 @@ pub(super) const KEY_SHIFT: &str = "\u{F0636}";
 pub(super) const KEY_TAB: &str = "\u{F0312}";
 const TERMINAL_RUNTIME_USER_VAR: &str = "dGVybWluYWw="; // base64("terminal")
 const TERMINAL_SIDEBAR_TITLE: &str = "mux-sidebar-terminal";
-const BOOT_CACHE_VERSION: u32 = 1;
+const BOOT_CACHE_VERSION: u32 = 2;
 const BOOT_CACHE_MAX_AGE: Duration = Duration::from_secs(60);
 
 #[derive(Serialize, Deserialize)]
@@ -263,11 +262,6 @@ impl SidebarState {
             for agent in &mut meta.agents {
                 if let Some(age) = agent.age {
                     agent.age = Some(age.saturating_add(cache_age));
-                }
-            }
-            if let Some(pr) = &mut meta.pr {
-                for check in &mut pr.checks {
-                    check.elapsed = check.elapsed.saturating_add(cache_age);
                 }
             }
         }
@@ -698,17 +692,6 @@ impl SidebarState {
                 matches!(
                     &item.kind,
                     ItemKind::Agent { gerund, asking, .. } if gerund.is_some() || *asking
-                ) || matches!(
-                    &item.kind,
-                    ItemKind::Branch { pr: Some(pr) }
-                        if matches!(
-                            pr.ci_state,
-                            PullRequestCiState::RunningClean | PullRequestCiState::RunningFailed
-                        )
-                ) || matches!(
-                    &item.kind,
-                    ItemKind::PullRequestCheck { check, .. }
-                        if matches!(check.status, meta::PullRequestCheckStatus::Running)
                 )
             })
     }
@@ -753,17 +736,6 @@ fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
             process.cpu_pct.to_bits().hash(hasher);
             process.mem_bytes.hash(hasher);
         }
-        ItemKind::Branch { pr } => pr.as_ref().map(|p| p.number).hash(hasher),
-        ItemKind::PullRequestUnresolved { count, pr } => {
-            count.hash(hasher);
-            pr.number.hash(hasher);
-            pr.unresolved_comments.hash(hasher);
-        }
-        ItemKind::PullRequestCheck { check, pr } => {
-            check.name.hash(hasher);
-            check.elapsed.hash(hasher);
-            pr.number.hash(hasher);
-        }
         ItemKind::Agent {
             name,
             age,
@@ -778,7 +750,7 @@ fn fingerprint_item_kind(kind: &ItemKind, hasher: &mut DefaultHasher) {
             asking.hash(hasher);
         }
         ItemKind::Progress(pct) => pct.hash(hasher),
-        ItemKind::Group | ItemKind::Status => {}
+        ItemKind::Group | ItemKind::Status | ItemKind::Branch => {}
     }
 }
 
@@ -949,19 +921,6 @@ fn cmd_sidebar_terminal_tui() {
                         }) =>
                     {
                         let vis_idx = state.offset + (me.row - last_list_area.y) as usize;
-                        if let Some(item_idx) = state.visible.get(vis_idx).copied()
-                            && let Some(item) = state.items.get(item_idx)
-                            && let ItemKind::Branch { pr: Some(pr) } = &item.kind
-                        {
-                            let label = format!(" #{}", pr.number);
-                            let row_w = last_list_area.width.saturating_sub(1) as usize;
-                            let label_w = label.chars().count();
-                            let label_x = last_list_area.x as usize + row_w.saturating_sub(label_w);
-                            if (me.column as usize) >= label_x {
-                                let _ = Command::new("open").arg(&pr.url).spawn();
-                                continue;
-                            }
-                        }
                         if let Some(item_idx) = state.visible.get(vis_idx).copied()
                             && let Some(sid) = state.items.get(item_idx).and_then(|i| {
                                 i.selectable

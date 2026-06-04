@@ -3,9 +3,6 @@ use ratatui::widgets::Paragraph;
 
 use crate::palette::{BASE, OVERLAY0, PEACH, SUBTEXT0, SURFACE0, SURFACE1, TEXT};
 
-use super::super::meta::{
-    PullRequestCheckStatus, PullRequestCiState, PullRequestMeta, PullRequestReviewState,
-};
 use super::super::meta::{agent_color, agent_glyph};
 use super::super::overlay::RenameOverlay;
 use super::super::tree::{Item, ItemKind, Tree};
@@ -16,14 +13,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const TREE_COLOR: Color = Color::Rgb(0x2e, 0x2f, 0x40);
 const WAITING_COLOR: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-const PR_DRAFT_PASSING: Color = Color::Rgb(0x7f, 0x84, 0x9c);
-const PR_DRAFT_FAILING: Color = Color::Rgb(0xb8, 0xad, 0x7d);
-const PR_REVIEW_PASSING: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-const PR_REVIEW_FAILING: Color = Color::Rgb(0xfa, 0xb3, 0x87);
-const PR_CHANGES_PASSING: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
-const PR_CHANGES_FAILING: Color = Color::Rgb(0xf5, 0xc2, 0xe7);
-const PR_APPROVED_PASSING: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
-const PR_APPROVED_FAILING: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
 
 // ── Agent activity animation ─────────────────────────────────
 // Claude's percolation palette (warm amber).
@@ -108,52 +97,6 @@ fn mem_stat_color(mem_bytes: u64) -> Color {
     } else {
         SURFACE1
     }
-}
-
-pub(in crate::sidebar) fn pr_base_color(pr: &PullRequestMeta) -> Color {
-    use PullRequestCiState::*;
-    use PullRequestReviewState::*;
-    let failing = matches!(pr.ci_state, Failing | RunningFailed);
-    match (pr.review_state, failing) {
-        (Draft, false) => PR_DRAFT_PASSING,
-        (Draft, true) => PR_DRAFT_FAILING,
-        (InReview, false) => PR_REVIEW_PASSING,
-        (InReview, true) => PR_REVIEW_FAILING,
-        (ChangesRequested, false) => PR_CHANGES_PASSING,
-        (ChangesRequested, true) => PR_CHANGES_FAILING,
-        (Approved, false) => PR_APPROVED_PASSING,
-        (Approved, true) => PR_APPROVED_FAILING,
-    }
-}
-
-fn pr_display_color(pr: &PullRequestMeta, now_ms: u128) -> Color {
-    let base = pr_base_color(pr);
-    if matches!(
-        pr.ci_state,
-        PullRequestCiState::RunningClean | PullRequestCiState::RunningFailed
-    ) {
-        scale_brightness(
-            base,
-            triangle_wave(now_ms, GLYPH_PULSE_MS, PULSE_MIN, PULSE_MAX),
-        )
-    } else {
-        base
-    }
-}
-
-fn pr_status_glyph(pr: &PullRequestMeta, now_ms: u128) -> &'static str {
-    match pr.ci_state {
-        PullRequestCiState::Passing => "",
-        PullRequestCiState::Failing => "",
-        PullRequestCiState::RunningClean | PullRequestCiState::RunningFailed => {
-            const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
-            SPINNER[(now_ms / 120) as usize % SPINNER.len()]
-        }
-    }
-}
-
-fn pr_number_label(pr: &PullRequestMeta) -> String {
-    format!(" #{}", pr.number)
 }
 
 fn push_percolating_word<'a>(
@@ -425,115 +368,13 @@ pub(in crate::sidebar) fn render_item(
                 row,
             );
         }
-        ItemKind::Branch { pr } => {
+        ItemKind::Branch => {
             let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
             line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            let now_ms = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let (pr_label, pr_color) = pr
-                .as_ref()
-                .map(|pr| (pr_number_label(pr), pr_display_color(pr, now_ms)))
-                .unwrap_or_default();
-            let pr_color = if is_cur {
-                pr_color
-            } else {
-                dim_color(pr_color)
-            };
-            let right_w = if pr_label.is_empty() {
-                0
-            } else {
-                pr_label.chars().count() + 1
-            };
-            let status_glyph = pr.as_ref().map(|pr| pr_status_glyph(pr, now_ms));
-            let status_w = status_glyph.map(|s| s.chars().count() + 1).unwrap_or(0);
-            if let Some(status_glyph) = status_glyph {
-                line.push(Span::styled(
-                    status_glyph,
-                    Style::default().fg(pr_color).bg(row_bg),
-                ));
-                line.push(Span::styled(" ", Style::default().bg(row_bg)));
-            }
-            let disp = truncate(&item.display, content_w.saturating_sub(right_w + status_w));
+            let disp = truncate(&item.display, content_w);
             line.push(Span::styled(
                 disp,
-                Style::default()
-                    .fg(pr.as_ref().map(|_| pr_color).unwrap_or(SURFACE1))
-                    .italic()
-                    .bg(row_bg),
-            ));
-            if !pr_label.is_empty() {
-                let used: usize = line.iter().skip(1).map(|s| s.width()).sum();
-                let pad = content_w.saturating_sub(used + pr_label.chars().count());
-                if pad > 0 {
-                    line.push(Span::styled(" ".repeat(pad), Style::default().bg(row_bg)));
-                }
-                line.push(Span::styled(
-                    pr_label,
-                    Style::default().fg(pr_color).underlined().bold().bg(row_bg),
-                ));
-            }
-            f.render_widget(
-                Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
-                row,
-            );
-        }
-        ItemKind::PullRequestCheck { check, pr } => {
-            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
-            line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            let now_ms = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
-            let (glyph, color) = match check.status {
-                PullRequestCheckStatus::Running => (
-                    spinner[(now_ms / 120) as usize % spinner.len()],
-                    scale_brightness(
-                        pr_base_color(pr),
-                        triangle_wave(now_ms, GLYPH_PULSE_MS, 0.7, 1.35),
-                    ),
-                ),
-                PullRequestCheckStatus::Failing => ("", pr_base_color(pr)),
-            };
-            let age_str = format_age(check.elapsed);
-            line.push(Span::styled(glyph, Style::default().fg(color).bg(row_bg)));
-            line.push(Span::styled(" ", Style::default().bg(row_bg)));
-            let right_w = age_str.chars().count() + 1;
-            let left_w: usize = line.iter().skip(1).map(|s| s.width()).sum();
-            let name_w = content_w.saturating_sub(left_w + right_w);
-            line.push(Span::styled(
-                truncate(&check.name, name_w),
-                Style::default().fg(color).bg(row_bg),
-            ));
-            let used: usize = line.iter().skip(1).map(|s| s.width()).sum();
-            let pad = content_w.saturating_sub(used + age_str.chars().count());
-            if pad > 0 {
-                line.push(Span::styled(" ".repeat(pad), Style::default().bg(row_bg)));
-            }
-            line.push(Span::styled(
-                age_str,
-                Style::default().fg(SURFACE1).bg(row_bg),
-            ));
-            f.render_widget(
-                Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
-                row,
-            );
-        }
-        ItemKind::PullRequestUnresolved { count, pr } => {
-            let color = if is_cur {
-                pr_base_color(pr)
-            } else {
-                dim_color(pr_base_color(pr))
-            };
-            let mut line: Vec<Span<'_>> = vec![bar_span(item, is_sel, row_bg)];
-            line.extend(tree_prefix_spans(item.tree, indent, row_bg));
-            line.push(Span::styled("", Style::default().fg(color).bg(row_bg)));
-            line.push(Span::styled("  ", Style::default().bg(row_bg)));
-            line.push(Span::styled(
-                format!("{count} unresolved"),
-                Style::default().fg(color).bg(row_bg),
+                Style::default().fg(SURFACE1).italic().bg(row_bg),
             ));
             f.render_widget(
                 Paragraph::new(Line::from(line)).style(Style::default().bg(row_bg)),
