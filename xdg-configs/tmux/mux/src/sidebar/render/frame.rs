@@ -170,12 +170,7 @@ pub(in crate::sidebar) fn draw(f: &mut Frame, state: &mut SidebarState) -> Rect 
     for vi in 0..list_height.min(total.saturating_sub(state.offset)) {
         let item_idx = state.visible[state.offset + vi];
         let item = &state.items[item_idx];
-        let session_chrome = !matches!(
-            item.kind,
-            ItemKind::Branch { .. }
-                | ItemKind::PullRequestUnresolved { .. }
-                | ItemKind::PullRequestCheck { .. }
-        );
+        let session_chrome = !matches!(item.kind, ItemKind::Branch);
         let is_sel = session_chrome
             && item.session_id.is_some()
             && item.session_id.as_deref() == selected_session.as_deref();
