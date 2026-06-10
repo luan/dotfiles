@@ -1,25 +1,85 @@
+set windows-shell := ["pwsh", "-NoProfile", "-Command"]
+
 dotfiles_dir := justfile_directory()
-config_dir := env("HOME") / ".config"
+home := home_directory()
+config_dir := home / ".config"
 
 # List available recipes
 default:
     @just --list
 
 # Link stow configs + create convenience symlinks in dotfiles dir
+[unix]
 link:
-    mkdir -p "{{ env("HOME") }}/bin"
+    mkdir -p "{{ home }}/bin"
     mkdir -p "{{ config_dir }}"
     stow -R xdg-configs -t "{{ config_dir }}"
-    stow -R bin -t "{{ env("HOME") }}/bin"
+    stow -R bin -t "{{ home }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
-    if [ ! -e "{{ env("HOME") }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ env("HOME") }}/.zshenv"; fi
-    if [ ! -e "{{ env("HOME") }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ env("HOME") }}/.zshrc"; fi
+    if [ ! -e "{{ home }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ home }}/.zshenv"; fi
+    if [ ! -e "{{ home }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ home }}/.zshrc"; fi
+
+# Symlink xdg-configs + bin into place (requires Developer Mode for symlinks)
+[windows]
+link: gitconfig
+    #!pwsh
+    $ErrorActionPreference = 'Stop'
+    New-Item -ItemType Directory -Force '{{ home }}\bin' | Out-Null
+    New-Item -ItemType Directory -Force '{{ config_dir }}' | Out-Null
+    $links = @()
+    foreach ($item in Get-ChildItem -Directory '{{ dotfiles_dir }}\xdg-configs') {
+        $links += @{ Path = Join-Path '{{ config_dir }}' $item.Name; Target = $item.FullName }
+    }
+    foreach ($item in Get-ChildItem -File '{{ dotfiles_dir }}\bin') {
+        $links += @{ Path = Join-Path '{{ home }}\bin' $item.Name; Target = $item.FullName }
+    }
+    foreach ($l in $links) {
+        if (Test-Path $l.Path) {
+            $existing = Get-Item $l.Path -Force
+            if (-not $existing.LinkType) { Write-Output "⚠ $($l.Path) exists and is not a link, skipping"; continue }
+            $existing.Delete()
+        }
+        New-Item -ItemType SymbolicLink -Path $l.Path -Target $l.Target | Out-Null
+        Write-Output "✓ $($l.Path) → $($l.Target)"
+    }
+    if (-not [Environment]::GetEnvironmentVariable('XDG_CONFIG_HOME', 'User')) {
+        [Environment]::SetEnvironmentVariable('XDG_CONFIG_HOME', (Join-Path $HOME '.config'), 'User')
+        Write-Output "✓ set XDG_CONFIG_HOME user env var"
+    }
+    # $PROFILE may live on a shared/redirected Documents folder where symlinks
+    # are unreliable, so bootstrap with a dot-sourcing stub instead (mirrors .zshenv).
+    $stub = $PROFILE.CurrentUserAllHosts
+    if (-not (Test-Path $stub)) {
+        New-Item -ItemType Directory -Force (Split-Path $stub) | Out-Null
+        Set-Content $stub '. (Join-Path $HOME ''.config\powershell\profile.ps1'')'
+        Write-Output "✓ created $stub"
+    }
 
 # Unlink stow configs + remove convenience symlinks
+[unix]
 unlink:
     stow -D xdg-configs -t "{{ config_dir }}"
-    stow -D bin -t "{{ env("HOME") }}/bin"
+    stow -D bin -t "{{ home }}/bin"
     rm -f "{{ dotfiles_dir }}/nvim"
+
+# Remove symlinks pointing into this repo
+[windows]
+unlink:
+    #!pwsh
+    $ErrorActionPreference = 'Stop'
+    $roots = @(
+        @{ Dir = '{{ config_dir }}'; Source = '{{ dotfiles_dir }}\xdg-configs' },
+        @{ Dir = '{{ home }}\bin'; Source = '{{ dotfiles_dir }}\bin' }
+    )
+    foreach ($r in $roots) {
+        if (-not (Test-Path $r.Dir)) { continue }
+        foreach ($item in Get-ChildItem $r.Dir -Force) {
+            if ($item.LinkType -and $item.LinkTarget -like "$($r.Source)*") {
+                $item.Delete()
+                Write-Output "✗ removed $($item.FullName)"
+            }
+        }
+    }
 
 # Clone external repos if not already present
 repos:
@@ -64,6 +124,33 @@ pull:
 brew:
     brew bundle --file="{{ dotfiles_dir }}/Brewfile"
 
+# Install Windows CLI tools via winget + PSFzf module
+[windows]
+winget:
+    #!pwsh
+    $pkgs = @(
+        'Starship.Starship'
+        'ajeetdsouza.zoxide'
+        'junegunn.fzf'
+        'eza-community.eza'
+        'sharkdp.bat'
+        'sharkdp.fd'
+        'BurntSushi.ripgrep.MSVC'
+        'dandavison.delta'
+        'rsteube.Carapace'
+        'JesseDuffield.lazygit'
+        'jj-vcs.jj'
+    )
+    foreach ($p in $pkgs) {
+        Write-Output "→ $p"
+        winget install --id $p --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity | Select-Object -Last 1
+    }
+    if (-not (Get-Module PSFzf -ListAvailable)) {
+        Write-Output "→ PSFzf module"
+        Install-Module PSFzf -Scope CurrentUser -Force
+    }
+    Write-Output "✓ Windows CLI tools ready"
+
 # Resolve and lock sheldon plugins (called during setup)
 sheldon:
     sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
@@ -97,6 +184,7 @@ macos-defaults:
     source "{{ dotfiles_dir }}/macos-defaults.sh"
 
 # Set up git config include
+[unix]
 gitconfig:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -106,6 +194,20 @@ gitconfig:
     else
         echo "✓ gitconfig already configured"
     fi
+
+# Set up git config include
+[windows]
+gitconfig:
+    #!pwsh
+    $ErrorActionPreference = 'Stop'
+    $include = '{{ dotfiles_dir }}/gitconfig' -replace '\\', '/'
+    $existing = git config --global --get-all include.path
+    if ($existing -contains $include) {
+        Write-Output "✓ gitconfig already configured"
+    } else {
+        git config --global --add include.path $include
+        Write-Output "✓ Added gitconfig include"
+    }
 
 # Install Claude Code plugin marketplaces and plugins
 claude-plugins:
@@ -168,13 +270,13 @@ dev-routing: link
 # Build mux binary (Rust)
 mux:
     cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
-    mkdir -p "{{ env("HOME") }}/bin" "{{ config_dir }}/tmux/scripts"
-    cp "{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux" "{{ env("HOME") }}/bin/mux"
-    codesign --force --sign - "{{ env("HOME") }}/bin/mux"
+    mkdir -p "{{ home }}/bin" "{{ config_dir }}/tmux/scripts"
+    cp "{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux" "{{ home }}/bin/mux"
+    codesign --force --sign - "{{ home }}/bin/mux"
     rm -f "{{ config_dir }}/tmux/scripts/mux"
-    ln -s "{{ env("HOME") }}/bin/mux" "{{ config_dir }}/tmux/scripts/mux"
-    swiftc -O -o "{{ env("HOME") }}/bin/notch-state" "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/notch-state.swift"
-    codesign --force --sign - "{{ env("HOME") }}/bin/notch-state"
+    ln -s "{{ home }}/bin/mux" "{{ config_dir }}/tmux/scripts/mux"
+    swiftc -O -o "{{ home }}/bin/notch-state" "{{ dotfiles_dir }}/xdg-configs/tmux/mux/scripts/notch-state.swift"
+    codesign --force --sign - "{{ home }}/bin/notch-state"
     @echo "✓ mux built"
 
 # Run mux sidebar performance regression guardrails
