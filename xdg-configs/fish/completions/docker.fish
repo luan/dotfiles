@@ -1,1 +1,1 @@
-/Applications/OrbStack.app/Contents/MacOS/../Resources/completions/fish/docker.fish
+/Applications/OrbStack.app/Contents/Resources/completions/fish/docker.fish
