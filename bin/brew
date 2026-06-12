@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+real_brew_path() {
+    if [[ -n "${HOMEBREW_REAL_BREW:-}" && -x "$HOMEBREW_REAL_BREW" ]]; then
+        printf '%s\n' "$HOMEBREW_REAL_BREW"
+        return 0
+    fi
+
+    local self_dir self candidate candidate_dir
+    self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    self="$self_dir/$(basename "${BASH_SOURCE[0]}")"
+
+    for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+        [[ -x "$candidate" ]] || continue
+        candidate_dir="$(cd "$(dirname "$candidate")" && pwd -P)"
+        [[ "$candidate_dir/$(basename "$candidate")" == "$self" ]] && continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+
+    echo "brew guard: real Homebrew binary not found" >&2
+    exit 127
+}
+
+has_arg() {
+    local expected="$1"
+    shift
+    local arg
+    for arg in "$@"; do
+        [[ "$arg" == "$expected" ]] && return 0
+    done
+    return 1
+}
+
+block_formula_management() {
+    local cmd="${1:-brew}"
+    shift || true
+    cat >&2 <<EOF
+Homebrew formula management is quarantined on this machine.
+Use zerobrew for CLI formulae: zb ${cmd} ...
+Use Homebrew only for casks, services, and explicit fallbacks.
+
+Escape hatch, when you intentionally need real Homebrew formula behavior:
+  HOMEBREW_ALLOW_FORMULA=1 brew $*
+EOF
+    exit 2
+}
+
+real_brew="$(real_brew_path)"
+
+if [[ "${HOMEBREW_ALLOW_FORMULA:-}" == "1" ]]; then
+    exec "$real_brew" "$@"
+fi
+
+cmd="${1:-}"
+case "$cmd" in
+    ""|-h|--help|help|--version|analytics|command|commands|config|deps|doctor|home|info|leaves|list|ls|missing|options|outdated|readall|search|shellenv|tap|tap-info|untap|update|uses|--cache|--cellar|--env|--prefix|--repo)
+        exec "$real_brew" "$@"
+        ;;
+    services)
+        exec "$real_brew" "$@"
+        ;;
+    install|reinstall|uninstall)
+        if has_arg --cask "$@" && ! has_arg --formula "$@"; then
+            exec "$real_brew" "$@"
+        fi
+        block_formula_management "$cmd" "$@"
+        ;;
+    upgrade)
+        if has_arg --cask "$@" && ! has_arg --formula "$@"; then
+            exec "$real_brew" "$@"
+        fi
+        block_formula_management "$cmd" "$@"
+        ;;
+    bundle)
+        cat >&2 <<EOF
+brew bundle is blocked by default so it cannot accidentally install Homebrew formulae.
+Use 'just brew' for the dotfiles Homebrew cask/fallback bundle, or opt in with:
+  HOMEBREW_ALLOW_FORMULA=1 brew bundle ...
+EOF
+        exit 2
+        ;;
+    autoremove|cleanup|link|pin|postinstall|switch|unlink|unpin)
+        block_formula_management "$cmd" "$@"
+        ;;
+    *)
+        cat >&2 <<EOF
+brew subcommand '$cmd' is not allowlisted by the dotfiles Homebrew guard.
+Use zerobrew for CLI formulae, or opt in deliberately with:
+  HOMEBREW_ALLOW_FORMULA=1 brew $*
+EOF
+        exit 2
+        ;;
+esac
