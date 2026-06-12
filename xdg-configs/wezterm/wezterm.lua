@@ -161,7 +161,11 @@ local function set_terminal_sidebar_width(width)
 	wezterm.background_child_process({
 		"/bin/sh",
 		"-c",
-		"export PATH=" .. PATH .. "; " .. cmd .. " >/dev/null 2>&1; mux update '' \"$(tmux display -p '#{client_width}' 2>/dev/null)\" >/dev/null 2>&1",
+		"export PATH="
+			.. PATH
+			.. "; "
+			.. cmd
+			.. " >/dev/null 2>&1; mux update '' \"$(tmux display -p '#{client_width}' 2>/dev/null)\" >/dev/null 2>&1",
 	})
 end
 
@@ -201,18 +205,21 @@ local function focus_or_create_terminal_sidebar(window, pane)
 		sidebar:activate()
 	else
 		set_terminal_sidebar_width(45)
-		window:perform_action(act.SplitPane({
-			direction = "Left",
-			size = { Cells = 45 },
-			command = {
-				args = { "mux", "sidebar-terminal" },
-				set_environment_variables = {
-					PATH = PATH,
-					MUX_SIDEBAR_HOST = "wezterm",
-					MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
+		window:perform_action(
+			act.SplitPane({
+				direction = "Left",
+				size = { Cells = 45 },
+				command = {
+					args = { "mux", "sidebar-terminal" },
+					set_environment_variables = {
+						PATH = PATH,
+						MUX_SIDEBAR_HOST = "wezterm",
+						MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
+					},
 				},
-			},
-		}), pane)
+			}),
+			pane
+		)
 	end
 end
 
