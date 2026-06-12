@@ -1,6 +1,6 @@
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
-    set --export PATH $HOME/.local/share/mise/shims /opt/zerobrew/bin /opt/homebrew/bin /usr/local/bin $HOME/bin $HOME/.local/bin $PATH
+    set --export PATH $HOME/.local/share/mise/shims $HOME/bin $HOME/.local/bin /opt/zerobrew/bin /opt/homebrew/bin /usr/local/bin $PATH
     return
 end
 
