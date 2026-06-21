@@ -9,10 +9,13 @@ export HOMEBREW_PREFIX="/opt/homebrew"
 export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
 export HOMEBREW_REPOSITORY="/opt/homebrew/Homebrew"
 export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+for _cert_var in SSL_CERT_FILE CURL_CA_BUNDLE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE; do
+  if [[ ${(P)_cert_var:-} == /opt/zerobrew/* ]]; then
+    unset $_cert_var
+  fi
+done
+unset _cert_var
 
-export ZEROBREW_BIN="${ZEROBREW_BIN:-$HOME/.local/bin}"
-export ZEROBREW_ROOT="${ZEROBREW_ROOT:-/opt/zerobrew}"
-export ZEROBREW_PREFIX="${ZEROBREW_PREFIX:-/opt/zerobrew}"
 
 export EDITOR=nvim
 export GIT_EDITOR=nvim
@@ -22,11 +25,8 @@ export VCPKG_ROOT="$HOME/vcpkg"
 export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
 
 typeset -U path
-path=("$HOME/.local/share/mise/shims" "$HOME/bin" "$ZEROBREW_BIN" "$ZEROBREW_PREFIX/bin" "/opt/homebrew/bin" "/opt/homebrew/sbin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)
-
-if [[ -d "$ZEROBREW_PREFIX/lib/pkgconfig" ]]; then
-  export PKG_CONFIG_PATH="$ZEROBREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-fi
+path=("$HOME/.local/share/mise/shims" "/opt/homebrew/bin" "/opt/homebrew/sbin" "$HOME/bin" "$HOME/.local/bin" "$BUN_INSTALL/bin" "$HOME/.cargo/bin" $path)
+export PATH
 
 # Slack MCP OAuth client registers this localhost redirect port.
 export MCP_OAUTH_CALLBACK_PORT=3118

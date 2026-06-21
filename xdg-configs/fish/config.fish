@@ -1,6 +1,12 @@
+for cert_var in SSL_CERT_FILE CURL_CA_BUNDLE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE
+    if set -q $cert_var; and string match -q '/opt/zerobrew/*' -- $$cert_var
+        set --erase $cert_var
+    end
+end
+
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
-    set --export PATH $HOME/.local/share/mise/shims $HOME/bin $HOME/.local/bin /opt/zerobrew/bin /opt/homebrew/bin /usr/local/bin $PATH
+    set --export PATH $HOME/.local/share/mise/shims /opt/homebrew/bin /opt/homebrew/sbin $HOME/bin $HOME/.local/bin /usr/local/bin $PATH
     return
 end
 
@@ -60,5 +66,5 @@ end
 fish_add_path $HOME/.opencode/bin
 
 # Keep mise shims ahead of language/package-manager bins added above.
+fish_add_path --path --move /opt/homebrew/bin /opt/homebrew/sbin
 fish_add_path --path --move $HOME/.local/share/mise/shims
-fish_add_path --path --move /opt/zerobrew/bin

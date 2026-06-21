@@ -120,7 +120,7 @@ pull:
     safe_pull "{{ dotfiles_dir }}" "dotfiles"
     safe_pull "{{ config_dir }}/nvim" "nvim"
 
-# Install Homebrew-managed casks, services, and fallback formulae from Brewfile
+# Install Homebrew-managed formulae, casks, services, and Mac App Store apps from Brewfile
 brew:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -140,159 +140,7 @@ brew:
     "$real_brew" trust --tap moltenbits/tap >/dev/null 2>&1 || true
     "$real_brew" trust --formula oven-sh/bun/bun >/dev/null 2>&1 || true
 
-    HOMEBREW_ALLOW_FORMULA=1 "$real_brew" bundle --file="{{ dotfiles_dir }}/Brewfile"
-
-# Install or update zerobrew without letting its installer edit shell config
-zerobrew:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    export ZEROBREW_BIN="$HOME/.local/bin"
-    export ZEROBREW_ROOT="/opt/zerobrew"
-    export ZEROBREW_PREFIX="/opt/zerobrew"
-
-    mkdir -p "$ZEROBREW_BIN"
-    curl -fsSL https://zerobrew.rs/install | bash -s -- --no-modify-path
-    "$ZEROBREW_BIN/zb" --version
-
-# Install zerobrew-managed CLI formulae from Brewfile.zerobrew
-zerobrew-packages: zerobrew
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    zb_bin="$HOME/.local/bin/zb"
-    export PATH="$HOME/.local/bin:/opt/zerobrew/bin:$PATH"
-
-    formulas=()
-    while IFS= read -r formula; do
-        formulas+=("$formula")
-    done < <(ruby -ne 'puts $1 if /^brew ["'"'"']([^"'"'"']+)["'"'"']/' "{{ dotfiles_dir }}/Brewfile.zerobrew")
-
-    install_formula() {
-        local formula="$1"
-        local output links link target attempt
-        echo "==> zerobrew install $formula"
-
-        for attempt in 1 2 3 4 5; do
-            if output="$($zb_bin install "$formula" 2>&1)"; then
-                printf '%s\n' "$output"
-                return 0
-            fi
-
-            if ! grep -q 'link conflict' <<<"$output"; then
-                printf '%s\n' "$output"
-                return 1
-            fi
-
-            echo "==> Repairing stale zerobrew symlinks for $formula (attempt $attempt)"
-            mapfile -t links < <(grep -Eo "'/opt/zerobrew/[^']+'" <<<"$output" | tr -d "'" | sort -u)
-            if [ "${#links[@]}" -eq 0 ]; then
-                printf '%s\n' "$output"
-                return 1
-            fi
-            for link in "${links[@]}"; do
-                [ -L "$link" ] || continue
-                target="$(readlink "$link")"
-                case "$target" in
-                    /opt/zerobrew/Cellar/*) rm "$link" ;;
-                    *) echo "refusing to remove non-zerobrew link $link -> $target" >&2; return 1 ;;
-                esac
-            done
-        done
-
-        echo "zerobrew install $formula still has link conflicts after 5 repair attempts" >&2
-        return 1
-    }
-
-    for formula in "${formulas[@]}"; do
-        install_formula "$formula"
-    done
-
-    doctor_clean=0
-    for attempt in 1 2 3; do
-        doctor_output="$($zb_bin doctor 2>&1)"
-        if grep -q 'No issues found' <<<"$doctor_output"; then
-            doctor_clean=1
-            break
-        fi
-        if ! grep -q 'Run zb doctor --repair' <<<"$doctor_output"; then
-            printf '%s\n' "$doctor_output"
-            exit 1
-        fi
-        echo "==> Repairing zerobrew doctor issues (attempt $attempt)"
-        $zb_bin doctor --repair
-    done
-    if [ "$doctor_clean" -ne 1 ]; then
-        $zb_bin doctor
-        exit 1
-    fi
-    echo "✓ zerobrew doctor passed"
-
-# Replace stale local Qt resource compiler with the zerobrew-managed one
-zerobrew-rcc: zerobrew-packages
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    rcc_src="/opt/zerobrew/opt/qt@5/bin/rcc"
-    rcc_dst="$HOME/.local/bin/rcc"
-
-    if [ ! -x "$rcc_src" ]; then
-        echo "✗ zerobrew qt@5 rcc not found at $rcc_src" >&2
-        exit 1
-    fi
-
-    mkdir -p "$HOME/.local/bin"
-    if [ "$(readlink "$rcc_dst" 2>/dev/null || true)" = "$rcc_src" ]; then
-        echo "✓ rcc already points to zerobrew qt@5"
-    else
-        if [ -e "$rcc_dst" ] || [ -L "$rcc_dst" ]; then
-            backup_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/homebrew-linkage-backups"
-            mkdir -p "$backup_dir"
-            backup="$backup_dir/rcc.$(date +%Y%m%d%H%M%S)"
-            mv "$rcc_dst" "$backup"
-            echo "→ Backed up existing rcc to $backup"
-        fi
-        ln -s "$rcc_src" "$rcc_dst"
-        echo "✓ Linked $rcc_dst -> $rcc_src"
-    fi
-
-    if otool -L "$rcc_dst" | grep -q '/opt/homebrew'; then
-        echo "✗ rcc still links to Homebrew libraries" >&2
-        exit 1
-    fi
-    "$rcc_dst" -v
-
-# Report executables that still link against Homebrew libraries before any pruning
-homebrew-linkage-audit:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if ! command -v otool >/dev/null; then
-        echo "✗ otool not found; install Xcode Command Line Tools first" >&2
-        exit 1
-    fi
-
-    found=0
-    for root in "$HOME/bin" "$HOME/.local/bin" "/opt/zerobrew/bin"; do
-        [ -d "$root" ] || continue
-        while IFS= read -r -d '' file; do
-            if ! file "$file" 2>/dev/null | grep -q 'Mach-O'; then
-                continue
-            fi
-            refs="$(otool -L "$file" 2>/dev/null | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)' || true)"
-            if [ -n "$refs" ]; then
-                found=1
-                printf '\n%s\n%s\n' "$file" "$refs"
-            fi
-        done < <(find "$root" -type f -perm -111 -print0)
-    done
-
-    if [ "$found" -eq 0 ]; then
-        echo "✓ No Homebrew library references found in scanned executable paths"
-    else
-        printf '\n⚠ Homebrew library references remain; do not prune those Homebrew formulae yet\n' >&2
-        exit 1
-    fi
+    "$real_brew" bundle --file="{{ dotfiles_dir }}/Brewfile"
 
 # Install Windows CLI tools via winget + PSFzf module
 [windows]
@@ -323,7 +171,7 @@ winget:
 
 # Resolve and lock sheldon plugins (called during setup)
 sheldon:
-    PATH="$HOME/.local/bin:/opt/zerobrew/bin:$PATH" sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
+    PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH" sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
 
 # Set Homebrew zsh as login shell (registers in /etc/shells if missing; needs sudo for that step)
 chsh-zsh:
@@ -418,10 +266,10 @@ claude-plugins:
 cargo:
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/.local/bin:/opt/zerobrew/bin:$PATH"
+    export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
     if ! command -v cargo-binstall &>/dev/null; then
-        echo "⚠ cargo-binstall not found, run 'just zerobrew-packages' first"
+        echo "⚠ cargo-binstall not found, run 'just brew' first"
         exit 1
     fi
 
@@ -499,5 +347,5 @@ mux-status-latency:
     "$tmux_bin" -L "$socket" new-session -d -x 120 -y 40 -s mux-latency "sleep 120"
     PATH="$wrapper_dir:$PATH" HOME="$tmp_home" "$bin" sidebar status-latency-profile 8 750
 
-# Full setup: zerobrew, Homebrew fallbacks/casks, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
-setup: zerobrew-rcc brew cargo repos link gitconfig claude-plugins dev-routing sheldon mux
+# Full setup: Homebrew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
+setup: brew cargo repos link gitconfig claude-plugins dev-routing sheldon mux
