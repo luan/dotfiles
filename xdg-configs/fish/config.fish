@@ -16,6 +16,7 @@ alias ls="eza --icons"
 alias ll="eza --icons -l"
 alias la="eza --icons -la"
 alias lt="eza --icons --tree"
+alias gs=git-spice
 
 set --export EDITOR nvim
 set --export GIT_EDITOR nvim
