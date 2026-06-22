@@ -1,6 +1,7 @@
 # Tool integrations — dot-sourced from $PROFILE stub (created by `just link`).
 
 $env:XDG_CONFIG_HOME ??= Join-Path $HOME '.config'
+$env:GIT_USERNAME = 'luan'
 
 # Interactive shells only, like zsh conf.d.
 if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return }

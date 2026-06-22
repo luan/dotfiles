@@ -50,6 +50,9 @@
 [branch]
   autosetupmerge = true
 
+[spice "branchCreate"]
+  prefix = luan
+
 [push]
   default = tracking
   recurseSubmodules=check
