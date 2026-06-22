@@ -19,6 +19,7 @@ unset _cert_var
 
 export EDITOR=nvim
 export GIT_EDITOR=nvim
+export GIT_USERNAME=luan
 
 export BUN_INSTALL="$HOME/.bun"
 export VCPKG_ROOT="$HOME/vcpkg"

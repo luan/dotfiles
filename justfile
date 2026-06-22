@@ -18,6 +18,10 @@ link:
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
     if [ ! -e "{{ home }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ home }}/.zshenv"; fi
     if [ ! -e "{{ home }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ home }}/.zshrc"; fi
+    touch "{{ home }}/.bashrc"
+    grep -qxF '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' "{{ home }}/.bashrc" || printf '\n%s\n' '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' >> "{{ home }}/.bashrc"
+    if [ ! -e "{{ home }}/.bash_profile" ] && [ ! -e "{{ home }}/.bash_login" ] && [ ! -e "{{ home }}/.profile" ]; then printf '%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; fi
+    if [ -e "{{ home }}/.bash_profile" ]; then grep -qxF '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' "{{ home }}/.bash_profile" || printf '\n%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' >> "{{ home }}/.bash_profile"; fi
 
 # Symlink xdg-configs + bin into place (requires Developer Mode for symlinks)
 [windows]
