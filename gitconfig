@@ -51,7 +51,7 @@
   autosetupmerge = true
 
 [spice "branchCreate"]
-  prefix = luan
+  prefix = luan/
 
 [push]
   default = tracking
