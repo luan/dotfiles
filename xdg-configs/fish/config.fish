@@ -8,7 +8,7 @@ set --export GIT_USERNAME luan
 
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
-    set --export PATH $HOME/.local/share/mise/shims /opt/homebrew/bin /opt/homebrew/sbin $HOME/bin $HOME/.local/bin /usr/local/bin $PATH
+    set --export PATH $HOME/.local/bin $HOME/.local/share/mise/shims /opt/homebrew/bin /opt/homebrew/sbin $HOME/bin /usr/local/bin $PATH
     return
 end
 
@@ -71,3 +71,4 @@ fish_add_path $HOME/.opencode/bin
 # Keep mise shims ahead of language/package-manager bins added above.
 fish_add_path --path --move /opt/homebrew/bin /opt/homebrew/sbin
 fish_add_path --path --move $HOME/.local/share/mise/shims
+fish_add_path --path --move $HOME/.local/bin
