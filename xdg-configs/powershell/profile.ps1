@@ -28,6 +28,9 @@ function Get-CachedInit([string] $tool, [string[]] $arguments) {
 # starship's full-init skips its bootstrap stub, which would re-spawn the binary on load.
 # mise shims instead of hooks: its pwsh command-not-found hook crashes on empty history.
 if ($init = Get-CachedInit mise @('activate', 'pwsh', '--shims')) { . $init }
+if ($mise = (Get-Command mise -CommandType Application -ErrorAction SilentlyContinue).Source) {
+    Invoke-Expression ((& $mise hook-env -s pwsh) -join "`n")
+}
 if ($init = Get-CachedInit zoxide @('init', 'powershell')) { . $init }
 if ($init = Get-CachedInit starship @('init', 'powershell', '--print-full-init')) { . $init }
 

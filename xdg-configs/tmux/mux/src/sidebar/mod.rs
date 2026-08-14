@@ -1288,24 +1288,6 @@ pub(crate) fn cmd_hook() {
     hooks::ingest_stdin();
 }
 
-#[cfg(test)]
-mod runtime_tests {
-    use super::TERMINAL_RUNTIME_USER_VAR;
-
-    #[test]
-    fn runtime_user_var_identifies_terminal_hosting_model() {
-        assert_eq!(TERMINAL_RUNTIME_USER_VAR, "dGVybWluYWw=");
-    }
-
-    #[test]
-    fn applescript_string_literals_escape_input() {
-        assert_eq!(
-            super::applescript_string_literal(r#"a "quote" and \ slash"#),
-            r#""a \"quote\" and \\ slash""#
-        );
-    }
-}
-
 fn enter_tui() {
     terminal::enable_raw_mode().ok();
     let mut stdout = io::stdout();
@@ -1423,4 +1405,22 @@ end tell"#
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+#[cfg(test)]
+mod runtime_tests {
+    use super::TERMINAL_RUNTIME_USER_VAR;
+
+    #[test]
+    fn runtime_user_var_identifies_terminal_hosting_model() {
+        assert_eq!(TERMINAL_RUNTIME_USER_VAR, "dGVybWluYWw=");
+    }
+
+    #[test]
+    fn applescript_string_literals_escape_input() {
+        assert_eq!(
+            super::applescript_string_literal(r#"a "quote" and \ slash"#),
+            r#""a \"quote\" and \\ slash""#
+        );
+    }
 }
