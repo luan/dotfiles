@@ -6,6 +6,14 @@ end
 
 set --export GIT_USERNAME luan
 
+if command -sq mise; and not set -q MISE_SHELL
+    if status is-interactive
+        mise activate fish | source
+    else
+        mise hook-env -s fish | source
+    end
+end
+
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
     set --export PATH $HOME/.local/bin $HOME/.local/share/mise/shims /opt/homebrew/bin /opt/homebrew/sbin $HOME/bin /usr/local/bin $PATH
@@ -22,12 +30,6 @@ alias gs=git-spice
 
 set --export EDITOR nvim
 set --export GIT_EDITOR nvim
-
-# sccache — compiler cache for C/C++
-if not test -f ~/.config/fish/.no-sccache
-    set --export CMAKE_C_COMPILER_LAUNCHER sccache
-    set --export CMAKE_CXX_COMPILER_LAUNCHER sccache
-end
 
 eval "$(/opt/homebrew/bin/brew shellenv)"
 

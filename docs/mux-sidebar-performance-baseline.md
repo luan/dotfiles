@@ -14,9 +14,9 @@ future optimization tasks can compare changes without needing a live tmux server
 ## Commands
 
 ```bash
-cargo test --manifest-path xdg-configs/tmux/mux/Cargo.toml
-cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
-/usr/bin/time -l cargo run --manifest-path xdg-configs/tmux/mux/Cargo.toml -- sidebar profile 2000 >/tmp/mux-sidebar-profile.json
+cargo test --manifest-path Cargo.toml
+cargo bench --manifest-path Cargo.toml --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+/usr/bin/time -l cargo run --manifest-path Cargo.toml -- sidebar profile 2000 >/tmp/mux-sidebar-profile.json
 ```
 
 ## Criterion baseline
@@ -34,14 +34,14 @@ cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar -- -
 | `sidebar/meta_snapshot_conversion/small` | 27.036 µs |
 | `sidebar/meta_snapshot_conversion/large` | 169.63 µs |
 
-Criterion reports are generated under `xdg-configs/tmux/mux/target/criterion/`.
+Criterion reports are generated under `target/criterion/`.
 
 ## Runtime/profile counters
 
 Command:
 
 ```bash
-/usr/bin/time -l cargo run --manifest-path xdg-configs/tmux/mux/Cargo.toml -- sidebar profile 2000 >/tmp/mux-sidebar-profile.json
+/usr/bin/time -l cargo run --manifest-path Cargo.toml -- sidebar profile 2000 >/tmp/mux-sidebar-profile.json
 ```
 
 Process timing:

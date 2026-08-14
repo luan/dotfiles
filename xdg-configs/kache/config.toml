@@ -1,0 +1,8 @@
+[cache]
+local_max_size = "15GiB"
+auto_gc = true
+gc_max_age_hours = 720
+min_store_compile_ms = 100
+cache_executables = false
+local_only = true
+adaptive_incremental = false

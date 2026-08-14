@@ -506,9 +506,7 @@ some output
         // gerund well above the bottom 12 lines.
         let mut lines = vec!["some output"];
         lines.push("✻ Reading…");
-        for _ in 0..20 {
-            lines.push("  ├ Task in progress");
-        }
+        lines.extend(std::iter::repeat_n("  ├ Task in progress", 20));
         lines.push("");
         lines.push("18٪ 139k/1.0m");
         let text = lines.join("\n");

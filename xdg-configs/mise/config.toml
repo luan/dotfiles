@@ -1,0 +1,9 @@
+[tools]
+rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer", "rustc-codegen-cranelift-preview"] }
+
+[env]
+CC = "kache cc"
+CXX = "kache c++"
+CC_KNOWN_WRAPPER_CUSTOM = "kache"
+CMAKE_C_COMPILER_LAUNCHER = ""
+CMAKE_CXX_COMPILER_LAUNCHER = ""

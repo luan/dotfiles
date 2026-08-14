@@ -1,4 +1,5 @@
 # Taps
+tap 'kunobi-ninja/kunobi'
 tap 'moltenbits/tap'
 
 # Formulae
@@ -32,7 +33,9 @@ brew 'hexedit'
 brew 'highlight'
 brew 'imagemagick'
 brew 'jq'
+brew 'kunobi-ninja/kunobi/kache'
 brew 'lld'
+brew 'mise'
 brew 'neovim'
 brew 'python3'
 brew 'qt@5'

@@ -232,19 +232,19 @@
   </p>
 
   <h2>Commands</h2>
-  <pre><code>cargo build --release --manifest-path xdg-configs/tmux/mux/Cargo.toml
-cargo test --manifest-path xdg-configs/tmux/mux/Cargo.toml --test sidebar_instrumentation
-cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+  <pre><code>cargo build --release --manifest-path Cargo.toml
+cargo test --manifest-path Cargo.toml --test sidebar_instrumentation
+cargo bench --manifest-path Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
 
-/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 visible-idle
-/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 hidden-idle
-/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 active-animation
-/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 30000
+/usr/bin/time -l target/release/mux sidebar profile 4000 visible-idle
+/usr/bin/time -l target/release/mux sidebar profile 4000 hidden-idle
+/usr/bin/time -l target/release/mux sidebar profile 4000 active-animation
+/usr/bin/time -l target/release/mux sidebar profile 30000
 
-leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 visible-idle
-leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 hidden-idle
-leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 active-animation
-leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 30000</code></pre>
+leaks --atExit -- target/release/mux sidebar profile 1000 visible-idle
+leaks --atExit -- target/release/mux sidebar profile 1000 hidden-idle
+leaks --atExit -- target/release/mux sidebar profile 1000 active-animation
+leaks --atExit -- target/release/mux sidebar profile 30000</code></pre>
 
   <h2>Allocation-aware Criterion harness</h2>
   <p>
@@ -905,13 +905,13 @@ leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 30000<
 
   <h2>Command appendix</h2>
   <pre><code># Synthetic state profiles and leak/time snapshots
-cargo run --manifest-path xdg-configs/tmux/mux/Cargo.toml -- sidebar profile 4000
-/usr/bin/time -l xdg-configs/tmux/mux/target/release/mux sidebar profile 4000 visible-idle
-/usr/bin/leaks --atExit -- xdg-configs/tmux/mux/target/release/mux sidebar profile 1000 visible-idle
+cargo run --manifest-path Cargo.toml -- sidebar profile 4000
+/usr/bin/time -l target/release/mux sidebar profile 4000 visible-idle
+/usr/bin/leaks --atExit -- target/release/mux sidebar profile 1000 visible-idle
 
 # Allocation-aware Criterion and throughput suites
-cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
-cargo bench --manifest-path xdg-configs/tmux/mux/Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+cargo bench --manifest-path Cargo.toml --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
+cargo bench --manifest-path Cargo.toml --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
 
 # Live isolated tmux small/medium/large daemon profiles
 MUX_SIDEBAR_MEMORY_SAMPLE_SECONDS=5 xdg-configs/tmux/mux/scripts/sidebar-memory-profile.sh docs/artifacts/mux-sidebar-live-memory-2026-05-05
@@ -921,7 +921,7 @@ just mux-status-latency
 just mux-perf
 
 # Snapshot/string diagnostics
-xdg-configs/tmux/mux/target/release/mux sidebar snapshot-string-stats docs/artifacts/mux-sidebar-live-memory-2026-05-05/large.snapshot.msgpack
+target/release/mux sidebar snapshot-string-stats docs/artifacts/mux-sidebar-live-memory-2026-05-05/large.snapshot.msgpack
 
 # HTML artifact link check
 python3 - &lt;&lt;'PY'

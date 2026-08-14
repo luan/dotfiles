@@ -1,5 +1,9 @@
 # Tool integrations — evaluated on every interactive shell.
 
+if command -v mise >/dev/null; then
+  eval "$(mise activate zsh)"
+fi
+
 eval "$(direnv hook zsh)"
 eval "$(zoxide init zsh)"
 eval "$(starship init zsh)"

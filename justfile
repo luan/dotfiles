@@ -13,15 +13,17 @@ default:
 link:
     mkdir -p "{{ home }}/bin"
     mkdir -p "{{ config_dir }}"
+    mkdir -p "{{ home }}/.cargo"
     stow -R xdg-configs -t "{{ config_dir }}"
+    stow -R cargo-config -t "{{ home }}/.cargo"
     stow -R bin -t "{{ home }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
     if [ ! -e "{{ home }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ home }}/.zshenv"; fi
     if [ ! -e "{{ home }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ home }}/.zshrc"; fi
     touch "{{ home }}/.bashrc"
     grep -qxF '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' "{{ home }}/.bashrc" || printf '\n%s\n' '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' >> "{{ home }}/.bashrc"
-    if [ ! -e "{{ home }}/.bash_profile" ] && [ ! -e "{{ home }}/.bash_login" ] && [ ! -e "{{ home }}/.profile" ]; then printf '%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; fi
-    if [ -e "{{ home }}/.bash_profile" ]; then grep -qxF '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' "{{ home }}/.bash_profile" || printf '\n%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' >> "{{ home }}/.bash_profile"; fi
+    if [ ! -e "{{ home }}/.bash_profile" ] && [ ! -e "{{ home }}/.bash_login" ]; then if [ -e "{{ home }}/.profile" ]; then printf '%s\n' '[[ -r "$HOME/.profile" ]] && source "$HOME/.profile"' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; else printf '%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; fi; fi
+    if [ -e "{{ home }}/.bash_profile" ]; then grep -qxF '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' "{{ home }}/.bash_profile" || printf '\n%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' >> "{{ home }}/.bash_profile"; elif [ -e "{{ home }}/.bash_login" ]; then grep -qxF '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' "{{ home }}/.bash_login" || printf '\n%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' >> "{{ home }}/.bash_login"; fi
 
 # Symlink xdg-configs + bin into place (requires Developer Mode for symlinks)
 [windows]
@@ -63,6 +65,7 @@ link: gitconfig
 [unix]
 unlink:
     stow -D xdg-configs -t "{{ config_dir }}"
+    stow -D cargo-config -t "{{ home }}/.cargo"
     stow -D bin -t "{{ home }}/bin"
     rm -f "{{ dotfiles_dir }}/nvim"
 
@@ -142,6 +145,7 @@ brew:
     fi
 
     "$real_brew" trust --tap moltenbits/tap >/dev/null 2>&1 || true
+    "$real_brew" trust --tap kunobi-ninja/kunobi >/dev/null 2>&1 || true
     "$real_brew" trust --formula oven-sh/bun/bun >/dev/null 2>&1 || true
 
     "$real_brew" bundle --file="{{ dotfiles_dir }}/Brewfile"
@@ -266,8 +270,20 @@ claude-plugins:
 
     echo "✓ Claude plugins ready"
 
+# Install the rolling Rust toolchain declared by the managed global Mise config
+rust: link
+    mise install rust
+    mise reshim
+    kache doctor
+
+# Update the rolling nightly toolchain and its managed components
+rust-upgrade: link
+    mise upgrade rust
+    mise reshim
+    kache doctor
+
 # Install cargo binaries via cargo-binstall
-cargo:
+cargo: rust
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
@@ -276,6 +292,10 @@ cargo:
         echo "⚠ cargo-binstall not found, run 'just brew' first"
         exit 1
     fi
+
+    crates=(
+        "ck-search"
+    )
 
     for crate in "${crates[@]}"; do
         echo "→ $crate"
@@ -291,10 +311,10 @@ dev-routing: link
     "$HOME/bin/dev-routing" setup && "$HOME/bin/dev-routing" scan
 
 # Build mux binary (Rust)
-mux:
-    cargo build --release --manifest-path="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+mux: rust
+    cargo build --release --locked --manifest-path="{{ dotfiles_dir }}/Cargo.toml" -p mux
     mkdir -p "{{ home }}/bin" "{{ config_dir }}/tmux/scripts"
-    cp "{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux" "{{ home }}/bin/mux"
+    cp "{{ dotfiles_dir }}/target/release/mux" "{{ home }}/bin/mux"
     codesign --force --sign - "{{ home }}/bin/mux"
     rm -f "{{ config_dir }}/tmux/scripts/mux"
     ln -s "{{ home }}/bin/mux" "{{ config_dir }}/tmux/scripts/mux"
@@ -306,7 +326,7 @@ mux:
 mux-perf:
     #!/usr/bin/env bash
     set -euo pipefail
-    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+    manifest="{{ dotfiles_dir }}/Cargo.toml"
     cargo test --manifest-path="$manifest"
     cargo bench --manifest-path="$manifest" --bench sidebar -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
     alloc_output="$(mktemp)"
@@ -323,7 +343,7 @@ mux-perf:
 mux-memory:
     #!/usr/bin/env bash
     set -euo pipefail
-    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
+    manifest="{{ dotfiles_dir }}/Cargo.toml"
     cargo bench --manifest-path="$manifest" --bench sidebar_alloc -- --sample-size 10 --warm-up-time 0.1 --measurement-time 0.2
 
 # Profile live mux sidebar daemon memory in isolated tmux shapes
@@ -334,8 +354,8 @@ mux-memory-live:
 mux-status-latency:
     #!/usr/bin/env bash
     set -euo pipefail
-    manifest="{{ dotfiles_dir }}/xdg-configs/tmux/mux/Cargo.toml"
-    bin="{{ dotfiles_dir }}/xdg-configs/tmux/mux/target/release/mux"
+    manifest="{{ dotfiles_dir }}/Cargo.toml"
+    bin="{{ dotfiles_dir }}/target/release/mux"
     cargo build --release --manifest-path="$manifest" >/dev/null
     socket="mux-sidebar-status-latency-$$"
     tmp_home="$(mktemp -d)"
@@ -352,4 +372,4 @@ mux-status-latency:
     PATH="$wrapper_dir:$PATH" HOME="$tmp_home" "$bin" sidebar status-latency-profile 8 750
 
 # Full setup: Homebrew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
-setup: brew cargo repos link gitconfig claude-plugins dev-routing sheldon mux
+setup: brew link rust cargo repos gitconfig claude-plugins dev-routing sheldon mux
