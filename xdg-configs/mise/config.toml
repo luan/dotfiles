@@ -1,5 +1,5 @@
 [tools]
-rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer", "rustc-codegen-cranelift-preview"] }
+rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer", "rustc-codegen-cranelift"] }
 
 [env]
 CC = "kache cc"

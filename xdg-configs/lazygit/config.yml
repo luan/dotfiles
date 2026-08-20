@@ -21,7 +21,6 @@ gui:
       - 
       - 
       - 
-
     # The "speed" of the spinner in milliseconds.
     rate: 50
 git:
@@ -29,9 +28,9 @@ git:
   branchPrefix: "luan/"
   log:
     order: default
-  pagers:
+  diffRenderers:
     - colorArg: always
-      pager: delta -s --dark --paging=never --24-bit-color=never
+      command: delta -s --dark --paging=never --24-bit-color=never
 keybinding:
   universal:
     openFile: O

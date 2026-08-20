@@ -74,3 +74,8 @@ fish_add_path $HOME/.opencode/bin
 fish_add_path --path --move /opt/homebrew/bin /opt/homebrew/sbin
 fish_add_path --path --move $HOME/.local/share/mise/shims
 fish_add_path --path --move $HOME/.local/bin
+
+# Added by DeveloperSetup.sh
+if test -r "$HOME/.local/share/bcny/config.fish"
+    source "$HOME/.local/share/bcny/config.fish"
+end
