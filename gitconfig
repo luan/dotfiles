@@ -50,8 +50,26 @@
 [branch]
   autosetupmerge = true
 
+[spice "repoSync"]
+  restack = none
+
 [spice "branchCreate"]
   prefix = luan/
+  commit = false
+
+[spice "submit"]
+  web = false
+  navigationComment = false
+  skipRestackCheck = trunk
+
+[spice "rebaseContinue"]
+  edit = false
+
+[spice "log"]
+  all = false
+  crStatus = true
+  crComments = true
+  pushStatusFormat = aheadbehind
 
 [push]
   default = tracking

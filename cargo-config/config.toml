@@ -3,19 +3,6 @@ incremental = false
 rustc-wrapper = "kache"
 
 [unstable]
-codegen-backend = true
 embed-metadata = false
 gc = true
 mtime-on-use = true
-
-[profile.dev]
-codegen-backend = "cranelift"
-
-[profile.test]
-codegen-backend = "cranelift"
-
-[profile.bench]
-codegen-backend = "llvm"
-
-[profile.release]
-codegen-backend = "llvm"

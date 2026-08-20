@@ -322,6 +322,14 @@ mux: rust
     codesign --force --sign - "{{ home }}/bin/notch-state"
     @echo "✓ mux built"
 
+# Build and install git-stat (Rust)
+git-stat: rust
+    cargo build --release --locked --manifest-path="{{ dotfiles_dir }}/Cargo.toml" -p git-stat
+    mkdir -p "{{ home }}/bin"
+    cp "{{ dotfiles_dir }}/target/release/git-stat" "{{ home }}/bin/git-stat"
+    codesign --force --sign - "{{ home }}/bin/git-stat"
+    @echo "✓ git-stat built"
+
 # Run mux sidebar performance regression guardrails
 mux-perf:
     #!/usr/bin/env bash
@@ -371,5 +379,5 @@ mux-status-latency:
     "$tmux_bin" -L "$socket" new-session -d -x 120 -y 40 -s mux-latency "sleep 120"
     PATH="$wrapper_dir:$PATH" HOME="$tmp_home" "$bin" sidebar status-latency-profile 8 750
 
-# Full setup: Homebrew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, sheldon
-setup: brew link rust cargo repos gitconfig claude-plugins dev-routing sheldon mux
+# Full setup: Homebrew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, mux, git-stat, sheldon
+setup: brew link rust cargo repos gitconfig claude-plugins dev-routing sheldon mux git-stat

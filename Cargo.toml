@@ -1,5 +1,5 @@
 [workspace]
-members = ["xdg-configs/tmux/mux"]
+members = ["crates/git-stat", "xdg-configs/tmux/mux"]
 resolver = "3"
 
 [profile.release]
