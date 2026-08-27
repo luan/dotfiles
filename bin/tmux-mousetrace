@@ -1,0 +1,43 @@
+#!/bin/sh
+# Capture the mouse events tmux receives from the terminal.
+#
+# Runs a throwaway tmux server on its own socket with debug logging, using the
+# real config. Your normal session is untouched. On exit it prints the mouse
+# event stream so a double-click that "does nothing" can be told apart from one
+# the terminal never reported.
+set -e
+
+dir=$(mktemp -d /tmp/tmux-mousetrace.XXXXXX)
+cd "$dir"
+
+cat <<'EOF'
+Inside the new tmux:
+  1. run something with text on screen, e.g.  git log --oneline | head -20
+  2. double-click a word            (should select it)
+  3. double-click a different word   (the one that "only works once")
+  4. move the mouse around WITHOUT holding any button
+  5. type  exit  to finish
+
+EOF
+printf 'press enter to start... '
+read -r _
+
+tmux -L mousetrace -vv -f "$HOME/.config/tmux/tmux.conf" new-session || true
+
+log=$(ls -t "$dir"/tmux-server-*.log 2>/dev/null | head -1)
+if [ -z "$log" ]; then
+	echo "no server log written in $dir" >&2
+	exit 1
+fi
+
+out="$dir/mouse-events.txt"
+grep -aE 'down at|second-click at|triple-click at|up at|drag start|drag update|wheel at|click timer|click sequence' "$log" >"$out" || true
+
+echo
+echo "=== mouse event stream (${out}) ==="
+cat "$out"
+echo
+echo "=== counts ==="
+awk '{ for (i=1;i<=NF;i++) if ($i=="at") { print $(i-1); break } }' "$out" | sort | uniq -c | sort -rn
+echo
+echo "full log: $log"
