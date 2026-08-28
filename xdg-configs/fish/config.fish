@@ -6,6 +6,14 @@ end
 
 set --export GIT_USERNAME luan
 
+# Some SSH clients, including Termius on iOS, do not send a locale. tmux then
+# treats the client as non-UTF-8 and replaces Unicode glyphs with underscores.
+# Preserve any locale supplied by local terminals or other SSH clients.
+if test -z "$LC_ALL$LC_CTYPE$LANG"
+    set --export LANG en_US.UTF-8
+    set --export LC_CTYPE en_US.UTF-8
+end
+
 if command -sq mise; and not set -q MISE_SHELL
     if status is-interactive
         mise activate fish | source
@@ -79,3 +87,6 @@ fish_add_path --path --move $HOME/.local/bin
 if test -r "$HOME/.local/share/bcny/config.fish"
     source "$HOME/.local/share/bcny/config.fish"
 end
+
+# Added by DeveloperSetup.sh
+source "/Users/luan.santos/.local/share/bcny/config.fish"

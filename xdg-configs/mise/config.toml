@@ -1,6 +1,5 @@
 [tools]
-"github:thebrowsercompany/infra" = { version = "0.1.0", version_prefix = "shed-v" }
-rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer", "rustc-codegen-cranelift"] }
+rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer"] }
 
 [env]
 CC = "kache cc"
