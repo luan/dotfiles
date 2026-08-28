@@ -7,6 +7,9 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
+  "edit_predictions": {
+    "provider": "copilot"
+  },
   "bottom_dock_layout": "contained",
   "outline_panel": {
     "button": true,
@@ -41,12 +44,31 @@
   "icon_theme": {
     "mode": "dark",
     "light": "Zed (Default)",
-    "dark": "Zed (Default)",
+    "dark": "Catppuccin Mocha",
   },
   "session": {
     "trust_all_worktrees": true,
   },
   "agent_servers": {
+    "cursor": {
+      "type": "registry"
+    },
+    "codex-acp": {
+      "favorite_config_option_values": {
+        "reasoning_effort": [
+          "medium",
+          "high",
+          "low"
+        ]
+      },
+      "default_config_options": {
+        "reasoning_effort": "medium"
+      },
+      "type": "registry"
+    },
+    "claude-acp": {
+      "type": "registry"
+    },
     "pi-acp": {
       "type": "registry",
     },
@@ -135,22 +157,19 @@
     "show_nav_history_buttons": false,
   },
   "show_whitespaces": "selection",
-  "theme": {
-    "mode": "dark",
-    "light": "Catppuccin Latte",
-    "dark": "Catppuccin Mocha - No Italics",
-  },
+  "theme": "Zedokai (Filter Octagon)",
   "ui_font_size": 15.0,
   "ui_font_family": "Maple Mono NF",
-  "ui_font_weight": 450.0,
+  "ui_font_weight": 100.0,
   "buffer_font_size": 13.0,
   "buffer_font_family": "Maple Mono NF",
-  "buffer_font_weight": 300.0,
+  "buffer_font_weight": 250.0,
   "terminal": {
     "option_as_meta": true,
   },
   "git": {
     "inline_blame": {
+      "location": "status_bar",
       "enabled": false,
     },
   },
