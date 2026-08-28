@@ -274,13 +274,29 @@ claude-plugins:
 rust: link
     mise install rust
     mise reshim
+    just rust-clean
+    rustup default "$(mise current rust)"
     kache doctor
 
 # Update the rolling nightly toolchain and its managed components
 rust-upgrade: link
     mise upgrade rust
     mise reshim
+    just rust-clean
+    rustup default "$(mise current rust)"
     kache doctor
+
+# Keep only Mise's current dated nightly; remove older dated toolchains.
+rust-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current="$(mise current rust)"
+    rustup toolchain uninstall nightly 2>/dev/null || true
+    rustup toolchain list | awk '$1 ~ /^nightly-[0-9]{4}-[0-9]{2}-[0-9]{2}-/ { print $1 }' | while read -r toolchain; do
+        if [[ "$toolchain" != "${current}-"* ]]; then
+            rustup toolchain uninstall "$toolchain"
+        fi
+    done
 
 # Install cargo binaries via cargo-binstall
 cargo: rust

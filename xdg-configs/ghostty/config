@@ -8,26 +8,26 @@ shell-integration-features = ssh-env
 shell-integration-features = ssh-terminfo
 shell-integration-features = ssh-env
 
-font-family = ""
-font-family = "Maple Mono"
-font-family = "Font Awesome 7 Brands"
 font-family = "Maple Mono NF"
 
 font-size = 11.75
+
+palette-generate = true
+palette-harmonious = true
 
 adjust-cell-height = 45%
 adjust-font-baseline = 3
 adjust-underline-position = 25%
 adjust-underline-thickness = 1
 
-window-decoration = "none"
+# window-decoration = "none"
 window-padding-balance = true
 window-padding-color = "extend"
 
-fullscreen = "non-native"
-macos-non-native-fullscreen = true
-macos-window-shadow = false
-macos-titlebar-style = "hidden"
+# fullscreen = "non-native"
+# macos-non-native-fullscreen = true
+# macos-window-shadow = false
+# macos-titlebar-style = "tabs"
 
 copy-on-select = true
 mouse-hide-while-typing = true
@@ -37,91 +37,91 @@ unfocused-split-opacity = 0.85
 scrollback-limit = 10000000
 macos-option-as-alt = left
 
-keybind = clear
+# keybind = clear
 # {{{ tmux hacks
 # tmux stuff
-keybind = super+1=text:\x001
-keybind = super+2=text:\x002
-keybind = super+3=text:\x003
-keybind = super+4=text:\x004
-keybind = super+5=text:\x005
-keybind = super+6=text:\x006
-keybind = super+7=text:\x007
-keybind = super+8=text:\x008
-keybind = super+9=text:\x009
-# tmux-fzf (super+shift+f -> prefix+F for tmux)
-keybind = super+shift+f=text:\x00F
-# session prev (super+shift+p)
-keybind = super+shift+p=csi:65~
-keybind = super+shift+[=csi:65~
-# session move up/down (super+shift+</> via CSI relay)
-keybind = super+shift+comma=csi:66~
-keybind = super+shift+period=csi:67~
-# session next (super+shift+n)
-keybind = super+shift+n=csi:64~
-keybind = super+shift+]=csi:64~
-# Ditch session safely (super+alt+x -> prefix+X for tmux)
-keybind = super+alt+x=text:\x00X
-# vim stuff
-keybind = super+j=csi:90;1~
-keybind = super+s=csi:90;2~
-keybind = super+shift+c=csi:90;3~
-keybind = super+alt+shift+c=csi:90;4~
-# Ghostty sidebars are intentionally disabled. WezTerm owns terminal-hosted
-# sidebars because it can spawn a fixed-width split with a command safely.
-keybind = super+y=csi:71~
-keybind = super+o=ignore
-keybind = super+.=csi:90;6~
-keybind = super+e=csi:90;7~
-keybind = super+b=csi:90;8~
-keybind = super+i=csi:90;9~
-keybind = super+l=csi:90;10~
-keybind = super+shift+i=csi:90;11~
-keybind = super+k=csi:90;12~
-keybind = super+alt+v=csi:90;13~
-# multicursor
-keybind = super+d=csi:90;14~
-keybind = super+shift+d=csi:90;15~
-keybind = super+u=csi:90;16~
-keybind = super+shift+u=csi:90;17~
-keybind = super+alt+k=csi:90;18~
-keybind = super+alt+j=csi:90;19~
-keybind = super+alt+shift+k=csi:90;20~
-keybind = super+alt+shift+j=csi:90;21~
-# last-session toggle relay (ctrl+tab)
-keybind = ctrl+tab=csi:60~
-keybind = ctrl+shift+tab=csi:76~
-# attention session relay (super+;)
-keybind = super+semicolon=csi:61~
-keybind = super+shift+e=ignore
+# keybind = super+1=text:\x001
+# keybind = super+2=text:\x002
+# keybind = super+3=text:\x003
+# keybind = super+4=text:\x004
+# keybind = super+5=text:\x005
+# keybind = super+6=text:\x006
+# keybind = super+7=text:\x007
+# keybind = super+8=text:\x008
+# keybind = super+9=text:\x009
+# # tmux-fzf (super+shift+f -> prefix+F for tmux)
+# keybind = super+shift+f=text:\x00F
+# # session prev (super+shift+p)
+# keybind = super+shift+p=csi:65~
+# keybind = super+shift+[=csi:65~
+# # session move up/down (super+shift+</> via CSI relay)
+# keybind = super+shift+comma=csi:66~
+# keybind = super+shift+period=csi:67~
+# # session next (super+shift+n)
+# keybind = super+shift+n=csi:64~
+# keybind = super+shift+]=csi:64~
+# # Ditch session safely (super+alt+x -> prefix+X for tmux)
+# keybind = super+alt+x=text:\x00X
+# # vim stuff
+# keybind = super+j=csi:90;1~
+# keybind = super+s=csi:90;2~
+# keybind = super+shift+c=csi:90;3~
+# keybind = super+alt+shift+c=csi:90;4~
+# # Ghostty sidebars are intentionally disabled. WezTerm owns terminal-hosted
+# # sidebars because it can spawn a fixed-width split with a command safely.
+# keybind = super+y=csi:71~
+# keybind = super+o=ignore
+# keybind = super+.=csi:90;6~
+# keybind = super+e=csi:90;7~
+# keybind = super+b=csi:90;8~
+# keybind = super+i=csi:90;9~
+# keybind = super+l=csi:90;10~
+# keybind = super+shift+i=csi:90;11~
+# keybind = super+k=csi:90;12~
+# keybind = super+alt+v=csi:90;13~
+# # multicursor
+# keybind = super+d=csi:90;14~
+# keybind = super+shift+d=csi:90;15~
+# keybind = super+u=csi:90;16~
+# keybind = super+shift+u=csi:90;17~
+# keybind = super+alt+k=csi:90;18~
+# keybind = super+alt+j=csi:90;19~
+# keybind = super+alt+shift+k=csi:90;20~
+# keybind = super+alt+shift+j=csi:90;21~
+# # last-session toggle relay (ctrl+tab)
+# keybind = ctrl+tab=csi:60~
+# keybind = ctrl+shift+tab=csi:76~
+# # attention session relay (super+;)
+# keybind = super+semicolon=csi:61~
+# keybind = super+shift+e=ignore
 # }}}
 
-# new project session (super+n)
-keybind = super+n=csi:62~
-# new worktree in current repo (super+ctrl+n)
-keybind = super+ctrl+n=csi:68~
-keybind = super+alt+n=new_window
-# session chooser (super+p)
-keybind = super+p=csi:63~
-keybind = super+shift+w=close_window
-keybind = super+w=close_surface
-keybind = super+q=quit
-
-# keybind = super+comma=open_config
-keybind = super+shift+r=reload_config
-
-keybind = super+minus=decrease_font_size:1
-keybind = super+equal=increase_font_size:1
-keybind = super+plus=increase_font_size:1
-keybind = super+zero=reset_font_size
-
-# keybind = super+k=clear_screen
-# keybind = super+alt+i=inspector:toggle
-
-keybind = performable:super+c=copy_to_clipboard
-keybind = performable:super+v=paste_from_clipboard
-
-keybind = super+alt+ctrl+f=toggle_fullscreen
-
-keybind = shift+enter=text:\n
+# # new project session (super+n)
+# keybind = super+n=csi:62~
+# # new worktree in current repo (super+ctrl+n)
+# keybind = super+ctrl+n=csi:68~
+# keybind = super+alt+n=new_window
+# # session chooser (super+p)
+# keybind = super+p=csi:63~
+# keybind = super+shift+w=close_window
+# keybind = super+w=close_surface
+# keybind = super+q=quit
+#
+# # keybind = super+comma=open_config
+# keybind = super+shift+r=reload_config
+#
+# keybind = super+minus=decrease_font_size:1
+# keybind = super+equal=increase_font_size:1
+# keybind = super+plus=increase_font_size:1
+# keybind = super+zero=reset_font_size
+#
+# # keybind = super+k=clear_screen
+# # keybind = super+alt+i=inspector:toggle
+#
+# keybind = performable:super+c=copy_to_clipboard
+# keybind = performable:super+v=paste_from_clipboard
+#
+# keybind = super+alt+ctrl+f=toggle_fullscreen
+#
+# keybind = shift+enter=text:\n
 # vim: ft=toml fdm=marker
