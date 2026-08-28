@@ -1,4 +1,5 @@
 [tools]
+"github:thebrowsercompany/infra" = { version = "0.1.0", version_prefix = "shed-v" }
 rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer", "rustc-codegen-cranelift"] }
 
 [env]
@@ -7,3 +8,6 @@ CXX = "kache c++"
 CC_KNOWN_WRAPPER_CUSTOM = "kache"
 CMAKE_C_COMPILER_LAUNCHER = ""
 CMAKE_CXX_COMPILER_LAUNCHER = ""
+
+[settings.github]
+credential_command = "gh auth token"
