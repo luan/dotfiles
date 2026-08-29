@@ -93,7 +93,8 @@ local function is_notched_screen()
 	return name:find("built%-in") ~= nil or name:find("builtin") ~= nil or name:find("liquid retina") ~= nil
 end
 
--- Adjust window chrome when fullscreen or display placement changes.
+-- Keep WezTerm's split color and tab-bar behavior in fullscreen on notched
+-- displays. tmux owns its own status bar independently.
 local function update_notched(window)
 	local dims = window:get_dimensions()
 	local notched = dims.is_full_screen and is_notched_screen()
@@ -134,6 +135,7 @@ local function toggle_last_session()
 	end)
 end
 
+
 config.keys = {
 	-- Clipboard (Cmd+C: copy WezTerm selection if active, else send CSI to tmux for copy-mode copy)
 	{
@@ -164,10 +166,9 @@ config.keys = {
 	{ key = "r", mods = "SUPER|SHIFT", action = act.ReloadConfiguration },
 	{ key = "Enter", mods = "SHIFT", action = act.SendString("\n") },
 
-	-- Native tmux session commands
+	-- Session actions delegated to native tmux commands
 	{ key = "p", mods = "SUPER", action = act.SendString(csi("63~")) },
 	{ key = "n", mods = "SUPER", action = act.SendString(csi("62~")) },
-	{ key = "x", mods = "SUPER|ALT", action = act.SendString(tmux_prefix .. "X") },
 
 	-- Toggle the previous tmux session (works from any pane)
 	{ key = "Tab", mods = "CTRL", action = toggle_last_session() },
@@ -175,7 +176,7 @@ config.keys = {
 }
 
 -- {{{ tmux relay: prefix + key
--- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf; Cmd+Alt+X closes session with confirmation
+-- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf
 local prefix_relay = {
 	{ key = "f", mods = "SUPER|SHIFT", suffix = "F" },
 }

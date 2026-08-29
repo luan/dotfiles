@@ -144,6 +144,7 @@ brew:
         exit 1
     fi
 
+    "$real_brew" trust --tap moltenbits/tap >/dev/null 2>&1 || true
     "$real_brew" trust --tap kunobi-ninja/kunobi >/dev/null 2>&1 || true
     "$real_brew" trust --formula oven-sh/bun/bun >/dev/null 2>&1 || true
 
@@ -333,5 +334,5 @@ git-stat: rust
     codesign --force --sign - "{{ home }}/bin/git-stat"
     @echo "✓ git-stat built"
 
-# Full setup: Homebrew, cargo, repos, link, gitconfig, claude-plugins, dev-routing, git-stat, sheldon
+# Full setup: Homebrew, Rust, repos, links, gitconfig, Claude plugins, dev-routing, git-stat, sheldon
 setup: brew link rust cargo repos gitconfig claude-plugins dev-routing sheldon git-stat
