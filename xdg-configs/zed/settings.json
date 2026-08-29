@@ -8,21 +8,37 @@
 // from the command palette or from `Zed` application menu.
 {
   "disable_ai": false,
+  "gutter": {
+    "runnables": true
+  },
+  "lsp_document_colors": "inlay",
+  "use_system_window_tabs": true,
+  "fullscreen_mode": "simple",
+  "indent_guides": {
+    "background_coloring": "disabled",
+    "coloring": "indent_aware"
+  },
+  "vim": {
+    "toggle_relative_line_numbers": false
+  },
+  "which_key": {
+    "enabled": true
+  },
   "edit_predictions": {
-    "provider": "copilot",
+    "provider": "copilot"
   },
   "bottom_dock_layout": "contained",
   "outline_panel": {
     "button": true,
-    "dock": "left",
+    "dock": "right",
   },
   "collaboration_panel": {
     "button": false,
-    "dock": "left",
+    "dock": "right",
   },
   "git_panel": {
     "tree_view": false,
-    "dock": "left",
+    "dock": "right",
   },
   "status_bar": {
     "show_active_file": true,
@@ -37,11 +53,18 @@
   "document_symbols": "on",
   "document_folding_ranges": "on",
   "semantic_tokens": "combined",
-  "code_lens": "on",
+  "code_lens": "menu",
   "inlay_hints": {
+    "show_type_hints": true,
+    "show_value_hints": true,
+    "show_background": false,
     "enabled": true,
   },
-  "autosave": "off",
+  "autosave": {
+    "after_delay": {
+      "milliseconds": 1000
+    }
+  },
   "text_rendering_mode": "platform_default",
   "icon_theme": {
     "mode": "dark",
@@ -53,19 +76,23 @@
   },
   "agent_servers": {
     "cursor": {
-      "type": "registry",
+      "type": "registry"
     },
     "codex-acp": {
       "favorite_config_option_values": {
-        "reasoning_effort": ["medium", "high", "low"],
+        "reasoning_effort": [
+          "medium",
+          "high",
+          "low"
+        ]
       },
       "default_config_options": {
-        "reasoning_effort": "medium",
+        "reasoning_effort": "medium"
       },
-      "type": "registry",
+      "type": "registry"
     },
     "claude-acp": {
-      "type": "registry",
+      "type": "registry"
     },
     "pi-acp": {
       "type": "registry",
@@ -73,15 +100,16 @@
   },
   "cli_default_open_behavior": "existing_window",
   "title_bar": {
+    "show_worktree_name": true,
     "show_user_menu": true,
-    "show_menus": false,
+    "show_menus": true,
     "show_branch_status_icon": true,
-    "show_sign_in": false,
+    "show_sign_in": true,
     "show_user_picture": false,
-    "show_onboarding_banner": true,
+    "show_onboarding_banner": false,
     "show_project_items": true,
     "show_branch_name": true,
-    "button_layout": null,
+    "button_layout": "platform_default",
   },
   "project_panel": {
     "bold_folder_labels": true,
@@ -90,14 +118,17 @@
     "button": true,
   },
   "toolbar": {
-    "code_actions": true,
-    "breadcrumbs": true,
+    "quick_actions": false,
+    "selections_menu": false,
+    "agent_review": false,
+    "breadcrumbs": false,
   },
   "language_models": {
     "openai_compatible": {},
   },
-  "base_keymap": "Zed",
+  "base_keymap": "Cursor",
   "agent": {
+    "enable_feedback": false,
     "sidebar_side": "left",
     "default_height": 900.0,
     "button": false,
@@ -142,6 +173,7 @@
   },
   "wrap_guides": [180],
   "tabs": {
+    "activate_on_close": "left_neighbour",
     "file_icons": true,
     "git_status": true,
     "show_diagnostics": "all",
@@ -150,9 +182,9 @@
   "show_edit_predictions": true,
   "hover_popover_enabled": true,
   "tab_bar": {
-    "show_tab_bar_buttons": true,
+    "show_tab_bar_buttons": false,
     "show": true,
-    "show_nav_history_buttons": false,
+    "show_nav_history_buttons": true,
   },
   "show_whitespaces": "selection",
   "theme": {
@@ -161,12 +193,13 @@
     "dark": "Zedokai Darker (Filter Octagon)",
   },
   "ui_font_size": 15.0,
-  "ui_font_family": ".ZedSans",
-  "ui_font_weight": 300.0,
+  "ui_font_family": "Maple Mono NF",
+  "ui_font_weight": 100.0,
   "buffer_font_size": 13.0,
   "buffer_font_family": "Maple Mono NF",
   "buffer_font_weight": 250.0,
   "terminal": {
+    "font_weight": 100.0,
     "option_as_meta": true,
   },
   "git": {

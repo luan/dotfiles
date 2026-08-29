@@ -162,6 +162,308 @@
     },
   },
   {
+    "context": "Editor && mode == full",
+    "bindings": {
+      "cmd-k": "assistant::InlineAssist",
+    },
+  },
+  {
+    "context": "Editor && mode == full",
+    "unbind": {
+      "cmd-k": "assistant::InlineAssist",
+    },
+  },
+  {
+    "context": "Terminal",
+    "unbind": {
+      "cmd-k": "assistant::InlineAssist",
+    },
+  },
+  {
+    "context": "KeymapEditor",
+    "unbind": {
+      "cmd-k": "keymap_editor::OpenCreateKeybindingModal",
+    },
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-k": "command_palette::Toggle",
+    },
+  },
+  {
+    "context": "Editor && mode == full",
+    "unbind": {
+      "cmd-e": "buffer_search::UseSelectionForFind",
+    },
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-shift-p": "pane::ActivatePreviousItem",
+    },
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-shift-n": "pane::ActivateNextItem",
+    },
+  },
+  {
+    "bindings": {
+      "cmd-shift-n": "multi_workspace::NextProject"
+    }
+  },
+  {
+    "bindings": {
+      "cmd-shift-p": "multi_workspace::PreviousProject"
+    }
+  },
+  {
+    "bindings": {
+      "cmd->": "multi_workspace::MoveProjectDown"
+    }
+  },
+  {
+    "bindings": {
+      "cmd-<": "multi_workspace::MoveProjectUp"
+    }
+  },
+  {
+    "context": "Workspace",
+    "unbind": {
+      "cmd-shift-n": "workspace::NewWindow"
+    }
+  },
+  {
+    "context": "Workspace",
+    "unbind": {
+      "cmd-shift-p": "command_palette::Toggle"
+    }
+  },
+  {
+    "context": "KeymapEditor",
+      "bindings": {
+      "backspace": "keymap_editor::DeleteBinding"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-shift-o": "projects::OpenRecent"
+    }
+  },
+  {
+    "context": "Workspace",
+    "unbind": {
+      "ctrl-r": "projects::OpenRecent"
+    }
+  },
+  {
+    "context": "Workspace",
+    "unbind": {
+      "alt-cmd-o": "projects::OpenRecent"
+    }
+  },
+  {
+    "context": "BufferSearchBar",
+    "bindings": {
+      "alt-cmd-o": "outline::Toggle"
+    }
+  },
+  {
+    "context": "BufferSearchBar",
+    "unbind": {
+      "cmd-shift-o": "outline::Toggle"
+    }
+  },
+  {
+    "context": "Editor && mode == full",
+    "bindings": {
+      "alt-cmd-o": "outline::Toggle"
+    }
+  },
+  {
+    "context": "Editor && mode == full",
+    "unbind": {
+      "cmd-shift-o": "outline::Toggle"
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-9": [
+        "pane::ActivateItem",
+        8
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-9": [
+        "pane::ActivateItem",
+        8
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-8": [
+        "pane::ActivateItem",
+        7
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-8": [
+        "pane::ActivateItem",
+        7
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-7": [
+        "pane::ActivateItem",
+        6
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-7": [
+        "pane::ActivateItem",
+        6
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-6": [
+        "pane::ActivateItem",
+        5
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-6": [
+        "pane::ActivateItem",
+        5
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-5": [
+        "pane::ActivateItem",
+        4
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-5": [
+        "pane::ActivateItem",
+        4
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-4": [
+        "pane::ActivateItem",
+        3
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-4": [
+        "pane::ActivateItem",
+        3
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-3": [
+        "pane::ActivateItem",
+        2
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-3": [
+        "pane::ActivateItem",
+        2
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-2": [
+        "pane::ActivateItem",
+        1
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-2": [
+        "pane::ActivateItem",
+        1
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-1": [
+        "pane::ActivateItem",
+        0
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-1": [
+        "pane::ActivateItem",
+        0
+      ]
+    }
+  },
+  {
+    "context": "Pane",
+    "bindings": {
+      "alt-0": "pane::ActivateLastItem"
+    }
+  },
+  {
+    "context": "Pane",
+    "unbind": {
+      "ctrl-0": "pane::ActivateLastItem"
+    }
+  },
+  {
     "context": "Workspace",
     "bindings": {
       "cmd-i": "agent::ToggleFocus",
@@ -177,5 +479,5 @@
     "bindings": {
       "cmd-i": "agent::Toggle",
     },
-  },
+  }
 ]
