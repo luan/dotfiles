@@ -11,5 +11,3 @@ Cargo uses Kache with non-incremental development and test builds.
 Mise exports Kache as the C and C++ compiler wrapper for Fish, Zsh, Bash, and PowerShell.
 
 Run `just rust-upgrade` to update nightly and its managed components.
-
-Run `just mux` to build, install, and sign the Rust `mux` binary.

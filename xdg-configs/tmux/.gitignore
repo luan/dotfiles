@@ -1,6 +1,3 @@
 plugins/
 .claude/settings.local.json
 .DS_Store
-.session-favorites
-session-order
-session-hidden

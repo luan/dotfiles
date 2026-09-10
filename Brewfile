@@ -1,6 +1,5 @@
 # Taps
 tap 'kunobi-ninja/kunobi'
-tap 'moltenbits/tap'
 
 # Formulae
 brew 'caddy'
@@ -63,7 +62,6 @@ cask 'firefox@nightly'
 cask 'ghostty'
 cask 'github'
 cask 'google-chrome'
-cask 'growlrrr'
 cask 'keka'
 cask 'obsidian'
 cask 'raycast'

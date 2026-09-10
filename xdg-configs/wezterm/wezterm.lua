@@ -93,14 +93,10 @@ local function is_notched_screen()
 	return name:find("built%-in") ~= nil or name:find("builtin") ~= nil or name:find("liquid retina") ~= nil
 end
 
--- Push notched state to tmux and refresh the status bar. Triggered when the
--- window enters/leaves fullscreen or moves between screens. Uses
--- background_child_process (non-blocking, non-tty) to avoid stalling the GUI
--- thread and to detach from the hardened-runtime parent cleanly.
+-- Adjust window chrome when fullscreen or display placement changes.
 local function update_notched(window)
 	local dims = window:get_dimensions()
 	local notched = dims.is_full_screen and is_notched_screen()
-	local val = notched and "1" or "0"
 	local overrides = window:get_config_overrides() or {}
 	local desired_split = notched and "#000000" or "#1A1B26"
 	local desired_hide = not notched
@@ -116,19 +112,6 @@ local function update_notched(window)
 	if dirty then
 		window:set_config_overrides(overrides)
 	end
-	wezterm.background_child_process({
-		"/bin/sh",
-		"-c",
-		"export PATH="
-			.. PATH
-			.. "; "
-			.. "tmux set-option -g @notched "
-			.. val
-			.. " >/dev/null 2>&1; "
-			.. "mux update '' "
-			.. "\"$(tmux display -p '#{client_width}' 2>/dev/null)\" "
-			.. ">/dev/null 2>&1",
-	})
 end
 
 wezterm.on("gui-startup", function(cmd)
@@ -148,101 +131,6 @@ end)
 local function toggle_last_session()
 	return wezterm.action_callback(function(_window, _pane)
 		os.execute("PATH=" .. PATH .. " tmux switch-client -l >/dev/null 2>&1 &")
-	end)
-end
-
-local function set_terminal_sidebar_width(width)
-	local cmd
-	if width then
-		cmd = "tmux set-option -g @terminal_sidebar_width " .. tostring(width)
-	else
-		cmd = "tmux set-option -gu @terminal_sidebar_width"
-	end
-	wezterm.background_child_process({
-		"/bin/sh",
-		"-c",
-		"export PATH="
-			.. PATH
-			.. "; "
-			.. cmd
-			.. " >/dev/null 2>&1; mux update '' \"$(tmux display -p '#{client_width}' 2>/dev/null)\" >/dev/null 2>&1",
-	})
-end
-
-local function sidebar_pane_in_tab(pane)
-	local tab = pane:tab()
-	if not tab then
-		return nil
-	end
-	for _, item in ipairs(tab:panes_with_info()) do
-		local vars = item.pane:get_user_vars()
-		if vars.is_sidebar == "true" and vars.mux_sidebar_runtime == "terminal" then
-			return item.pane
-		end
-	end
-	return nil
-end
-
-local function focus_or_create_terminal_sidebar(window, pane)
-	local existing = sidebar_pane_in_tab(pane)
-	if existing then
-		set_terminal_sidebar_width(45)
-		existing:activate()
-		return
-	end
-	local sidebar = pane:split({
-		direction = "Left",
-		size = 45,
-		args = { "mux", "sidebar-terminal" },
-		set_environment_variables = {
-			PATH = PATH,
-			MUX_SIDEBAR_HOST = "wezterm",
-			MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
-		},
-	})
-	if sidebar then
-		set_terminal_sidebar_width(45)
-		sidebar:activate()
-	else
-		set_terminal_sidebar_width(45)
-		window:perform_action(
-			act.SplitPane({
-				direction = "Left",
-				size = { Cells = 45 },
-				command = {
-					args = { "mux", "sidebar-terminal" },
-					set_environment_variables = {
-						PATH = PATH,
-						MUX_SIDEBAR_HOST = "wezterm",
-						MUX_SIDEBAR_TITLE = "mux-sidebar-terminal",
-					},
-				},
-			}),
-			pane
-		)
-	end
-end
-
-local function toggle_terminal_sidebar(window, pane)
-	local existing = sidebar_pane_in_tab(pane)
-	if existing then
-		existing:activate()
-		window:perform_action(act.CloseCurrentPane({ confirm = false }), existing)
-		set_terminal_sidebar_width(nil)
-		return
-	end
-	focus_or_create_terminal_sidebar(window, pane)
-end
-
-local function sidebar_key_or_fallback(text, fallback)
-	return wezterm.action_callback(function(window, pane)
-		local sidebar = sidebar_pane_in_tab(pane)
-		if sidebar then
-			sidebar:activate()
-			sidebar:send_text(text)
-			return
-		end
-		window:perform_action(fallback, pane)
 	end)
 end
 
@@ -276,16 +164,10 @@ config.keys = {
 	{ key = "r", mods = "SUPER|SHIFT", action = act.ReloadConfiguration },
 	{ key = "Enter", mods = "SHIFT", action = act.SendString("\n") },
 
-	-- Session sidebar
-	{ key = "e", mods = "SUPER|SHIFT", action = wezterm.action_callback(toggle_terminal_sidebar) },
-	{ key = "o", mods = "SUPER", action = wezterm.action_callback(focus_or_create_terminal_sidebar) },
-
-	-- Sidebar-aware session actions: use the terminal-hosted sidebar when it is
-	-- open; fall back to the normal tmux popup/command when it is not.
-	{ key = "p", mods = "SUPER", action = sidebar_key_or_fallback("/", act.SendString(csi("63~"))) },
-	{ key = "n", mods = "SUPER", action = sidebar_key_or_fallback("n", act.SendString(csi("62~"))) },
-	{ key = "n", mods = "SUPER|CTRL", action = sidebar_key_or_fallback("w", act.SendString(csi("68~"))) },
-	{ key = "x", mods = "SUPER|ALT", action = sidebar_key_or_fallback("x", act.SendString(tmux_prefix .. "X")) },
+	-- Native tmux session commands
+	{ key = "p", mods = "SUPER", action = act.SendString(csi("63~")) },
+	{ key = "n", mods = "SUPER", action = act.SendString(csi("62~")) },
+	{ key = "x", mods = "SUPER|ALT", action = act.SendString(tmux_prefix .. "X") },
 
 	-- Toggle the previous tmux session (works from any pane)
 	{ key = "Tab", mods = "CTRL", action = toggle_last_session() },
@@ -293,7 +175,7 @@ config.keys = {
 }
 
 -- {{{ tmux relay: prefix + key
--- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf; Cmd+Alt+X ditches session
+-- Cmd+1..9 select tmux windows; Cmd+Shift+F opens tmux-fzf; Cmd+Alt+X closes session with confirmation
 local prefix_relay = {
 	{ key = "f", mods = "SUPER|SHIFT", suffix = "F" },
 }
@@ -307,11 +189,8 @@ end
 
 -- {{{ tmux relay: CSI user-key sequences
 local csi_relay = {
-	{ key = ";", mods = "SUPER", csi = "61~" },
 	{ key = "n", mods = "SUPER|SHIFT", csi = "64~" },
 	{ key = "p", mods = "SUPER|SHIFT", csi = "65~" },
-	{ key = "mapped:<", mods = "SUPER|SHIFT", csi = "66~" },
-	{ key = "mapped:>", mods = "SUPER|SHIFT", csi = "67~" },
 	{ key = "[", mods = "CTRL|ALT", csi = "69~" },
 	{ key = "mapped:}", mods = "SUPER|SHIFT", csi = "70~" },
 	{ key = "mapped:{", mods = "SUPER|SHIFT", csi = "73~" },
