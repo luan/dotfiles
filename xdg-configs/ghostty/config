@@ -12,6 +12,9 @@ font-family = "Maple Mono NF"
 
 font-size = 11.75
 
+cursor-style-blink = true
+cursor-style = bar
+
 palette-generate = true
 palette-harmonious = true
 

@@ -111,13 +111,12 @@
     "context": "Editor && (vim_mode == insert) && !VimWaiting && !menu && !edit_prediction",
   },
   {
-    "bindings": {},
-    "context": "Editor && vim_mode == visual && !VimWaiting && !menu",
-  },
-  {
     "bindings": {
       ">": "editor::Indent",
       "<": "editor::Outdent",
+      "shift-s": "vim::PushAddSurrounds",
+      "ctrl-b": ["workspace::SendKeystrokes", "\" s c * * ctrl-r s * * escape"],
+      "ctrl-i": ["workspace::SendKeystrokes", "\" s c _ ctrl-r s _ escape"],
     },
     "context": "Editor && vim_mode == visual && !VimWaiting && !menu",
   },
@@ -163,27 +162,20 @@
     },
   },
   {
-    "context": "Editor && mode == full",
+    "context": "Workspace",
     "bindings": {
-      "cmd-k": "assistant::InlineAssist"
-    }
+      "cmd-i": "agent::ToggleFocus",
+    },
   },
   {
-    "context": "Editor && mode == full",
+    "context": "Workspace",
     "unbind": {
-      "cmd-k": "assistant::InlineAssist"
-    }
+      "cmd-?": "agent::ToggleFocus",
+    },
   },
   {
-    "context": "Terminal",
-    "unbind": {
-      "cmd-k": "assistant::InlineAssist"
-    }
+    "bindings": {
+      "cmd-i": "agent::Toggle",
+    },
   },
-  {
-    "context": "KeymapEditor",
-    "unbind": {
-      "cmd-k": "keymap_editor::OpenCreateKeybindingModal"
-    }
-  }
 ]

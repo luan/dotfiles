@@ -7,8 +7,9 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
+  "disable_ai": false,
   "edit_predictions": {
-    "provider": "copilot"
+    "provider": "copilot",
   },
   "bottom_dock_layout": "contained",
   "outline_panel": {
@@ -20,6 +21,7 @@
     "dock": "left",
   },
   "git_panel": {
+    "tree_view": false,
     "dock": "left",
   },
   "status_bar": {
@@ -43,7 +45,7 @@
   "text_rendering_mode": "platform_default",
   "icon_theme": {
     "mode": "dark",
-    "light": "Zed (Default)",
+    "light": "Catppuccin Latte",
     "dark": "Catppuccin Mocha",
   },
   "session": {
@@ -51,23 +53,19 @@
   },
   "agent_servers": {
     "cursor": {
-      "type": "registry"
+      "type": "registry",
     },
     "codex-acp": {
       "favorite_config_option_values": {
-        "reasoning_effort": [
-          "medium",
-          "high",
-          "low"
-        ]
+        "reasoning_effort": ["medium", "high", "low"],
       },
       "default_config_options": {
-        "reasoning_effort": "medium"
+        "reasoning_effort": "medium",
       },
-      "type": "registry"
+      "type": "registry",
     },
     "claude-acp": {
-      "type": "registry"
+      "type": "registry",
     },
     "pi-acp": {
       "type": "registry",
@@ -98,11 +96,11 @@
   "language_models": {
     "openai_compatible": {},
   },
-  "base_keymap": "Cursor",
+  "base_keymap": "Zed",
   "agent": {
     "sidebar_side": "left",
     "default_height": 900.0,
-    "button": true,
+    "button": false,
     "dock": "left",
     "default_model": {
       "provider": "openai-subscribed",
@@ -157,10 +155,14 @@
     "show_nav_history_buttons": false,
   },
   "show_whitespaces": "selection",
-  "theme": "Zedokai (Filter Octagon)",
+  "theme": {
+    "mode": "dark",
+    "light": "Catppuccin Latte",
+    "dark": "Zedokai Darker (Filter Octagon)",
+  },
   "ui_font_size": 15.0,
-  "ui_font_family": "Maple Mono NF",
-  "ui_font_weight": 100.0,
+  "ui_font_family": ".ZedSans",
+  "ui_font_weight": 300.0,
   "buffer_font_size": 13.0,
   "buffer_font_family": "Maple Mono NF",
   "buffer_font_weight": 250.0,
@@ -178,7 +180,7 @@
       "initialization_options": {},
     },
   },
-  "format_on_save": "on",
+  "format_on_save": "off",
   "helix_mode": false,
   "vim_mode": true,
 }
