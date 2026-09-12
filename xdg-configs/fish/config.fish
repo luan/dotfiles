@@ -30,10 +30,10 @@ end
 
 # aliases
 alias vim=nvim
-alias ls="eza --icons"
-alias ll="eza --icons -l"
-alias la="eza --icons -la"
-alias lt="eza --icons --tree"
+alias ls="eza --icons=auto"
+alias ll="eza --icons=auto -l"
+alias la="eza --icons=auto -la"
+alias lt="eza --icons=auto --tree"
 alias gs=git-spice
 
 set --export EDITOR nvim
@@ -67,8 +67,6 @@ source ~/.orbstack/shell/init2.fish 2>/dev/null || :
 
 alias view="nvim -R"
 
-COMPLETE=fish jj | source
-
 set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
 carapace _carapace | source
 if command -sq cargo
@@ -87,6 +85,3 @@ fish_add_path --path --move $HOME/.local/bin
 if test -r "$HOME/.local/share/bcny/config.fish"
     source "$HOME/.local/share/bcny/config.fish"
 end
-
-# Added by DeveloperSetup.sh
-source "/Users/luan.santos/.local/share/bcny/config.fish"

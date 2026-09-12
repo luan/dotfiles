@@ -8,6 +8,8 @@
 // from the command palette or from `Zed` application menu.
 {
   "disable_ai": false,
+  "use_system_prompts": false,
+  "use_system_path_prompts": false,
   "gutter": {
     "runnables": true
   },
@@ -173,6 +175,7 @@
   },
   "wrap_guides": [180],
   "tabs": {
+    "show_close_button": "hover",
     "activate_on_close": "left_neighbour",
     "file_icons": true,
     "git_status": true,
@@ -184,7 +187,7 @@
   "tab_bar": {
     "show_tab_bar_buttons": false,
     "show": true,
-    "show_nav_history_buttons": true,
+    "show_nav_history_buttons": false,
   },
   "show_whitespaces": "selection",
   "theme": {
@@ -192,9 +195,9 @@
     "light": "Catppuccin Latte",
     "dark": "Zedokai Darker (Filter Octagon)",
   },
-  "ui_font_size": 15.0,
-  "ui_font_family": "Maple Mono NF",
-  "ui_font_weight": 100.0,
+  // "ui_font_size": 15.0,
+  // "ui_font_family": "Maple Mono NF",
+  // "ui_font_weight": 100.0,
   "buffer_font_size": 13.0,
   "buffer_font_family": "Maple Mono NF",
   "buffer_font_weight": 250.0,

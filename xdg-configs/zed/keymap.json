@@ -479,5 +479,10 @@
     "bindings": {
       "cmd-i": "agent::Toggle",
     },
-  }
+  },
+  {
+    "unbind": {
+      "cmd-shift-c": "collab_panel::ToggleFocus"
+    }
+  },
 ]

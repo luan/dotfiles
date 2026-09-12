@@ -1,9 +1,9 @@
 alias vim=nvim
 alias view='nvim -R'
-alias ls='eza --icons'
-alias ll='eza --icons -l'
-alias la='eza --icons -la'
-alias lt='eza --icons --tree'
+alias ls='eza --icons=auto'
+alias ll='eza --icons=auto -l'
+alias la='eza --icons=auto -la'
+alias lt='eza --icons=auto --tree'
 alias gs='git-spice'
 
 lg() {

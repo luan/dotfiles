@@ -36,10 +36,10 @@ if ($init = Get-CachedInit starship @('init', 'powershell', '--print-full-init')
 
 if (Test-Tool eza) {
     Remove-Alias ls -ErrorAction SilentlyContinue # built-in alias outranks the function
-    function ls { eza --icons @args }
-    function ll { eza --icons -l @args }
-    function la { eza --icons -la @args }
-    function lt { eza --icons --tree @args }
+    function ls { eza --icons=auto @args }
+    function ll { eza --icons=auto -l @args }
+    function la { eza --icons=auto -la @args }
+    function lt { eza --icons=auto --tree @args }
 }
 
 if (Test-Tool git-spice) { Set-Alias gs git-spice }
