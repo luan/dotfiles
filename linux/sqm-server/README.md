@@ -142,12 +142,24 @@ schema in the **owned** DB, compares every restored table checksum and drops onl
 that schema. It never imports over the live world. Backups on the same disk cover
 operator mistakes; copy a complete private backup off Beast for disk-loss recovery.
 
-For actual recovery, schedule downtime, stop AAC/Canary, take an extra backup,
-and verify the selected archive. Import `world.sql.gz` into a fresh schema, check
-it with `verify-backup`, then intentionally point the owned DB configuration at
-the recovered schema. Recover private configuration from `config.tar.gz` to a
-private staging directory for review before replacing current configuration.
-Do not overwrite unrelated databases or delete the persistent MySQL directory.
+For actual recovery, schedule downtime and take an extra current backup first.
+The following deliberately replaces only the owned `sqm` schema after an
+isolated restore check; all services and tools continue using that canonical name:
+
+```sh
+sudo sqm-server backup
+sudo systemctl stop sqm-aac sqm-canary
+sudo sqm-server verify-backup /srv/sqm-server/backups/SELECTED_BACKUP
+sudo sqm-server sql -e 'DROP DATABASE sqm; CREATE DATABASE sqm CHARACTER SET utf8mb4;'
+sudo gzip -dc /srv/sqm-server/backups/SELECTED_BACKUP/world.sql.gz | sudo sqm-server sql
+sudo systemctl start sqm-canary sqm-aac
+sudo sqm-server health
+```
+
+Recover private configuration from `config.tar.gz` to a private staging directory
+for review before replacing current configuration. Application grants on `sqm.*`
+remain in MySQL's system schema, which the world dump never overwrites. Do not
+overwrite unrelated databases or delete the persistent MySQL directory.
 
 ## Updates
 
