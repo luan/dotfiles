@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodic SQM health check
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

@@ -8,6 +8,11 @@ config_dir := home / ".config"
 default:
     @just --list
 
+# Install the isolated persistent Canary/SlenderAAC world on Beast (see runbook)
+[unix]
+sqm-server canary_source map receipt:
+    bash "{{ dotfiles_dir }}/linux/sqm-server/install.sh" "{{ canary_source }}" "{{ map }}" "{{ receipt }}"
+
 # Link stow configs + create convenience symlinks in dotfiles dir
 [unix]
 link:

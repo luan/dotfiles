@@ -1,0 +1,8 @@
+[Unit]
+Description=Check SQM website, game listener and database
+After=sqm-canary.service sqm-aac.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sqm-server health
+LogNamespace=sqm-server

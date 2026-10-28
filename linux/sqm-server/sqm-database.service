@@ -1,0 +1,16 @@
+[Unit]
+Description=SQM human world MySQL
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/etc/sqm-server
+ExecStart=/usr/bin/docker compose up --wait --wait-timeout 300
+ExecStop=/usr/bin/docker compose stop -t 120
+TimeoutStartSec=360
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

@@ -1,1 +1,2 @@
 gitconfig filter=gitignore
+linux/sqm-server/*.patch -whitespace

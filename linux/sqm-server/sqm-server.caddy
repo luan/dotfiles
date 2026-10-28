@@ -1,0 +1,40 @@
+# The tunnel targets this loopback origin. Its hostname must be sqm-server.luan.sh.
+http://:3081 {
+    bind 127.0.0.1
+    request_body {
+        max_size 1MB
+    }
+    # Only the local tunnel/SSH origin may supply Cloudflare's client header.
+    map {http.request.header.Cf-Connecting-Ip} {sqm_client_address} {
+        "" {remote_host}
+        default {http.request.header.Cf-Connecting-Ip}
+    }
+    @public host sqm-server.luan.sh
+    handle @public {
+        reverse_proxy 127.0.0.1:3080 {
+            header_up X-Forwarded-Host {hostport}
+            header_up X-Forwarded-Proto https
+            header_up X-Sqm-Client-Address {sqm_client_address}
+        }
+    }
+    handle {
+        reverse_proxy 127.0.0.1:3080 {
+            header_up X-Forwarded-Host {hostport}
+            header_up X-Forwarded-Proto http
+            header_up X-Sqm-Client-Address {remote_host}
+        }
+    }
+}
+
+# Private LAN access while public DNS/TCP forwarding is being arranged.
+https://192.168.1.191:3443 {
+    bind 192.168.1.191
+    tls internal
+    request_body {
+        max_size 1MB
+    }
+    reverse_proxy 127.0.0.1:3080 {
+        header_up X-Forwarded-Host {hostport}
+        header_up X-Sqm-Client-Address {remote_host}
+    }
+}

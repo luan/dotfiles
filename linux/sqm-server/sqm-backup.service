@@ -1,0 +1,10 @@
+[Unit]
+Description=Save and back up the SQM human world
+After=sqm-database.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sqm-server backup
+TimeoutStartSec=600
+UMask=0077
+LogNamespace=sqm-server

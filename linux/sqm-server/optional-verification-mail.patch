@@ -1,0 +1,47 @@
+diff --git a/src/routes/(app)/account/(un-authenticated)/signup/+page.server.ts b/src/routes/(app)/account/(un-authenticated)/signup/+page.server.ts
+--- a/src/routes/(app)/account/(un-authenticated)/signup/+page.server.ts
++++ b/src/routes/(app)/account/(un-authenticated)/signup/+page.server.ts
+@@ -4,6 +4,7 @@
+ 
+ import { AccountType } from '$lib/accounts';
+ import { parsePlayerPronoun, parsePlayerSex } from '$lib/players';
++import { requireEmailVerification } from '$lib/server/config';
+ import { sendVerificationEmail } from '$lib/server/email';
+ import { generateCharacterInput } from '$lib/server/players';
+ import { prisma } from '$lib/server/prisma';
+@@ -18,7 +19,7 @@
+ 	validate,
+ } from '$lib/server/validations';
+ 
+-import { AUTO_ADMIN_EMAIL } from '$env/static/private';
++import { AUTO_ADMIN_EMAIL, SMTP_SERVER } from '$env/static/private';
+ 
+ import type { Actions, PageServerLoad } from './$types';
+ 
+@@ -148,15 +149,21 @@
+ 				} as Record<string, string[]>,
+ 			});
+ 		}
+-		await sendVerificationEmail(
+-			created.email,
+-			created.emailVerifications[0].token,
+-		);
++		const verificationMailEnabled =
++			requireEmailVerification || SMTP_SERVER.trim().length > 0;
++		if (verificationMailEnabled) {
++			await sendVerificationEmail(
++				created.email,
++				created.emailVerifications[0].token,
++			);
++		}
+ 		throw redirect(
+ 			'/account/login',
+ 			{
+ 				type: 'success',
+-				message: 'Account created. Check your email to confirm your account.',
++				message: verificationMailEnabled
++					? 'Account created. Check your email to confirm your account.'
++					: 'Account created. Email verification is disabled on this server; no email was sent. You can log in now.',
+ 			},
+ 			event,
+ 		);

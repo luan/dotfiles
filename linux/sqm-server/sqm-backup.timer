@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily SQM world backup (brief graceful maintenance)
+
+[Timer]
+OnCalendar=*-*-* 04:15:00 America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target

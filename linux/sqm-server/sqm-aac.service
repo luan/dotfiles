@@ -1,0 +1,30 @@
+[Unit]
+Description=SQM SlenderAAC account and login service
+Requires=sqm-database.service
+After=sqm-database.service sqm-canary.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+User=sqm-server
+Group=sqm-server
+WorkingDirectory=/srv/sqm-server/slenderaac
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3080
+Environment=PROTOCOL_HEADER=x-forwarded-proto
+Environment=HOST_HEADER=x-forwarded-host
+Environment=ADDRESS_HEADER=x-sqm-client-address
+ExecStart=/usr/bin/node -r dotenv/config /usr/local/lib/sqm-server/serve-aac.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+LogNamespace=sqm-server
+
+[Install]
+WantedBy=multi-user.target

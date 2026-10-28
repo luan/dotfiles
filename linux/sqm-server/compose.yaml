@@ -1,0 +1,32 @@
+name: sqm-human
+services:
+  database:
+    image: ${MYSQL_IMAGE:?}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:33080:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql-root
+      MYSQL_DATABASE: sqm
+      MYSQL_USER: sqm
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql-app
+    volumes:
+      - /srv/sqm-server/mysql:/var/lib/mysql
+    secrets:
+      - mysql-root
+      - mysql-app
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$(cat /run/secrets/mysql-root)" mysql -uroot -Nse "SELECT 1"']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+secrets:
+  mysql-root:
+    file: /etc/sqm-server/mysql-root
+  mysql-app:
+    file: /etc/sqm-server/mysql-app

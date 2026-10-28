@@ -1,0 +1,26 @@
+[Unit]
+Description=SQM persistent stock Canary world
+Requires=sqm-database.service
+After=sqm-database.service
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+User=sqm-server
+Group=sqm-server
+WorkingDirectory=/srv/sqm-server/canary
+ExecStart=/srv/sqm-server/canary/canary
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=300
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/sqm-server/canary
+LogNamespace=sqm-server
+
+[Install]
+WantedBy=multi-user.target
