@@ -1,6 +1,8 @@
 # Architecture: WezTerm → tmux
 
-Two layers own the terminal workflow. WezTerm provides the GPU-rendered terminal and native macOS integration. tmux provides persistent sessions, windows, panes, key bindings, and the status bar.
+Two layers own the terminal workflow. WezTerm provides the GPU-rendered
+terminal and platform-aware desktop integration. tmux provides persistent
+sessions, windows, panes, key bindings, and the status bar.
 
 ```mermaid
 graph TD
@@ -40,4 +42,8 @@ The prefix (`Ctrl+Space`) is reserved for less-common operations such as window 
 
 ## Why this stack
 
-tmux is the session multiplexer because it survives terminal crashes, supports remote attach, and has a mature plugin ecosystem. WezTerm is the terminal because it provides native macOS integration, programmatic configuration, and the key relay needed to bridge macOS Cmd+* bindings into tmux's key model.
+tmux is the session multiplexer because it survives terminal crashes, supports
+remote attach, and has a mature plugin ecosystem. WezTerm is the terminal
+because it provides programmatic configuration and the key relay needed to
+bridge desktop Super/Cmd bindings into tmux's key model. macOS-only window and
+fullscreen options are enabled conditionally.

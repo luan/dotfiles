@@ -27,7 +27,8 @@ config.underline_thickness = "2px"
 config.enable_kitty_keyboard = true
 
 -- Window [info]
-config.window_decorations = "RESIZE|MACOS_FORCE_SQUARE_CORNERS|MACOS_FORCE_DISABLE_SHADOW"
+local is_macos = wezterm.target_triple:find("apple%-darwin") ~= nil
+config.window_decorations = is_macos and "RESIZE|MACOS_FORCE_SQUARE_CORNERS|MACOS_FORCE_DISABLE_SHADOW" or "RESIZE"
 config.window_frame = {
 	border_left_width = 0,
 	border_right_width = 0,
@@ -51,15 +52,19 @@ config.window_background_opacity = 1.0
 config.colors = { split = "#1A1B26" }
 config.scrollback_lines = 10000000
 config.enable_scroll_bar = false
-config.macos_fullscreen_extend_behind_notch = true
-config.native_macos_fullscreen_mode = false
+if is_macos then
+	config.macos_fullscreen_extend_behind_notch = true
+	config.native_macos_fullscreen_mode = false
+end
 
 -- Mouse
 config.hide_mouse_cursor_when_typing = true
 
 -- macOS
-config.send_composed_key_when_left_alt_is_pressed = false
-config.send_composed_key_when_right_alt_is_pressed = true
+if is_macos then
+	config.send_composed_key_when_left_alt_is_pressed = false
+	config.send_composed_key_when_right_alt_is_pressed = true
+end
 
 -- Bell
 config.audible_bell = "Disabled"
@@ -73,7 +78,7 @@ config.default_cursor_style = "BlinkingBar"
 config.disable_default_key_bindings = true
 
 -- Shared paths
-local PATH = wezterm.home_dir .. "/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+local PATH = wezterm.home_dir .. "/bin:" .. (os.getenv("PATH") or "/usr/bin:/bin")
 
 -- Helpers
 local tmux_prefix = "\x00" -- Ctrl+Space

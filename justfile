@@ -14,12 +14,14 @@ link:
     mkdir -p "{{ home }}/bin"
     mkdir -p "{{ config_dir }}"
     mkdir -p "{{ home }}/.cargo"
-    stow -R xdg-configs -t "{{ config_dir }}"
+    python3 "{{ dotfiles_dir }}/normalize-links.py" "{{ home }}"
+    stow -R --no-folding xdg-configs -t "{{ config_dir }}"
     stow -R cargo-config -t "{{ home }}/.cargo"
     stow -R bin -t "{{ home }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"
     if [ ! -e "{{ home }}/.zshenv" ]; then printf '%s\n' '[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"' > "{{ home }}/.zshenv"; fi
-    if [ ! -e "{{ home }}/.zshrc" ]; then printf '%s\n' '_zsh_config_home="${ZSH_CONFIG_HOME:-$HOME/.config/zsh}"' '[[ -r "$_zsh_config_home/zshrc" ]] && source "$_zsh_config_home/zshrc"' 'unset _zsh_config_home' > "{{ home }}/.zshrc"; fi
+    touch "{{ home }}/.zshrc"
+    grep -qxF '[[ -r "${ZSH_CONFIG_HOME:-$HOME/.config/zsh}/zshrc" ]] && source "${ZSH_CONFIG_HOME:-$HOME/.config/zsh}/zshrc"' "{{ home }}/.zshrc" || printf '\n%s\n' '[[ -r "${ZSH_CONFIG_HOME:-$HOME/.config/zsh}/zshrc" ]] && source "${ZSH_CONFIG_HOME:-$HOME/.config/zsh}/zshrc"' >> "{{ home }}/.zshrc"
     touch "{{ home }}/.bashrc"
     grep -qxF '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' "{{ home }}/.bashrc" || printf '\n%s\n' '[[ -r "$HOME/.config/bash/bashrc" ]] && source "$HOME/.config/bash/bashrc"' >> "{{ home }}/.bashrc"
     if [ ! -e "{{ home }}/.bash_profile" ] && [ ! -e "{{ home }}/.bash_login" ]; then if [ -e "{{ home }}/.profile" ]; then printf '%s\n' '[[ -r "$HOME/.profile" ]] && source "$HOME/.profile"' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; else printf '%s\n' '[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"' > "{{ home }}/.bash_profile"; fi; fi
@@ -132,6 +134,11 @@ brew:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    if [ "$(uname -s)" != "Darwin" ]; then
+        echo "✗ brew is a macOS recipe; use your OS package manager on $(uname -s)" >&2
+        exit 1
+    fi
+
     real_brew=""
     for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
         if [ -x "$candidate" ]; then
@@ -179,7 +186,8 @@ winget:
 
 # Resolve and lock sheldon plugins (called during setup)
 sheldon:
-    PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH" sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
+    if ! command -v sheldon >/dev/null 2>&1; then echo "⚠ sheldon not installed; skipping plugin lock"; exit 0; fi
+    PATH="$HOME/.local/bin:$PATH" sheldon --config-file "{{ dotfiles_dir }}/xdg-configs/sheldon/plugins.toml" lock --update
 
 # Set Homebrew zsh as login shell (registers in /etc/shells if missing; needs sudo for that step)
 chsh-zsh:
@@ -207,6 +215,7 @@ chsh-zsh:
 
 # Apply macOS system defaults
 macos-defaults:
+    if [ "$(uname -s)" != "Darwin" ]; then echo "✗ macos-defaults requires macOS" >&2; exit 1; fi
     source "{{ dotfiles_dir }}/macos-defaults.sh"
 
 # Set up git config include
@@ -334,5 +343,26 @@ git-stat: rust
     codesign --force --sign - "{{ home }}/bin/git-stat"
     @echo "✓ git-stat built"
 
-# Full setup: Homebrew, Rust, repos, links, gitconfig, Claude plugins, dev-routing, git-stat, sheldon
-setup: brew link rust cargo repos gitconfig claude-plugins dev-routing sheldon git-stat
+# Configure Vite+ as the JavaScript runtime and package-manager owner.
+vite-plus:
+    mise install github:voidzero-dev/vite-plus
+    mise exec -- vp env on
+    mise exec -- vp env default lts
+    mise exec -- vp env default bun@latest
+    mise exec -- vp env default pnpm@latest
+    mise exec -- vp env default yarn@latest
+    mise exec -- vp env install lts
+
+# Select the platform baseline; package installation stays explicit on Linux.
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "$(uname -s)" in
+        Darwin) exec just setup-macos ;;
+        Linux) exec just setup-linux ;;
+        *) echo "Unsupported platform: $(uname -s)" >&2; exit 1 ;;
+    esac
+
+setup-linux: link vite-plus rust repos gitconfig claude-plugins sheldon
+
+setup-macos: brew link vite-plus rust cargo repos gitconfig claude-plugins dev-routing sheldon git-stat

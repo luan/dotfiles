@@ -7,7 +7,7 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
-  "disable_ai": false,
+  "disable_ai": true,
   "use_system_prompts": false,
   "use_system_path_prompts": false,
   "gutter": {
@@ -129,50 +129,6 @@
     "openai_compatible": {},
   },
   "base_keymap": "Cursor",
-  "agent": {
-    "enable_feedback": false,
-    "sidebar_side": "left",
-    "default_height": 900.0,
-    "button": false,
-    "dock": "left",
-    "default_model": {
-      "provider": "openai-subscribed",
-      "model": "gpt-5.4-mini",
-      "enable_thinking": true,
-      "effort": "medium",
-    },
-    "default_profile": "write",
-    "profiles": {
-      "write": {
-        "name": "Write",
-        "tools": {
-          "open": true,
-          "create_directory": true,
-          "terminal": true,
-          "batch_tool": true,
-          "code_actions": true,
-          "code_symbols": true,
-          "copy_path": true,
-          "create_file": true,
-          "delete_path": true,
-          "diagnostics": true,
-          "edit_file": true,
-          "fetch": true,
-          "list_directory": true,
-          "move_path": true,
-          "now": true,
-          "find_path": true,
-          "read_file": true,
-          "grep": true,
-          "rename": true,
-          "symbol_info": true,
-          "thinking": true,
-        },
-        "enable_all_context_servers": true,
-        "context_servers": {},
-      },
-    },
-  },
   "wrap_guides": [180],
   "tabs": {
     "show_close_button": "hover",

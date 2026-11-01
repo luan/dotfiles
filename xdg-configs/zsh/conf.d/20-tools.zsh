@@ -1,3 +1,5 @@
+[[ -r "$HOME/.config/vite-plus/env" ]] && source "$HOME/.config/vite-plus/env"
+
 # Tool integrations — evaluated on every interactive shell.
 
 if command -v mise >/dev/null; then

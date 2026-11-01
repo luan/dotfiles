@@ -1,5 +1,7 @@
 export GIT_USERNAME=luan
 
+[[ -r "$HOME/.config/vite-plus/env" ]] && source "$HOME/.config/vite-plus/env"
+
 if command -v mise >/dev/null; then
     eval "$(mise activate bash)"
 fi

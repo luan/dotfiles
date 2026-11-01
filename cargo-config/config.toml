@@ -1,8 +1,12 @@
 [build]
-incremental = false
 rustc-wrapper = "kache"
 
 [unstable]
 embed-metadata = false
 gc = true
 mtime-on-use = true
+
+[env]
+HOST_CC = "kache cc"
+HOST_CXX = "kache c++"
+CC_KNOWN_WRAPPER_CUSTOM = "kache"

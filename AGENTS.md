@@ -4,12 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-macOS dotfiles managed with GNU Stow and orchestrated via justfile. Configs for fish, tmux, lazygit, ghostty, zed, plus custom automation scripts.
+Cross-platform dotfiles managed with GNU Stow and orchestrated via justfile.
+Configs for fish, zsh, tmux, lazygit, ghostty, zed, plus custom automation
+scripts. Shared setup targets macOS and Linux; OS-specific package and desktop
+integration steps are gated in the justfile.
 
 ## Commands
 
 ```bash
-just setup          # Full setup: brew + repos + link + gitconfig + claude-plugins
+just setup          # Platform-aware setup (macOS or Linux)
+just setup-linux    # Portable Linux baseline
+just setup-macos    # Full macOS setup: brew + repos + link + tools + services
 just link           # Stow configs to ~/.config + ~/bin, create convenience symlinks
 just unlink         # Remove all stow symlinks
 just repos          # Clone external repos (nvim, dot-claude) if missing

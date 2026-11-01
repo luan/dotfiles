@@ -1,1 +1,5 @@
 \.DS_Store
+
+\.config\.toml\.lock
+\.session-favorites
+^/zed/(prompts|conversations|embeddings)(/|$)

@@ -20,3 +20,7 @@ indowp
 /xdg-configs/zsh/.zcompdump
 /xdg-configs/zsh/.zsh_history
 /docs/artifacts
+
+# Runtime locks and personal session state.
+/xdg-configs/kache/.config.toml.lock
+/xdg-configs/tmux/.session-favorites

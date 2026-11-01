@@ -14,17 +14,25 @@ if test -z "$LC_ALL$LC_CTYPE$LANG"
     set --export LC_CTYPE en_US.UTF-8
 end
 
-if command -sq mise; and not set -q MISE_SHELL
-    if status is-interactive
-        mise activate fish | source
-    else
-        mise hook-env -s fish | source
-    end
+# Activate after PATH setup, including shells that inherit MISE_SHELL.
+set --export MISE_ACTIVATE_AGGRESSIVE 1
+
+# Optional Homebrew paths. The same config works on macOS, Linuxbrew, and
+# machines without Homebrew.
+for brew_path in /opt/homebrew/bin /opt/homebrew/sbin /usr/local/bin $HOME/.linuxbrew/bin $HOME/.linuxbrew/sbin
+    fish_add_path --path $brew_path
 end
+if command -sq brew
+    eval (brew shellenv fish)
+end
+fish_add_path --path $HOME/.local/bin $HOME/bin $HOME/.cargo/bin $HOME/.bun/bin $HOME/.opencode/bin
 
 # Fast exit for non-interactive shells (tmux popups, scripts, etc.)
 if not status is-interactive
-    set --export PATH $HOME/.local/bin $HOME/.local/share/mise/shims /opt/homebrew/bin /opt/homebrew/sbin $HOME/bin /usr/local/bin $PATH
+    fish_add_path --path --move $HOME/.local/share/vite-plus/bin
+    if command -sq mise
+        mise env -s fish | source
+    end
     return
 end
 
@@ -39,10 +47,7 @@ alias gs=git-spice
 set --export EDITOR nvim
 set --export GIT_EDITOR nvim
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
-
 # path
-fish_add_path /usr/local/bin
 fish_add_path /usr/local/go/bin
 fish_add_path $HOME/bin
 fish_add_path $HOME/.local/bin
@@ -52,7 +57,7 @@ set --export XDG_CONFIG_HOME $HOME/.config
 
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
-set --export PATH $BUN_INSTALL/bin $PATH
+fish_add_path --path $BUN_INSTALL/bin
 
 direnv hook fish | source
 
@@ -69,19 +74,26 @@ alias view="nvim -R"
 
 set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
 carapace _carapace | source
-if command -sq cargo
-    source $__fish_data_dir/completions/cargo.fish # carapace's cargo completer is broken for -p/--package
+
+# Keep package-manager bins ahead of language-specific bins.
+if command -sq brew
+    fish_add_path --path --move (brew --prefix)/bin (brew --prefix)/sbin
 end
-
-# opencode
-fish_add_path $HOME/.opencode/bin
-
-# Keep mise shims ahead of language/package-manager bins added above.
-fish_add_path --path --move /opt/homebrew/bin /opt/homebrew/sbin
-fish_add_path --path --move $HOME/.local/share/mise/shims
 fish_add_path --path --move $HOME/.local/bin
 
 # Added by DeveloperSetup.sh
 if test -r "$HOME/.local/share/bcny/config.fish"
     source "$HOME/.local/share/bcny/config.fish"
+end
+
+# Vite+ selects the JavaScript runtime and package managers for this directory.
+if test -r "$HOME/.config/vite-plus/env.fish"
+    source "$HOME/.config/vite-plus/env.fish"
+end
+
+if command -sq mise
+    mise activate fish | source
+    # Reset inherited PATH snapshots after activation.
+    set --erase __MISE_ORIG_PATH
+    mise hook-env --force -s fish | source
 end

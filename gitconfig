@@ -77,7 +77,7 @@
 
 [core]
   autocrlf = false
-  editor = vim
+  editor = nvim
   excludesfile = ~/dotfiles/gitignore.global
   pager = delta
 
