@@ -2,7 +2,6 @@
 cargo-binstall = "latest"
 "cargo:cargo-xwin" = "latest"
 cmake = "latest"
-"github:kunobi-ninja/kache" = "2.0.0-rc.3"
 
 rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "clippy", "rust-analyzer"] }
 "github:voidzero-dev/vite-plus" = { version = "latest", postinstall = '"$MISE_TOOL_INSTALL_PATH/vp" env setup --refresh', install_env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", VP_NODE_MANAGER = "yes", VP_PM_MANAGER = "yes" } }

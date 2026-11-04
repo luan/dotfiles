@@ -1,5 +1,4 @@
 [cache]
 local_max_size = "40GiB"
+restore_max_size = "12GiB"
 auto_gc = true
-gc_max_age_hours = 720
-min_store_compile_ms = 0
