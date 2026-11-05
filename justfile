@@ -16,6 +16,8 @@ link:
     mkdir -p "{{ home }}/.cargo"
     python3 "{{ dotfiles_dir }}/normalize-links.py" "{{ home }}"
     stow -R --no-folding xdg-configs -t "{{ config_dir }}"
+    # Apps rewrite these files, so they are seeded as local copies instead of linked.
+    for path in zed/settings.json mise/config.toml fish/config.fish; do if [ ! -e "{{ config_dir }}/$path" ] && [ ! -L "{{ config_dir }}/$path" ]; then mkdir -p "$(dirname "{{ config_dir }}/$path")" && cp "{{ dotfiles_dir }}/xdg-configs/$path" "{{ config_dir }}/$path"; fi; done
     stow -R cargo-config -t "{{ home }}/.cargo"
     stow -R bin -t "{{ home }}/bin"
     ln -sfn "{{ config_dir }}/nvim" "{{ dotfiles_dir }}/nvim"

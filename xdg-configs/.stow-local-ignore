@@ -3,3 +3,6 @@
 \.config\.toml\.lock
 \.session-favorites
 ^/zed/(prompts|conversations|embeddings)(/|$)
+^/zed/settings\.json$
+^/mise/config\.toml$
+^/fish/config\.fish$

@@ -29,6 +29,7 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 
 **Stow layout** — two stow directories, each targeting a different destination:
 - `xdg-configs/` → stowed to `~/.config/` (zsh, sheldon, tmux, lazygit, ghostty, wezterm, zed, zellij; fish deprecated)
+  - Apps rewrite `zed/settings.json`, `mise/config.toml` and `fish/config.fish`, so stow ignores them and `just link` seeds local copies once. Edit the repository version for shared changes; a machine manager can merge them into the local copies.
 - `bin/` → stowed to `~/bin/` (custom scripts: ralph, bd-loop, loop-format.py)
 
 **External repos** — independent git repos cloned separately, symlinked into dotfiles root for convenience. These are **not submodules** — they have their own git history and remotes. Commits to these repos must be made from within them.
