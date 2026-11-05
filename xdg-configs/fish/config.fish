@@ -36,14 +36,6 @@ if not status is-interactive
     return
 end
 
-# aliases
-alias vim=nvim
-alias ls="eza --icons=auto"
-alias ll="eza --icons=auto -l"
-alias la="eza --icons=auto -la"
-alias lt="eza --icons=auto --tree"
-alias gs=git-spice
-
 set --export EDITOR nvim
 set --export GIT_EDITOR nvim
 
@@ -69,8 +61,6 @@ end
 # Added by OrbStack: command-line tools and integration
 # This won't be added again if you remove it.
 source ~/.orbstack/shell/init2.fish 2>/dev/null || :
-
-alias view="nvim -R"
 
 set -Ux CARAPACE_BRIDGES 'zsh,fish,bash,inshellisense' # optional
 carapace _carapace | source

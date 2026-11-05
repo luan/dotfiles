@@ -39,10 +39,7 @@ if command -v git-spice >/dev/null; then
   if [[ ! -s $_git_spice_completion || $_git_spice_completion -ot $_git_spice_bin ]]; then
     git-spice shell completion zsh >| "$_git_spice_completion" 2>/dev/null
   fi
-  if [[ -s $_git_spice_completion ]]; then
-    source "$_git_spice_completion"
-    complete -C "$_git_spice_bin" gs 2>/dev/null
-  fi
+  [[ -s $_git_spice_completion ]] && source "$_git_spice_completion"
   unset _git_spice_completion _git_spice_bin
 fi
 

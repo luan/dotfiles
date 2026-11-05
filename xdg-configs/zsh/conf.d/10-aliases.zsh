@@ -1,11 +1,3 @@
-alias vim=nvim
-alias view='nvim -R'
-alias ls='eza --icons=auto'
-alias ll='eza --icons=auto -l'
-alias la='eza --icons=auto -la'
-alias lt='eza --icons=auto --tree'
-alias gs='git-spice'
-
 lg() {
   local -x LAZYGIT_NEW_DIR_FILE=~/.lazygit/newdir
 

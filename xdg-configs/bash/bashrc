@@ -5,5 +5,3 @@ export GIT_USERNAME=luan
 if command -v mise >/dev/null; then
     eval "$(mise activate bash)"
 fi
-
-alias gs='git-spice'
