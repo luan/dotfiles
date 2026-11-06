@@ -1,7 +1,0 @@
-onboarding = false
-[ui.toast]
-delivery = "terminal"
-
-[theme]
-name = "tokyo-night"
-auto_switch = false
