@@ -1,6 +1,4 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# Dotfiles
 
 ## What This Is
 
@@ -17,7 +15,7 @@ just setup-linux    # Portable Linux baseline
 just setup-macos    # Full macOS setup: brew + repos + link + tools + services
 just link           # Stow configs to ~/.config + ~/bin, create convenience symlinks
 just unlink         # Remove all stow symlinks
-just repos          # Clone external repos (nvim, dot-claude) if missing
+just repos          # Clone external repos (nvim) if missing
 just pull           # Pull dotfiles + external repos (skips dirty repos)
 just brew           # Install Homebrew packages from Brewfile
 just macos-defaults # Apply macOS system preferences
@@ -34,7 +32,6 @@ just claude-plugins # Install Claude Code plugin marketplaces and plugins
 
 **External repos** — independent git repos cloned separately, symlinked into dotfiles root for convenience. These are **not submodules** — they have their own git history and remotes. Commits to these repos must be made from within them.
 - `./nvim` → `~/.config/nvim` (github.com/luan/nvim) — full Neovim config
-- `./dot-claude` → `~/.claude` (github.com/luan/dot-claude) — Claude Code settings, CLAUDE.md, rules, hooks, skills, MCP config
 
 See [docs/architecture.md](docs/architecture.md) for the layered diagram + module map.
 
