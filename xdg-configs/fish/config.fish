@@ -36,6 +36,9 @@ if not status is-interactive
     return
 end
 
+alias vim=nvim
+alias view="nvim -R"
+
 set --export EDITOR nvim
 set --export GIT_EDITOR nvim
 

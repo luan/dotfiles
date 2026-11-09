@@ -1,3 +1,6 @@
+alias vim=nvim
+alias view='nvim -R'
+
 lg() {
   local -x LAZYGIT_NEW_DIR_FILE=~/.lazygit/newdir
 
