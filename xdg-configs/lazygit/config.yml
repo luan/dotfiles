@@ -4,13 +4,6 @@ gui:
   sidePanelWidth: 0.33
   timeFormat: "2006-01-02"
   shortTimeFormat: 15:04
-  authorColors:
-    "Luan Santos": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
-  branchColorPatterns:
-    "^luan/pr": "#339Ccc"
-    "^luan/pu": "#33FCcc"
-    "^luan/el": "#a33CFc"
-    "^luan/[^pe][^rul]": "#FF9CFF"
   border: single
   spinner:
     # The frames of the spinner animation.
@@ -23,6 +16,14 @@ gui:
       - 
     # The "speed" of the spinner in milliseconds.
     rate: 50
+  theme:
+    authorColors:
+      "Luan Santos": "#FF9CFF" # use a light blue for branches beginning with 'docs/'
+    branchColorPatterns:
+      "^luan/pr": "#339Ccc"
+      "^luan/pu": "#33FCcc"
+      "^luan/el": "#a33CFc"
+      "^luan/[^pe][^rul]": "#FF9CFF"
 git:
   overrideGpg: true
   branchPrefix: "luan/"
