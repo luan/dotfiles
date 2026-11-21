@@ -2,3 +2,9 @@
 local_max_size = "40GiB"
 restore_max_size = "12GiB"
 auto_gc = true
+# Kache expands `~/`. Outside macOS's purgeable ~/Library/Caches, so the socket and lock survive.
+runtime_dir = "~/.local/state/kache"
+# Worktree build output. Kache never deletes remote objects; these clean local target/ dirs only.
+auto_clean_unused_units_days = 3
+auto_clean_idle_targets_days = 1
+auto_recover_targets = true
