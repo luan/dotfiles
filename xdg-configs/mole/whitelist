@@ -1,0 +1,8 @@
+# Kache keeps its compiler cache under its own size limit and records builds in its logs;
+# Mole wiping them empties the cache mid-build and loses the record of why.
+# macOS
+~/Library/Caches/kache
+~/Library/Logs/kache
+# Linux
+~/.cache/kache
+~/.local/state/kache
