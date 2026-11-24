@@ -11,8 +11,9 @@ rust = { version = "nightly", profile = "minimal", components = ["rustfmt", "cli
 CC_KNOWN_WRAPPER_CUSTOM = "kache"
 CMAKE_C_COMPILER_LAUNCHER = ""
 CMAKE_CXX_COMPILER_LAUNCHER = ""
-HOST_CC = "kache cc"
-HOST_CXX = "kache c++"
+# Windows has no `cc`: an empty value leaves cc-rs on MSVC instead of failing to find it.
+HOST_CC = "{% if os() != 'windows' %}kache cc{% endif %}"
+HOST_CXX = "{% if os() != 'windows' %}kache c++{% endif %}"
 
 [settings]
 # Interactive activation uses tool paths; Vite+ owns the JavaScript shims.
