@@ -2,3 +2,4 @@
 .DS_Store
 .pi/openai-codex-images/
 .pi/subagent-schedules/
+**/.agents/scheduled_tasks.lock
